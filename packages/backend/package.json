@@ -1,0 +1,24 @@
+{
+  "name": "@srvmc/backend",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/cli.ts"
+  },
+  "dependencies": {
+    "@fastify/static": "^8.0.3",
+    "@fastify/websocket": "^11.0.1",
+    "@srvmc/shared": "*",
+    "extract-zip": "^2.0.1",
+    "fastify": "^5.2.0",
+    "yazl": "^3.3.1"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "@types/yazl": "^2.4.6"
+  }
+}

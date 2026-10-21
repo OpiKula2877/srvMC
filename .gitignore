@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.log
+.vite/
+coverage/
+# lokální testovací data serverů
+.srvmc-dev/
+# sestavený instalátor
+apps/desktop/release/

@@ -1,0 +1,42 @@
+# Windows installer (NSIS). Build with: npm run installer (from the repository root).
+appId: cz.srvmc.app
+productName: srvMC
+copyright: Copyright © 2026 OpiKula
+
+directories:
+  output: release
+  buildResources: assets
+
+# Everything the app needs is bundled into dist/ by build.mjs (main process + core + panel),
+# so no node_modules go into the package.
+files:
+  - dist/**/*
+  - package.json
+  - '!dist/**/*.map'
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: assets/icon.ico
+  executableName: srvMC
+
+nsis:
+  oneClick: false
+  # Installs for all users into Program Files by default (asks for admin rights), and lets the user pick another folder.
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: srvMC
+  menuCategory: false
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
+  uninstallDisplayName: srvMC
+  runAfterFinish: true
+  # Servers, worlds and backups live in %USERPROFILE%\srvMC and are never removed by uninstalling.
+  deleteAppDataOnUninstall: false
+  language: '1029'
+  installerLanguages: [cs_CZ]
+  artifactName: srvMC-Setup-${version}.${ext}

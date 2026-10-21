@@ -1,0 +1,20 @@
+{
+  "name": "@srvmc/desktop",
+  "productName": "srvMC",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "srvMC – lokální správce Minecraft serverů",
+  "author": "OpiKula",
+  "main": "dist/main.mjs",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "electron .",
+    "dist": "node build.mjs && electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "@srvmc/backend": "*",
+    "electron": "33.4.11",
+    "electron-builder": "^26.15.3"
+  }
+}

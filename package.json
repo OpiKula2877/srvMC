@@ -1,0 +1,38 @@
+{
+  "name": "srvmc",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "Lokální správce Minecraft serverů (Aternos styl)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c green,blue \"npm run dev -w @srvmc/backend\" \"npm run dev -w @srvmc/web\"",
+    "build": "npm run build -w @srvmc/web && npm run build -w @srvmc/desktop",
+    "app": "npm run build && npm run start -w @srvmc/desktop",
+    "installer": "npm run build -w @srvmc/web && npm run dist -w @srvmc/desktop",
+    "icons": "node scripts/make-icons.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc -p packages/shared && tsc -p packages/backend && tsc -p packages/web && tsc -p apps/desktop"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "concurrently": "^9.1.0",
+    "esbuild": "^0.24.0",
+    "sharp": "^0.34.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "esbuild@0.24.2": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true
+  }
+}

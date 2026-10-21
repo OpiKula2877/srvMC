@@ -1,0 +1,203 @@
+// Routes for worlds, backups and pre-generation.
+import { createReadStream } from 'node:fs';
+import { rm, stat, statfs } from 'node:fs/promises';
+import path from 'node:path';
+import type { Readable } from 'node:stream';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { PregenRequest } from '@srvmc/shared';
+import type { BackupService } from '../backups.ts';
+import { installChunky, pregenCommand, startPregen } from '../chunky.ts';
+import { saveUpload } from '../files.ts';
+import type { ServerManager } from '../manager.ts';
+import type { Paths } from '../paths.ts';
+import { UserError } from '../providers/index.ts';
+import { checkWorldName, findWorlds, importWorld, setActiveWorld, trashWorld, worldFolders } from '../worlds.ts';
+import { collectFiles, zipStream } from '../zip.ts';
+
+const MAX_WORLD_UPLOAD = 20 * 1024 * 1024 * 1024;
+
+function attachment(reply: FastifyReply, name: string, size?: number): void {
+  reply.header('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+  reply.header('content-type', 'application/zip');
+  if (size !== undefined) reply.header('content-length', size);
+}
+
+export function registerWorldRoutes(app: FastifyInstance, manager: ServerManager, backups: BackupService, paths: Paths): void {
+  const stopped = (id: string, what: string) => {
+    const inst = manager.get(id);
+    if (inst.running) throw new UserError(`Nejdřív server zastav – ${what} za běhu nejde.`);
+    if (inst.task) throw new UserError('Počkej, až doběhne úloha na serveru.');
+    return inst;
+  };
+
+  // Worlds
+  app.get<{ Params: { id: string } }>('/api/servers/:id/worlds', (req) => findWorlds(manager.get(req.params.id).dir));
+
+  app.post<{ Params: { id: string; name: string } }>('/api/servers/:id/worlds/:name/activate', async (req) => {
+    const inst = stopped(req.params.id, 'přepnutí světa');
+    await setActiveWorld(inst.dir, req.params.name);
+    return findWorlds(inst.dir);
+  });
+
+  app.post<{ Params: { id: string }; Body: { name: string; seed?: string; type?: string } }>(
+    '/api/servers/:id/worlds',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['name'],
+          additionalProperties: false,
+          properties: { name: { type: 'string', maxLength: 64 }, seed: { type: 'string', maxLength: 64 }, type: { type: 'string', enum: ['minecraft:normal', 'minecraft:flat', 'minecraft:large_biomes', 'minecraft:amplified'] } },
+        },
+      },
+    },
+    async (req) => {
+      const inst = stopped(req.params.id, 'založení světa');
+      checkWorldName(req.body.name);
+      if ((await worldFolders(inst.dir, req.body.name)).length) throw new UserError('Svět s tímto názvem už existuje.');
+      await setActiveWorld(inst.dir, req.body.name, { 'level-seed': req.body.seed ?? '', ...(req.body.type ? { 'level-type': req.body.type } : {}) });
+      return findWorlds(inst.dir);
+    },
+  );
+
+  app.post<{ Params: { id: string; name: string }; Body: { seed?: string } }>(
+    '/api/servers/:id/worlds/:name/reset',
+    { schema: { body: { type: 'object', properties: { seed: { type: 'string', maxLength: 64 } } } } },
+    async (req) => {
+      const inst = stopped(req.params.id, 'reset světa');
+      checkWorldName(req.params.name);
+      await trashWorld(inst.dir, req.params.name, path.join(paths.trash, inst.cfg.id));
+      if (req.body?.seed !== undefined) await setActiveWorld(inst.dir, req.params.name, { 'level-seed': req.body.seed });
+      inst.pushLog('system', `Svět ${req.params.name} přesunut do koše. Nový se vygeneruje při startu.`);
+      return findWorlds(inst.dir);
+    },
+  );
+
+  app.delete<{ Params: { id: string; name: string } }>('/api/servers/:id/worlds/:name', async (req) => {
+    const inst = stopped(req.params.id, 'mazání světa');
+    const worlds = await findWorlds(inst.dir);
+    if (worlds.find((w) => w.name === req.params.name)?.active) throw new UserError('Aktivní svět nejde smazat. Nejdřív přepni na jiný.');
+    await trashWorld(inst.dir, req.params.name, path.join(paths.trash, inst.cfg.id));
+    return findWorlds(inst.dir);
+  });
+
+  app.get<{ Params: { id: string; name: string } }>('/api/servers/:id/worlds/:name/download', async (req, reply) => {
+    const inst = manager.get(req.params.id);
+    checkWorldName(req.params.name);
+    const folders = await worldFolders(inst.dir, req.params.name);
+    if (folders.length === 0) throw new UserError('Svět ještě neexistuje.');
+    const resume = await backups.pauseSaves(inst);
+    try {
+      const items = await collectFiles(inst.dir, folders, (rel) => /(^|\/)session\.lock$/.test(rel));
+      const stream = zipStream(items);
+      stream.once('close', resume);
+      stream.once('end', resume);
+      stream.once('error', resume);
+      attachment(reply, `${req.params.name}.zip`);
+      return reply.send(stream);
+    } catch (err) {
+      resume();
+      throw err;
+    }
+  });
+
+  app.post<{ Params: { id: string }; Querystring: { name?: string; activate?: string }; Body: Readable }>(
+    '/api/servers/:id/worlds/import',
+    { schema: { querystring: { type: 'object', properties: { name: { type: 'string', maxLength: 64 }, activate: { type: 'string' } } } } },
+    async (req) => {
+      const inst = manager.get(req.params.id);
+      if (inst.task) throw new UserError('Počkej, až doběhne úloha na serveru.');
+      const declared = Number(req.headers['content-length'] ?? 0);
+      if (declared > MAX_WORLD_UPLOAD) throw new UserError('Svět je moc velký (max 20 GB).');
+      const fs = await statfs(inst.dir).catch(() => null);
+      if (fs && declared * 2.5 > fs.bavail * fs.bsize) throw new UserError('Na disku není dost místa na rozbalení světa.');
+      if (req.query.activate === '1' && inst.running) throw new UserError('Pro nastavení jako aktivní nejdřív server zastav.');
+
+      const tmpName = `.srvmc-import-${Date.now()}.zip`;
+      await saveUpload(inst.dir, '', tmpName, req.body, MAX_WORLD_UPLOAD, false);
+      const zip = path.join(inst.dir, tmpName);
+      try {
+        const name = await manager.runTask(inst.cfg.id, 'import', 'Rozbaluji svět', (report) =>
+          importWorld(inst.dir, zip, req.query.name ?? '', (pct) => report(pct, 'Rozbaluji svět')),
+        );
+        if (req.query.activate === '1') await setActiveWorld(inst.dir, name);
+        inst.pushLog('system', `Svět nahrán jako „${name}“.`);
+        return { name, worlds: await findWorlds(inst.dir) };
+      } finally {
+        await rm(zip, { force: true });
+      }
+    },
+  );
+
+  // Backups
+  app.get<{ Params: { id: string } }>('/api/servers/:id/backups', async (req) => {
+    const inst = manager.get(req.params.id);
+    return { backups: await backups.list(req.params.id), nextRun: backups.nextRun(inst.cfg) };
+  });
+  app.post<{ Params: { id: string } }>('/api/servers/:id/backups', async (req, reply) => {
+    manager.get(req.params.id);
+    // Big worlds take minutes; the panel follows progress through the server's task field.
+    void backups.create(req.params.id, 'manual').catch((err: Error) => manager.get(req.params.id).pushLog('error', `Záloha selhala: ${err.message}`));
+    reply.code(202);
+    return { started: true };
+  });
+  app.post<{ Params: { id: string; file: string } }>('/api/servers/:id/backups/:file/restore', async (req, reply) => {
+    const inst = stopped(req.params.id, 'obnova zálohy');
+    const file = backups.fileFor(inst.cfg.id, req.params.file);
+    if (!(await stat(file).catch(() => null))) throw new UserError('Záloha neexistuje.');
+    void backups.restore(req.params.id, req.params.file).catch((err: Error) => inst.pushLog('error', `Obnova selhala: ${err.message}`));
+    reply.code(202);
+    return { started: true };
+  });
+  app.delete<{ Params: { id: string; file: string } }>('/api/servers/:id/backups/:file', async (req) => {
+    await backups.remove(req.params.id, req.params.file);
+    return { backups: await backups.list(req.params.id) };
+  });
+  app.get<{ Params: { id: string; file: string } }>('/api/servers/:id/backups/:file/download', async (req, reply) => {
+    manager.get(req.params.id);
+    const file = backups.fileFor(req.params.id, req.params.file);
+    const s = await stat(file).catch(() => null);
+    if (!s?.isFile()) throw new UserError('Záloha neexistuje.');
+    attachment(reply, req.params.file, s.size);
+    return reply.send(createReadStream(file));
+  });
+
+  // Pre-generation
+  app.post<{ Params: { id: string } }>('/api/servers/:id/pregen/install', async (req) => {
+    const inst = manager.get(req.params.id);
+    const files = await installChunky(inst, paths);
+    await manager.refreshPregen(inst);
+    inst.pushLog('system', `Nainstalováno: ${files.join(', ')}. ${inst.running ? 'Restartuj server, aby se načetlo.' : ''}`);
+    return { files, needsRestart: inst.running };
+  });
+  app.post<{ Params: { id: string }; Body: PregenRequest }>(
+    '/api/servers/:id/pregen/start',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['dimension', 'radius', 'shape', 'setBorder'],
+          additionalProperties: false,
+          properties: {
+            dimension: { type: 'string', enum: ['overworld', 'nether', 'end'] },
+            radius: { type: 'integer', minimum: 100, maximum: 100000 },
+            shape: { type: 'string', enum: ['square', 'circle'] },
+            setBorder: { type: 'boolean' },
+          },
+        },
+      },
+    },
+    async (req) => {
+      const inst = manager.get(req.params.id);
+      await startPregen(inst, req.body);
+      return manager.info(inst);
+    },
+  );
+  app.post<{ Params: { id: string; action: string } }>('/api/servers/:id/pregen/:action', async (req) => {
+    const inst = manager.get(req.params.id);
+    const action = req.params.action;
+    if (action !== 'pause' && action !== 'continue' && action !== 'cancel') throw new UserError('Neznámá akce.');
+    pregenCommand(inst, action);
+    return manager.info(inst);
+  });
+}

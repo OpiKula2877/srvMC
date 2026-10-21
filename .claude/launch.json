@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "srvmc-panel",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "packages/backend/src/cli.ts", "--web", "packages/web/dist"],
+      "port": 8420
+    }
+  ]
+}
