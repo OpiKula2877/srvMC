@@ -63,6 +63,7 @@ Vše je v `%USERPROFILE%\srvMC` (jinou složku nastavíš proměnnou `SRVMC_HOME
 - `backups\<id>\` – zálohy (`RRRR-MM-DD_HH-MM-SS_<druh>.zip`)
 - `trash\<id>\` – smazané soubory a světy (jde je ručně vrátit)
 - `metrics\<id>\` – historie zátěže po minutách (jeden soubor na den, drží se 31 dní)
+- `network.json` – DuckDNS a playit.gg; token a klíč jsou v desktopové aplikaci zašifrované klíčem uživatele Windows (Electron safeStorage)
 - `servers.json` – seznam serverů a jejich nastavení
 
 ## Struktura
@@ -81,8 +82,9 @@ apps/desktop       Electron: okno, ikona v oznamovací oblasti, balí jádro i p
 - Požadavky s cizí hlavičkou `Host` nebo `Origin` dostanou 403 (ochrana proti DNS rebindingu a jiným webům).
 - Každá změna přes API musí nést hlavičku `x-srvmc: 1`.
 - Servery se spouštějí bez shellu, s polem argumentů. Vlastní JVM argumenty musí začínat `-`.
+- Program playit dostává tajný klíč v proměnné prostředí, ne v příkazové řádce. Stahuje se jen pevná verze s kontrolou SHA-256.
 
-## Stav (fáze 1–6)
+## Stav (fáze 1–7)
 
 Fáze 1: vytvoření serveru (Vanilla, Paper, Fabric), automatická Java, start, stop, restart a násilné ukončení, živá konzole s historií příkazů, grafy CPU a RAM, hráči online, nastavení RAM, portu, JVM a časového pásma, autostart, mazání serveru. Když zavřeš okno, servery běží dál v oznamovací oblasti.
 
@@ -118,7 +120,16 @@ Fáze 6:
 - **Spánek a probuzení** – server se může sám vypnout, když nikdo nehraje. Vypnutý server s probouzením odpovídá v seznamu serverů „Spí · připoj se a probudí se“ a při pokusu o připojení se spustí (hráč se připojí znovu za chvilku). Při prvním použití se může ozvat Windows firewall – srvMC poslouchá na portu serveru.
 - **Limit disku** – velikost složky serveru se počítá každých 5 minut. Nad limitem varování, nad limitem o 10 % se server zastaví a nespustí, dokud se neuvolní místo. Nahrávání souborů, světů a jarů i instalace modů limit hlídají.
 
-Další fáze: síť a doména, Bedrock, Discord a další (viz plán). CurseForge přijde, až bude kam zadat API klíč.
+Fáze 7 – záložka **Síť a doména**:
+
+- **Stav sítě** – adresa v síti doma, veřejná IP, CGNAT (když router přes UPnP hlásí jinou nebo neveřejnou adresu) a kontrola portu zvenku: služba mcstatus.io (záložně mcsrvstat.us) se na server připojí jako hráč. Když server neběží, srvMC na dobu kontroly na portu krátce odpovídá sám.
+- **Jen doma (LAN)** – adresa pro hráče na stejné Wi-Fi.
+- **playit.gg** – propojení účtu přes odkaz (schválíš na playit.gg), srvMC uloží klíč, stáhne a spustí program playit 0.17.1 a vytvoří tunel Minecraft Java na port serveru. Funguje bez nastavení routeru i za CGNAT. Verze 1.x potřebuje službu Windows, proto zatím 0.17.1.
+- **Vlastní IP a otevřený port** – otevření portu na routeru přes UPnP (obnovuje se každých 20 minut, při změně portu se přesune) a ruční postup, když router UPnP neumí.
+- **DuckDNS** – zdarma `něco.duckdns.org`, adresa se aktualizuje každých 10 minut.
+- **Vlastní doména** – podle cíle (veřejná IP, DuckDNS, playit tunel) srvMC vypíše záznamy A / CNAME / SRV pro registrátora a ověří je přes veřejné DNS (1.1.1.1, 8.8.8.8).
+
+Další fáze: Bedrock, Bedrock Preview a Hytale, potom Discord, Geyser, statistiky, víc uživatelů, BlueMap a Velocity (viz plán). CurseForge přijde, až bude kam zadat API klíč.
 
 ## Ikona
 

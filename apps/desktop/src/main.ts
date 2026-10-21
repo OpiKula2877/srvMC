@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, Menu, nativeImage, shell, Tray } from 'electron';
+import { app, BrowserWindow, dialog, Menu, nativeImage, safeStorage, shell, Tray } from 'electron';
 import { startBackend, type Backend } from '@srvmc/backend';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -87,7 +87,14 @@ function createTray(): void {
 }
 
 async function boot(): Promise<void> {
-  const options = { webDir: path.join(here, 'web'), autoStartServers: true };
+  // Tokens (DuckDNS, playit.gg) are sealed with the Windows user's key (DPAPI).
+  const secretBox = safeStorage.isEncryptionAvailable()
+    ? {
+        encrypt: (plain: string) => safeStorage.encryptString(plain).toString('base64'),
+        decrypt: (sealed: string) => safeStorage.decryptString(Buffer.from(sealed, 'base64')),
+      }
+    : undefined;
+  const options = { webDir: path.join(here, 'web'), autoStartServers: true, secretBox };
   try {
     backend = await startBackend({ ...options, port: PREFERRED_PORT });
   } catch (err) {

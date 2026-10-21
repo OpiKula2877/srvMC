@@ -12,15 +12,18 @@ import { ensureDirs, makePaths, type Paths } from './paths.ts';
 import { providerFor, UserError } from './providers/index.ts';
 import { BackupService } from './backups.ts';
 import { MetricHistory } from './history.ts';
+import { NetworkService } from './network.ts';
 import { registerContentRoutes } from './routes/content.ts';
 import { registerModRoutes } from './routes/mods.ts';
 import { registerMonitorRoutes } from './routes/monitor.ts';
+import { registerNetworkRoutes } from './routes/network.ts';
 import { registerWorldRoutes } from './routes/worlds.ts';
 import { Scheduler } from './scheduler.ts';
+import type { SecretBox } from './secrets.ts';
 import { ServerStore } from './store.ts';
 import { Supervisor } from './supervisor.ts';
 
-export const VERSION = '0.6.0';
+export const VERSION = '0.7.0';
 
 export interface BackendOptions {
   /** Port to listen on. 0 picks a free one. Default 8420. */
@@ -32,6 +35,8 @@ export interface BackendOptions {
   devOrigins?: string[];
   autoStartServers?: boolean;
   logger?: boolean;
+  /** Seals stored tokens and keys (the desktop app passes Electron safeStorage). */
+  secretBox?: SecretBox;
 }
 
 export interface Backend {
@@ -210,11 +215,13 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   const history = new MetricHistory(paths.metrics);
   const supervisor = new Supervisor(manager, history);
   const scheduler = new Scheduler(manager, backups);
+  const network = new NetworkService(manager, paths, VERSION, opts.secretBox);
   registerRoutes(app, manager, paths);
   registerContentRoutes(app, manager, paths);
   registerModRoutes(app, manager, paths);
   registerWorldRoutes(app, manager, backups, paths);
   registerMonitorRoutes(app, manager, history, scheduler);
+  registerNetworkRoutes(app, network);
 
   if (opts.webDir) {
     await app.register(fastifyStatic, {
@@ -242,6 +249,7 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   backups.start();
   supervisor.start();
   scheduler.start();
+  await network.start();
 
   return {
     port,
@@ -250,6 +258,7 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
     async close() {
       backups.stop();
       scheduler.stop();
+      await network.stop();
       await supervisor.stop();
       await manager.stopAll();
       for (const ws of clients) ws.close();

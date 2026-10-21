@@ -15,6 +15,7 @@ import { OptionsTab } from './tabs/OptionsTab.tsx';
 import { PlayersTab } from './tabs/PlayersTab.tsx';
 import { GraphsTab } from './tabs/GraphsTab.tsx';
 import { ModsTab } from './tabs/ModsTab.tsx';
+import { NetworkTab } from './tabs/NetworkTab.tsx';
 import { ScheduleTab } from './tabs/ScheduleTab.tsx';
 import { WorldsTab } from './tabs/WorldsTab.tsx';
 
@@ -44,7 +45,7 @@ const TABS: { id: string; label: string; phase?: number }[] = [
   { id: 'mody', label: 'Mody a pluginy' },
   { id: 'grafy', label: 'Grafy' },
   { id: 'planovac', label: 'Plánovač' },
-  { id: 'sit', label: 'Síť a doména', phase: 7 },
+  { id: 'sit', label: 'Síť a doména' },
 ];
 
 const QUICK = ['list', 'save-all', 'time set day', 'weather clear', 'say Restart za 5 minut'];
@@ -509,7 +510,8 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
       {tab === 'mody' && <ModsTab key={server.id} server={server} />}
       {tab === 'grafy' && <GraphsTab key={server.id} server={server} />}
       {tab === 'planovac' && <ScheduleTab key={server.id} server={server} />}
-      {!['nastaveni', 'hraci', 'moznosti', 'zaznamy', 'soubory', 'svety', 'mody', 'grafy', 'planovac'].includes(tab) && (
+      {tab === 'sit' && <NetworkTab key={server.id} server={server} />}
+      {!['nastaveni', 'hraci', 'moznosti', 'zaznamy', 'soubory', 'svety', 'mody', 'grafy', 'planovac', 'sit'].includes(tab) && (
         <div className="row">
           <Console server={server} />
           <Metrics server={server} />

@@ -94,6 +94,91 @@ export interface ServerConfig {
   /** Soft size limit of the server folder in MB. 0 or missing = no limit. */
   diskLimitMb?: number;
   schedule?: ScheduledTask[];
+  /** Keep the port open on the router through UPnP. */
+  upnp?: boolean;
+  /** The player-facing domain the user set up for this server. */
+  domain?: DomainConfig;
+}
+
+export type DomainTarget = 'ip' | 'duckdns' | 'playit';
+
+export interface DomainConfig {
+  /** Registered domain, e.g. "mojedomena.cz". */
+  zone: string;
+  /** Name inside it, e.g. "survival"; empty = the domain itself. */
+  sub: string;
+  target: DomainTarget;
+}
+
+export interface DnsRecord {
+  type: 'A' | 'CNAME' | 'SRV';
+  /** Relative to the zone, as registrars ask for it ("survival", "_minecraft._tcp.survival", "@"). */
+  name: string;
+  value: string;
+}
+
+export interface DomainCheck {
+  host: string;
+  records: { record: DnsRecord; found: string | null; ok: boolean }[];
+  /** Players can use the domain already. */
+  ok: boolean;
+  message: string;
+}
+
+export interface DuckDnsState {
+  configured: boolean;
+  /** Subdomain without .duckdns.org */
+  domain?: string;
+  lastUpdate?: number;
+  lastOk?: boolean;
+  error?: string;
+}
+
+export type PlayitStatus = 'off' | 'claiming' | 'starting' | 'running' | 'error';
+
+export interface PlayitTunnel {
+  id: string;
+  name: string;
+  /** What players type, e.g. "brave-fox.gl.joinmc.link". */
+  address: string;
+  localPort: number | null;
+  pending: boolean;
+  disabled?: string;
+}
+
+export interface PlayitState {
+  status: PlayitStatus;
+  /** While claiming: the page where the user approves srvMC on their playit account. */
+  claimUrl?: string;
+  error?: string;
+  tunnels: PlayitTunnel[];
+}
+
+export interface NetworkOverview {
+  lanIp: string | null;
+  publicIp: string | null;
+  /** The router's internet address as UPnP reports it. */
+  routerIp: string | null;
+  upnp: boolean;
+  /** The provider shares one public address between customers: port forwarding cannot work. */
+  cgnat: boolean | null;
+  duckdns: DuckDnsState;
+  playit: PlayitState;
+}
+
+export interface ServerNetwork {
+  port: number;
+  upnp: { enabled: boolean; mapped: boolean; error?: string };
+  /** playit.gg address of the tunnel to this server's port. */
+  playit: PlayitTunnel | null;
+  domain?: DomainConfig;
+  records: DnsRecord[];
+}
+
+export interface PortCheck {
+  address: string;
+  open: boolean;
+  checkedAt: number;
 }
 
 export type ScheduleAction = 'restart' | 'start' | 'stop' | 'backup' | 'command';

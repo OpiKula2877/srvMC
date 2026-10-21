@@ -313,6 +313,14 @@ export class ServerManager extends EventEmitter {
     await this.persist();
   }
 
+  /** Changes stored settings that have no field in UpdateServerRequest (network options). */
+  async saveConfig(id: string, mutate: (cfg: ServerConfig) => void): Promise<void> {
+    const inst = this.get(id);
+    mutate(inst.cfg);
+    await this.persist();
+    inst.emit('status');
+  }
+
   async recordTaskRun(id: string, taskId: string, result: string): Promise<void> {
     const task = this.instances.get(id)?.cfg.schedule?.find((t) => t.id === taskId);
     if (!task) return;
