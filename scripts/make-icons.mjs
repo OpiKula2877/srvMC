@@ -49,4 +49,23 @@ await writeFile('apps/desktop/assets/tray@2x.png', pngs[64]);
 await writeFile('apps/desktop/assets/icon.ico', ico([16, 24, 32, 48, 64, 128, 256].map((size) => ({ size, png: pngs[size] }))));
 await writeFile('packages/web/public/favicon.png', pngs[64]);
 await writeFile('packages/web/public/brand.png', pngs[128]);
+
+// 16×16 dirt tile darkened like the background of Minecraft's server list (used by the MOTD preview).
+const DIRT = [
+  [134, 96, 67],
+  [121, 85, 58],
+  [89, 61, 41],
+  [155, 118, 83],
+  [104, 74, 52],
+];
+let seed = 7;
+const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+const dirt = Buffer.alloc(16 * 16 * 3);
+for (let i = 0; i < 256; i++) {
+  const [r, g, b] = DIRT[Math.floor(rand() * DIRT.length)];
+  dirt[i * 3] = Math.round(r * 0.27);
+  dirt[i * 3 + 1] = Math.round(g * 0.27);
+  dirt[i * 3 + 2] = Math.round(b * 0.27);
+}
+await writeFile('packages/web/public/mc-dirt.png', await sharp(dirt, { raw: { width: 16, height: 16, channels: 3 } }).png().toBuffer());
 console.log('Ikony hotové: apps/desktop/assets, packages/web/public');

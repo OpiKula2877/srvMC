@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SERVER_TYPES, serverTypeInfo, type BuildInfo, type GameVersion, type ServerType, type SystemInfo } from '@srvmc/shared';
 import { api } from '../api.ts';
-import { Slider, Toggle } from '../components/Controls.tsx';
+import { RamPicker, Toggle } from '../components/Controls.tsx';
 import { Dropdown } from '../components/Dropdown.tsx';
 import { Icon, Spinner } from '../components/Icon.tsx';
 import { useToast } from '../components/Overlays.tsx';
@@ -39,23 +39,23 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
   const [build, setBuild] = useState<string>();
   const [name, setName] = useState('');
   const [port, setPort] = useState(25565);
-  const [ramGb, setRamGb] = useState(4);
+  const [ramMb, setRamMb] = useState(4096);
   const [startAfter, setStartAfter] = useState(true);
   const [eula, setEula] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string>();
 
   const info = serverTypeInfo(type);
-  const totalGb = system ? Math.floor(system.totalMemMb / 1024) : 16;
-  const maxGb = Math.max(1, Math.min(32, totalGb - 2));
+  // Leave 2 GB for Windows; never more than 32 GB (Java gets slower with huge heaps).
+  const maxMb = Math.max(1024, Math.min(32768, Math.floor(((system?.totalMemMb ?? 16384) - 2048) / 256) * 256));
 
   useEffect(() => {
     void api.suggestPort().then((r) => setPort(r.port)).catch(() => undefined);
   }, []);
 
   useEffect(() => {
-    if (system) setRamGb((g) => Math.min(g, maxGb));
-  }, [system, maxGb]);
+    if (system) setRamMb((m) => Math.min(m, maxMb));
+  }, [system, maxMb]);
 
   useEffect(() => {
     let live = true;
@@ -92,15 +92,8 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
     };
   }, [type, version]);
 
-  const versionOptions = useMemo(
-    () => (versions ?? []).map((v) => ({ value: v.id, label: v.id, hint: v.type === 'snapshot' ? 'testovací verze' : undefined })),
-    [versions],
-  );
-  const buildOptions = useMemo(
-    () => (builds ?? []).map((b, i) => ({ value: b.id, label: b.label, hint: i === 0 && b.channel === 'stable' ? 'nejnovější' : b.channel === 'stable' ? undefined : 'není stabilní' })),
-    [builds],
-  );
-  const quickVersions = (versions ?? []).filter((v) => v.type === 'release').slice(0, 5);
+  const versionOptions = useMemo(() => (versions ?? []).map((v) => ({ value: v.id, label: v.id })), [versions]);
+  const buildOptions = useMemo(() => (builds ?? []).map((b) => ({ value: b.id, label: b.label })), [builds]);
 
   const finalName = name.trim() || `${info.name} ${version ?? ''}`.trim();
   const canCreate = eula && !!version && !!build && !busy;
@@ -109,7 +102,7 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
     if (!version) return;
     setBusy(true);
     try {
-      const server = await api.create({ name: finalName, type, version, build, port, ramMaxMb: ramGb * 1024, eulaAccepted: eula, startAfterInstall: startAfter });
+      const server = await api.create({ name: finalName, type, version, build, port, ramMaxMb: ramMb, eulaAccepted: eula, startAfterInstall: startAfter });
       upsertServer(server);
       toast('info', 'Server se připravuje', 'Stahuji soubory z oficiálních zdrojů.');
       navigate({ page: 'server', id: server.id, tab: 'konzole' });
@@ -118,8 +111,6 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
       setBusy(false);
     }
   };
-
-  const ramHint = ramGb > 16 ? 'Hodně RAM – Java pak dělá delší pauzy. Většině serverů stačí 4–10 GB.' : ramGb < 2 ? 'Málo RAM – stačí jen pro malý vanilla server.' : 'Dobrá volba. Použiji optimalizované Aikar flags.';
 
   return (
     <main className="main">
@@ -142,12 +133,9 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
       <div className="row">
         <div className="col-main">
           <section className="card stack" aria-labelledby="h-typ" style={{ gap: 16 }}>
-            <div className="stack" style={{ gap: 4 }}>
-              <h2 id="h-typ" className="h2">
-                1. Typ serveru
-              </h2>
-              <p className="muted">Soubory se stáhnou až po vytvoření, přímo z oficiálních zdrojů.</p>
-            </div>
+            <h2 id="h-typ" className="h2">
+              1. Typ serveru
+            </h2>
             <div className="grid-auto" style={{ ['--min' as string]: '170px', gap: 10 }}>
               {SERVER_TYPES.map((t) => (
                 <button key={t.id} type="button" className="type-btn" aria-pressed={t.id === type} disabled={!t.available} onClick={() => setType(t.id)}>
@@ -155,7 +143,6 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
                     <span className="swatch" style={{ background: t.color }} />
                     <span style={{ fontWeight: 600 }}>{t.name}</span>
                   </span>
-                  <span className="muted small">{t.available ? t.tag : `Přijde ve fázi ${t.phase}`}</span>
                 </button>
               ))}
             </div>
@@ -172,15 +159,6 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
               </label>
             </div>
             {loadError && <div className="banner error">Nepodařilo se načíst seznam verzí: {loadError}. Zkontroluj připojení k internetu.</div>}
-            {quickVersions.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {quickVersions.map((v) => (
-                  <button key={v.id} type="button" className="pill-btn" aria-pressed={v.id === version} onClick={() => setVersion(v.id)}>
-                    {v.id}
-                  </button>
-                ))}
-              </div>
-            )}
             <div className="grid-auto" style={{ ['--min' as string]: '240px', gap: 14 }}>
               <Dropdown label="Verze Minecraftu" value={version} options={versionOptions} onChange={setVersion} loading={!versions && !loadError} searchable mono />
               <Dropdown label="Build / loader" value={build} options={buildOptions} onChange={setBuild} loading={!!version && !builds && !loadError} />
@@ -201,12 +179,7 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
                 <input className="input mono" inputMode="numeric" value={port} onChange={(e) => setPort(Number(e.target.value.replace(/\D/g, '')) || 0)} />
               </label>
             </div>
-            <div className="stack" style={{ gap: 8 }}>
-              <Slider id="ram" label="RAM pro server" valueLabel={`${ramGb} GB z ${totalGb} GB`} value={ramGb} min={1} max={maxGb} onChange={setRamGb} />
-              <span className="small" style={{ color: ramGb > 16 || ramGb < 2 ? 'var(--amber-text)' : 'var(--muted)' }}>
-                {ramHint}
-              </span>
-            </div>
+            <RamPicker id="ram" label="RAM pro server" valueMb={ramMb} maxMb={maxMb} onChange={setRamMb} />
             <Toggle label="Po instalaci server rovnou spustit" checked={startAfter} onChange={setStartAfter} />
           </section>
         </div>
@@ -227,7 +200,6 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
             <li>Správná Java (Temurin), jen když ještě chybí</li>
             <li>eula.txt a server.properties s portem {port}</li>
           </ul>
-          <p className="muted small">Stažené soubory se uloží do cache. Další server stejné verze se nestahuje znovu.</p>
           {NOTES[type] && <div className="banner info">{NOTES[type]}</div>}
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, color: 'var(--text-2)' }}>
             <input type="checkbox" className="check" checked={eula} onChange={(e) => setEula(e.target.checked)} style={{ marginTop: 1 }} />
@@ -242,7 +214,7 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
             {busy ? <Spinner /> : null}
             Vytvořit a stáhnout
           </button>
-          {system && ramGb * 1024 > system.freeMemMb && (
+          {system && ramMb > system.freeMemMb && (
             <div className="banner info">Teď je volných jen {gb(system.freeMemMb)} RAM. Server se spustí, ale Windows může zpomalit.</div>
           )}
         </aside>

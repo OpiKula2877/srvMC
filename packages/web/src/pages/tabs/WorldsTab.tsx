@@ -14,12 +14,12 @@ const WORLD_TYPES = [
   { value: 'minecraft:amplified', label: 'Zesílený (amplified)' },
 ];
 
-const SCHEDULES: { value: BackupSchedule; label: string; hint?: string }[] = [
+const SCHEDULES: { value: BackupSchedule; label: string }[] = [
   { value: 'off', label: 'Vypnuto' },
   { value: 'hourly', label: 'Každou hodinu' },
-  { value: '6h', label: 'Každých 6 hodin', hint: '0:00, 6:00, 12:00, 18:00' },
+  { value: '6h', label: 'Každých 6 hodin' },
   { value: 'daily', label: 'Každý den' },
-  { value: 'weekly', label: 'Každý týden', hint: 'v pondělí' },
+  { value: 'weekly', label: 'Každé pondělí' },
 ];
 
 const TIMES = Array.from({ length: 48 }, (_, i) => {
@@ -167,21 +167,16 @@ function PregenCard({ server }: { server: ServerInfo }) {
 
   return (
     <section className="card stack" aria-labelledby="h-pregen" style={{ gap: 14 }}>
-      <div className="stack" style={{ gap: 4 }}>
-        <h2 id="h-pregen" className="h2">
-          Pre-generace světa
-        </h2>
-        <span className="muted" style={{ fontSize: 13 }}>
-          Chunky vygeneruje mapu předem, takže hráči pak nemají lagy při objevování nových míst.
-        </span>
-      </div>
+      <h2 id="h-pregen" className="h2">
+        Pre-generace světa
+      </h2>
 
       {!PREGEN_SUPPORTED.has(server.type) ? (
         <div className="banner info">Vanilla server neumí pluginy ani mody. Pre-generace funguje na Paperu nebo Fabricu.</div>
       ) : !p?.installed ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
           <span className="muted" style={{ flex: '1 1 260px', fontSize: 13 }}>
-            Chunky ještě není nainstalovaný. Stáhnu ho z Modrinthu i s tím, co potřebuje.
+            Chunky není nainstalovaný.
           </span>
           <button
             type="button"
@@ -259,7 +254,7 @@ function PregenCard({ server }: { server: ServerInfo }) {
                 />
               </div>
               <Slider id="pregen-radius" label="Poloměr od středu (0, 0)" valueLabel={`${radius.toLocaleString('cs-CZ')} bloků`} value={radius} min={500} max={20000} step={500} onChange={setRadius} />
-              <span className="muted small">Cca {chunksEstimate.toLocaleString('cs-CZ')} chunků. Malý server zvládne 50–200 chunků za sekundu.</span>
+              <span className="muted small">Cca {chunksEstimate.toLocaleString('cs-CZ')} chunků</span>
               {dimension === 'overworld' && <Toggle label={`Nastavit hranici světa na ${(radius * 2).toLocaleString('cs-CZ')} bloků`} checked={border} onChange={setBorder} />}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <button
@@ -328,7 +323,6 @@ function BackupsPanel({ server }: { server: ServerInfo }) {
       {(schedule === 'daily' || schedule === 'weekly') && <Dropdown label="V kolik hodin" value={server.backupTime ?? '04:00'} options={TIMES} onChange={(v) => update({ backupTime: v })} mono />}
       <Dropdown label="Ponechat automatických" value={String(server.backupKeep ?? DEFAULT_BACKUP_KEEP)} options={KEEP} onChange={(v) => update({ backupKeep: Number(v) })} searchable={false} />
       {nextRun && <span className="muted small">Další automatická záloha: {dateTime(nextRun)}</span>}
-      <span className="muted small">Ruční zálohy se nemažou. Automatické nad limit ano, nejstarší první.</span>
 
       <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', maxHeight: 420, overflowY: 'auto' }}>
         {list === null && <Spinner />}
@@ -499,12 +493,7 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
                     <path d="M12 21V9M7 14l5-5 5 5M4 3h16" />
                   </svg>
                 </span>
-                <div className="stack" style={{ gap: 4 }}>
-                  <span style={{ fontWeight: 600 }}>Přetáhni sem svět (.zip)</span>
-                  <span className="muted" style={{ fontSize: 13 }}>
-                    Najdu level.dat i složky Netheru a Endu. Funguje i zip ze singleplayeru (.minecraft/saves).
-                  </span>
-                </div>
+                <span style={{ fontWeight: 600 }}>Přetáhni sem svět (.zip)</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
                   <input className="input mono" style={{ width: 200 }} value={importName} maxLength={48} placeholder="název (nepovinné)" aria-label="Název nahraného světa" onChange={(e) => setImportName(e.target.value)} />
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: running ? 'var(--muted)' : 'var(--text-2)' }}>

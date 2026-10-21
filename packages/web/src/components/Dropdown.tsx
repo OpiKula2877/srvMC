@@ -135,10 +135,7 @@ export function Dropdown({ label, value, options, onChange, placeholder = 'Vyber
                 style={mono ? { fontFamily: 'var(--mono)', fontSize: 13 } : undefined}
               >
                 {o.swatch && <span className="swatch" style={{ background: o.swatch }} />}
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  {o.label}
-                  {o.hint && <span className="hint">{o.hint}</span>}
-                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>{o.label}</span>
                 {o.value === value && (
                   <span style={{ color: 'var(--green)' }}>
                     <Icon name="check" size={16} strokeWidth={2.6} />

@@ -37,7 +37,7 @@ export const fabric: Provider = {
     const loaders = await loadersFor(version);
     return loaders.map(({ loader }) => ({
       id: loader.version,
-      label: `Fabric Loader ${loader.version}${loader.stable ? '' : ' (beta)'}`,
+      label: `Fabric Loader ${loader.version}`,
       channel: loader.stable ? 'stable' : 'beta',
     }));
   },

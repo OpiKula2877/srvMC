@@ -27,9 +27,9 @@ const LISTS: Record<PlayerListKind, ListMeta> = {
 };
 
 const LEVELS = [
-  { value: '4', label: '4 – všechna práva', hint: 'včetně stop a správy operátorů' },
-  { value: '3', label: '3 – správa hráčů', hint: 'kick, ban, op' },
-  { value: '2', label: '2 – příkazy hry', hint: 'gamemode, tp, give' },
+  { value: '4', label: '4 – všechna práva' },
+  { value: '3', label: '3 – správa hráčů' },
+  { value: '2', label: '2 – příkazy hry' },
   { value: '1', label: '1 – jen obejít ochranu spawnu' },
 ];
 
@@ -107,12 +107,7 @@ export function PlayersTab({ server }: { server: ServerInfo }) {
 
         <div className="card stack" style={{ gap: 16 }}>
           <div className="section-head">
-            <div className="stack" style={{ gap: 4 }}>
-              <h2 className="h2">{meta.title}</h2>
-              <p className="muted" style={{ fontSize: 13 }}>
-                {meta.hint}
-              </p>
-            </div>
+            <h2 className="h2">{meta.title}</h2>
             {kind === 'whitelist' && info && (
               <div style={{ minWidth: 240 }}>
                 <Toggle
@@ -220,9 +215,6 @@ export function PlayersTab({ server }: { server: ServerInfo }) {
               />
             </div>
           ))}
-        </div>
-        <div className="banner info">
-          Když server běží, panel pošle příkaz do konzole (whitelist add, op, ban). Když neběží, upraví soubory whitelist.json, ops.json a banned-players.json.
         </div>
         {info && !info.onlineMode && (
           <div className="banner error">

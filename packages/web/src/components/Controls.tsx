@@ -126,6 +126,56 @@ export function Slider(props: {
   );
 }
 
+const gbText = (mb: number) => `${(mb / 1024).toLocaleString('cs-CZ', { maximumFractionDigits: 2 })} GB`;
+
+/** RAM in MB: a slider for quick moves plus an exact number (e.g. 1536 MB = 1,5 GB). */
+export function RamPicker({ id, label, valueMb, maxMb, onChange }: { id: string; label: string; valueMb: number; maxMb: number; onChange: (mb: number) => void }) {
+  const min = 512;
+  const [text, setText] = useState(String(valueMb));
+  useEffect(() => setText(String(valueMb)), [valueMb]);
+  const commit = () => {
+    const n = Math.round(Number(text));
+    const next = Number.isFinite(n) && n > 0 ? Math.min(maxMb, Math.max(min, n)) : valueMb;
+    setText(String(next));
+    if (next !== valueMb) onChange(next);
+  };
+  const pct = maxMb > min ? ((valueMb - min) / (maxMb - min)) * 100 : 0;
+  return (
+    <div className="field" style={{ gap: 10 }}>
+      <div className="kv muted" style={{ fontSize: 13 }}>
+        <label htmlFor={id}>{label}</label>
+        <span style={{ color: 'var(--text)', fontWeight: 600 }}>
+          {gbText(valueMb)} z {gbText(maxMb)}
+        </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <input
+          type="range"
+          className="slider"
+          aria-label={`${label} (posuvník)`}
+          min={min}
+          max={maxMb}
+          step={256}
+          value={valueMb}
+          onChange={(e) => onChange(Number(e.target.value))}
+          style={{ flex: 1, '--pct': `${pct}%` } as CSSProperties}
+        />
+        <label className="unit-input">
+          <input
+            id={id}
+            inputMode="numeric"
+            value={text}
+            onChange={(e) => setText(e.target.value.replace(/\D/g, ''))}
+            onBlur={commit}
+            onKeyDown={(e) => e.key === 'Enter' && commit()}
+          />
+          <span>MB</span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 export function StatusPill({ server }: { server: ServerInfo }) {
   const look = statusLook(server);
   return (

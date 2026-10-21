@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import type { ServerInfo, SystemInfo } from '@srvmc/shared';
 import { api } from '../api.ts';
-import { Progress, Slider, Sparkline, StatusPill, Toggle } from '../components/Controls.tsx';
+import { Progress, RamPicker, Sparkline, StatusPill, Toggle } from '../components/Controls.tsx';
 import { Dropdown } from '../components/Dropdown.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { ConfirmDialog, useToast } from '../components/Overlays.tsx';
@@ -210,18 +210,17 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
   const toast = useToast();
   const [name, setName] = useState(server.name);
   const [port, setPort] = useState(server.port);
-  const [ramGb, setRamGb] = useState(Math.round(server.ramMaxMb / 1024));
+  const [ramMb, setRamMb] = useState(server.ramMaxMb);
   const [flags, setFlags] = useState(server.jvmFlags);
   const [extra, setExtra] = useState(server.extraJvmArgs);
   const [autoStart, setAutoStart] = useState(server.autoStart);
   const [timezone, setTimezone] = useState(server.timezone ?? '');
   const [busy, setBusy] = useState(false);
-  const totalGb = system ? Math.floor(system.totalMemMb / 1024) : 16;
-  const maxGb = Math.max(1, Math.min(32, totalGb - 1));
+  const maxMb = Math.max(1024, Math.min(32768, Math.floor(((system?.totalMemMb ?? 16384) - 1024) / 256) * 256));
   const dirty =
     name !== server.name ||
     port !== server.port ||
-    ramGb * 1024 !== server.ramMaxMb ||
+    ramMb !== server.ramMaxMb ||
     flags !== server.jvmFlags ||
     extra !== server.extraJvmArgs ||
     autoStart !== server.autoStart ||
@@ -230,7 +229,7 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
   const save = async () => {
     setBusy(true);
     try {
-      await api.update(server.id, { name, port, ramMaxMb: ramGb * 1024, jvmFlags: flags, extraJvmArgs: extra, autoStart, timezone });
+      await api.update(server.id, { name, port, ramMaxMb: ramMb, jvmFlags: flags, extraJvmArgs: extra, autoStart, timezone });
       toast('ok', 'Uloženo', isActive(server) ? 'Port, RAM a Java argumenty se projeví po restartu.' : undefined);
     } catch (err) {
       toast('error', 'Uložení selhalo', (err as Error).message);
@@ -253,15 +252,15 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
             <input className="input mono" inputMode="numeric" value={port} onChange={(e) => setPort(Number(e.target.value.replace(/\D/g, '')) || 0)} />
           </label>
         </div>
-        <Slider id="ram-edit" label="Max RAM" valueLabel={`${ramGb} GB z ${totalGb} GB`} value={ramGb} min={1} max={maxGb} onChange={setRamGb} />
+        <RamPicker id="ram-edit" label="Max RAM" valueMb={ramMb} maxMb={maxMb} onChange={setRamMb} />
         <div className="grid-auto" style={{ ['--min' as string]: '240px', gap: 14 }}>
           <Dropdown
             label="Optimalizace Javy"
             value={flags}
             onChange={(v) => setFlags(v as typeof flags)}
             options={[
-              { value: 'aikar', label: 'Aikar flags', hint: 'doporučeno – kratší lagy při úklidu paměti' },
-              { value: 'default', label: 'Výchozí Java', hint: 'bez úprav' },
+              { value: 'aikar', label: 'Aikar flags (doporučeno)' },
+              { value: 'default', label: 'Výchozí Java' },
             ]}
           />
           <label className="field">
@@ -279,11 +278,6 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
           </button>
         </div>
       </section>
-      <aside className="col-side">
-        <div className="banner info">
-          Herní nastavení, MOTD a ikona jsou v záložce <a href={href({ page: 'server', id: server.id, tab: 'moznosti' })}>Možnosti</a>.
-        </div>
-      </aside>
     </div>
   );
 }

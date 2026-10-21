@@ -169,16 +169,17 @@ button:disabled { cursor: not-allowed; }
 .dd-btn { min-height: 44px; width: 100%; padding: 0 12px; border-radius: var(--radius); border: 1px solid var(--line-strong); background: var(--bg); color: var(--text); display: flex; align-items: center; gap: 10px; text-align: left; transition: border-color .15s, box-shadow .15s, background .15s; }
 .dd-btn[aria-expanded='true'] { border-color: var(--green); box-shadow: 0 0 0 3px rgba(91, 210, 122, 0.18); background: #12161a; }
 .dd-btn:disabled { opacity: .55; }
-.dd-btn .value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Long values wrap and the field grows taller instead of cutting the text off. */
+.dd-btn .value { flex: 1; min-width: 0; padding: 10px 0; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
 .dd-btn .placeholder { color: var(--faint); }
 .dd-chev { flex: none; transition: transform .18s; color: var(--muted); }
 .dd-btn[aria-expanded='true'] .dd-chev { transform: rotate(180deg); color: var(--green); }
-.dd-panel { position: absolute; top: 100%; left: 0; right: 0; margin-top: 6px; z-index: 60; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line-strong); box-shadow: 0 18px 40px rgba(0, 0, 0, .55), 0 0 0 1px rgba(91, 210, 122, .06); overflow: hidden; display: flex; flex-direction: column; animation: ddIn .14s ease-out; }
+.dd-panel { position: absolute; top: 100%; left: 0; min-width: 100%; width: max-content; max-width: min(460px, calc(100vw - 32px)); margin-top: 6px; z-index: 60; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line-strong); box-shadow: 0 18px 40px rgba(0, 0, 0, .55), 0 0 0 1px rgba(91, 210, 122, .06); overflow: hidden; display: flex; flex-direction: column; animation: ddIn .14s ease-out; }
 @keyframes ddIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .dd-search { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #2a3038; color: var(--muted); }
 .dd-search input { flex: 1; min-width: 0; min-height: 32px; border: none; outline: none; background: transparent; color: var(--text); font: inherit; }
 .dd-list { max-height: 280px; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
-.dd-opt { min-height: 40px; padding: 6px 10px; border-radius: 8px; border: none; background: transparent; color: var(--text); display: flex; align-items: center; gap: 10px; text-align: left; }
+.dd-opt { min-height: 40px; padding: 8px 10px; border-radius: 8px; border: none; background: transparent; color: var(--text); display: flex; align-items: center; gap: 10px; text-align: left; line-height: 1.35; overflow-wrap: anywhere; }
 .dd-opt.active { background: #252c34; }
 .dd-opt[aria-selected='true'] { background: #18301f; font-weight: 600; }
 .dd-opt[aria-selected='true'].active { background: #1f3a27; }
@@ -283,7 +284,10 @@ button:disabled { cursor: not-allowed; }
 .prop-row:last-child { border-bottom: none; }
 .prop-row .meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .prop-row .key { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-.prop-row .hint { font-size: 12px; color: var(--muted); }
+.unit-input { display: flex; align-items: center; min-height: 44px; width: 132px; flex: none; padding: 0 12px; border-radius: var(--radius); border: 1px solid var(--line-strong); background: var(--bg); transition: border-color .15s, box-shadow .15s; }
+.unit-input:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px rgba(91, 210, 122, 0.18); }
+.unit-input input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--text); font-family: var(--mono); font-size: 13px; text-align: right; }
+.unit-input span { margin-left: 6px; color: var(--muted); font-size: 13px; }
 .prop-row .control { flex: 0 0 auto; width: min(260px, 50%); display: flex; justify-content: flex-end; }
 .prop-row .control > * { width: 100%; }
 .prop-row .control > .toggle { width: 40px; }
@@ -292,10 +296,14 @@ button:disabled { cursor: not-allowed; }
 .savebar { position: sticky; bottom: 16px; z-index: 40; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 14px; background: #1b2531; border: 1px solid #2b3a4c; box-shadow: 0 12px 30px rgba(0, 0, 0, .45); animation: ddIn .16s ease-out; }
 .savebar .grow { flex: 1; min-width: 200px; color: #c7ddf7; }
 
-.mc-entry { padding: 14px; border-radius: 6px; background: #221e1b; border: 2px solid #8c8c8c; display: flex; gap: 12px; align-items: flex-start; font-family: var(--pixel); font-size: 22px; line-height: 1.05; }
-.mc-entry .icon { width: 64px; height: 64px; flex: none; image-rendering: pixelated; background: #3a3530; display: grid; place-items: center; color: #8c8c8c; font-size: 40px; }
-.mc-entry .lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+/* Server list entry as Minecraft draws it: darkened dirt background, pixel font with drop shadows. */
+.mc-entry { padding: 10px 12px; background: #1c1712 url('/mc-dirt.png') repeat; background-size: 64px 64px; image-rendering: pixelated; display: flex; gap: 12px; align-items: flex-start; font-family: var(--pixel); font-size: 24px; line-height: 1; letter-spacing: 0.02em; }
+.mc-entry .icon { width: 64px; height: 64px; flex: none; image-rendering: pixelated; display: grid; place-items: center; background: #3b3b3b; color: #a0a0a0; font-size: 44px; text-shadow: 3px 3px 0 #282828; }
+.mc-entry .icon img { display: block; image-rendering: pixelated; }
+.mc-entry .lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-top: 2px; }
 .mc-entry .line { white-space: pre; overflow: hidden; }
+.mc-entry .name { color: #fff; text-shadow: 2px 2px 0 #3f3f3f; }
+.mc-entry .count { color: #aaa; text-shadow: 2px 2px 0 #2a2a2a; }
 .palette { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .palette button { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line-strong); font-family: var(--mono); font-size: 12px; font-weight: 700; }
 

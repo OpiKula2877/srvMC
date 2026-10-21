@@ -30,6 +30,13 @@ async function toServerIcon(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Obrázek se nepodařilo převést.'))), 'image/png'));
 }
 
+/** Minecraft draws every glyph twice: the shadow is the text color at a quarter brightness. */
+function shadowOf(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const q = (shift: number) => ((n >> shift) & 255) >> 2;
+  return `2px 2px 0 rgb(${q(16)}, ${q(8)}, ${q(0)})`;
+}
+
 function MotdLine({ text }: { text: string }) {
   const segs = parseMotd(text);
   return (
@@ -40,6 +47,7 @@ function MotdLine({ text }: { text: string }) {
           key={i}
           style={{
             color: s.color,
+            textShadow: shadowOf(s.color),
             fontWeight: s.bold ? 700 : 400,
             fontStyle: s.italic ? 'italic' : 'normal',
             textDecoration: [s.underline && 'underline', s.strike && 'line-through'].filter(Boolean).join(' ') || 'none',
@@ -150,7 +158,6 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
   );
   const online = value('online-mode') !== 'false';
   const changed = Object.keys(edits).length;
-  const maxPlayers = value('max-players');
 
   if (!values) {
     return (
@@ -164,31 +171,16 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
     <div className="stack" style={{ gap: 20 }}>
       <div className="row">
         <section className="col-main card stack" aria-labelledby="h-motd" style={{ gap: 16 }}>
-          <div className="stack" style={{ gap: 4 }}>
-            <h2 id="h-motd" className="h2">
-              Jak server vypadá v seznamu
-            </h2>
-            <p className="muted" style={{ fontSize: 13 }}>
-              Popisek (MOTD) a ikona, které hráč uvidí v Multiplayeru. Název serveru v seznamu si každý hráč zadá sám. Barvy píšeš kódem &amp;a, tučně &amp;l.
-            </p>
-          </div>
+          <h2 id="h-motd" className="h2">
+            Jak server vypadá v seznamu
+          </h2>
 
           <div className="mc-entry" aria-label="Náhled v seznamu serverů">
             <div className="icon">
               {hasIcon ? <img src={api.iconUrl(server.id, iconVersion)} width={64} height={64} alt="" onError={() => setHasIcon(false)} /> : '?'}
             </div>
             <div className="lines">
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                <span style={{ color: '#fff' }}>{server.name}</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#aaa' }}>
-                  {server.players.length}/{maxPlayers}
-                  <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true">
-                    {[0, 1, 2, 3, 4].map((i) => (
-                      <rect key={i} x={i * 4} y={12 - i * 3} width="3" height={4 + i * 3} fill="#55FF55" />
-                    ))}
-                  </svg>
-                </span>
-              </div>
+              <span className="line name">{server.name}</span>
               <MotdLine text={lines[0]} />
               <MotdLine text={lines[1]} />
             </div>
@@ -260,21 +252,18 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
               <span className="radio" />
               Jen placené účty
             </span>
-            <span className="muted small">Mojang ověří každého hráče. Nejbezpečnější volba.</span>
           </button>
           <button type="button" className="choice" aria-pressed={false} disabled>
             <span className="title">
               <span className="radio" />
               Placené i neplacené (s heslem)
             </span>
-            <span className="muted small">AuthMe + FastLogin se nainstalují samy – přijde ve fázi 5 s pluginy.</span>
           </button>
           <button type="button" className="choice danger" aria-pressed={!online} onClick={() => set('online-mode', 'false')}>
             <span className="title">
               <span className="radio" />
               I neplacené, bez ochrany
             </span>
-            <span className="muted small">online-mode=false. Kdokoli se přihlásí pod jakýmkoli jménem.</span>
           </button>
           {!online && <div className="banner error">Bez ověřování si někdo může vzít jméno operátora. Zapni bílou listinu a dávej OP opatrně.</div>}
         </section>
@@ -314,7 +303,6 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
                         {edits[d.key] !== undefined && <span className="changed-dot"> •</span>}
                       </span>
                       <span className="key">{d.key}</span>
-                      {d.hint && <span className="hint">{d.hint}</span>}
                     </div>
                     <div className="control">
                       <PropertyControl def={d} value={value(d.key)} onChange={(v) => set(d.key, v)} />

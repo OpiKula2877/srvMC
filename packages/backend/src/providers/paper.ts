@@ -52,11 +52,7 @@ export function paperFamily(project: 'paper' | 'folia' | 'velocity', type: Provi
 
     async listBuilds(version) {
       const list = [...(await builds(project, version))].sort((a, b) => b.id - a.id);
-      return list.map((b) => {
-        const channel = paperChannel(b.channel);
-        const suffix = channel === 'stable' ? '' : channel === 'beta' ? ' (beta)' : ' (experimentální)';
-        return { id: String(b.id), label: `Build #${b.id}${suffix}`, channel };
-      });
+      return list.map((b) => ({ id: String(b.id), label: `Build #${b.id}`, channel: paperChannel(b.channel) }));
     },
 
     async plan(version, build) {
