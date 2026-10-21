@@ -2,7 +2,7 @@
 // playit.gg tunnels and own domains. Settings with secrets live in network.json, sealed.
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { DomainCheck, DomainConfig, DuckDnsState, NetworkOverview, PlayitState, PlayitTunnel, PortCheck, ServerNetwork } from '@srvmc/shared';
+import { bedrockUdpRange, editionOf, portProtocol, type DomainCheck, type DomainConfig, type DuckDnsState, type NetworkOverview, type PlayitState, type PlayitTunnel, type PortCheck, type ServerConfig, type ServerNetwork } from '@srvmc/shared';
 import { checkDomain, normalizeDomain, recordsFor } from './dnscheck.ts';
 import { checkDuckToken, normalizeDuckDomain, updateDuckDns } from './duckdns.ts';
 import type { ServerInstance } from './instance.ts';
@@ -12,10 +12,21 @@ import type { Paths } from './paths.ts';
 import { agentRunData, claimCode, claimExchange, claimSetup, claimUrl, createTunnel, PlayitAgent, PlayitApiError, tunnelEndpoint } from './playit.ts';
 import { UserError } from './providers/types.ts';
 import { seal, unseal, type SecretBox } from './secrets.ts';
-import { addMapping, deleteMapping, externalIp, findGateway, type Gateway } from './upnp.ts';
+import { addMapping, deleteMapping, externalIp, findGateway, type Gateway, type Mapping } from './upnp.ts';
 import { WakeListener } from './wake.ts';
 
 const MINUTE = 60_000;
+
+/** Router rules a server needs: its port (TCP, or UDP for Hytale), plus Bedrock's UDP block. */
+export function mappingsFor(type: ServerConfig['type'], port: number, name: string): Mapping[] {
+  const description = `srvMC ${name}`.slice(0, 60);
+  const out: Mapping[] = [{ port, protocol: portProtocol(type), description }];
+  if (editionOf(type) === 'bedrock') {
+    const [from, to] = bedrockUdpRange(port);
+    for (let p = from; p <= to; p++) out.push({ port: p, protocol: 'UDP', description });
+  }
+  return out;
+}
 
 interface Stored {
   duckdns?: { domain: string; token: string };
@@ -27,7 +38,7 @@ export class NetworkService {
   private readonly file: string;
   private gateway: { gw: Gateway | null; at: number } | null = null;
   private routerIp: string | null = null;
-  private readonly upnp = new Map<string, { port: number; mapped: boolean; error?: string }>();
+  private readonly upnp = new Map<string, { port: number; mappings: Mapping[]; mapped: boolean; error?: string }>();
   private duck: DuckDnsState = { configured: false };
   private readonly agent: PlayitAgent;
   private claim?: { code: string; url: string; cancelled: boolean };
@@ -137,19 +148,24 @@ export class NetworkService {
     const up = this.upnp.get(id);
     return {
       port: cfg.port,
+      protocol: portProtocol(cfg.type),
+      edition: editionOf(cfg.type),
+      ...(editionOf(cfg.type) === 'bedrock' && { udpRange: bedrockUdpRange(cfg.port) }),
       upnp: { enabled: !!cfg.upnp, mapped: !!up?.mapped && up.port === cfg.port, ...(up?.error && { error: up.error }) },
       playit,
       domain: cfg.domain,
-      records: cfg.domain ? await this.records(cfg.domain, cfg.port, playit) : [],
+      records: cfg.domain ? await this.records(cfg, cfg.domain, playit) : [],
     };
   }
 
-  private async records(domain: DomainConfig, port: number, tunnel: PlayitTunnel | null) {
+  private async records(cfg: ServerConfig, domain: DomainConfig, tunnel: PlayitTunnel | null) {
+    const java = editionOf(cfg.type) === 'java';
     return recordsFor(domain, {
-      port,
+      port: cfg.port,
       publicIp: await publicIp(),
       duckdns: this.stored.duckdns?.domain,
-      playit: tunnel && !tunnel.pending ? await tunnelEndpoint(tunnel.address) : null,
+      playit: tunnel && !tunnel.pending && java ? await tunnelEndpoint(tunnel.address) : null,
+      srv: java,
     });
   }
 
@@ -175,24 +191,26 @@ export class NetworkService {
     const id = inst.cfg.id;
     const current = this.upnp.get(id);
     const want = inst.cfg.upnp ? inst.cfg.port : null;
+    const wanted = want === null ? [] : mappingsFor(inst.cfg.type, want, inst.cfg.name);
     if (!current && want === null) return;
     const gw = await this.gatewayCached();
     if (!gw) {
-      if (want !== null) this.upnp.set(id, { port: want, mapped: false, error: 'Router neodpovídá na UPnP.' });
+      if (want !== null) this.upnp.set(id, { port: want, mappings: wanted, mapped: false, error: 'Router neodpovídá na UPnP.' });
       return;
     }
     try {
-      if (current?.mapped && current.port !== want) await deleteMapping(gw, { port: current.port, protocol: 'TCP' });
+      const same = (a: Mapping, b: Mapping) => a.port === b.port && a.protocol === b.protocol;
+      if (current?.mapped) for (const m of current.mappings) if (!wanted.some((w) => same(w, m))) await deleteMapping(gw, m);
       if (want === null) {
         this.upnp.delete(id);
         inst.pushLog('system', 'Port na routeru zavřen (UPnP).');
         return;
       }
-      await addMapping(gw, { port: want, protocol: 'TCP', description: `srvMC ${inst.cfg.name}`.slice(0, 60) });
-      if (!current?.mapped || current.port !== want) inst.pushLog('system', `Port ${want} je na routeru otevřený (UPnP).`);
-      this.upnp.set(id, { port: want, mapped: true });
+      for (const m of wanted) await addMapping(gw, m);
+      if (!current?.mapped || current.port !== want) inst.pushLog('system', `Port ${want} je na routeru otevřený (UPnP${wanted.length > 1 ? `, ${wanted.length} pravidel` : ''}).`);
+      this.upnp.set(id, { port: want, mappings: wanted, mapped: true });
     } catch (err) {
-      this.upnp.set(id, { port: want ?? current?.port ?? 0, mapped: false, error: (err as Error).message });
+      this.upnp.set(id, { port: want ?? current?.port ?? 0, mappings: wanted, mapped: false, error: (err as Error).message });
     }
   }
 
@@ -205,7 +223,7 @@ export class NetworkService {
     const state = this.upnp.get(id);
     this.upnp.delete(id);
     const gw = state?.mapped ? await this.gatewayCached() : null;
-    if (gw && state) await deleteMapping(gw, { port: state.port, protocol: 'TCP' }).catch(() => undefined);
+    if (gw && state) for (const m of state.mappings) await deleteMapping(gw, m).catch(() => undefined);
   }
 
   // ---- port check ----
@@ -216,6 +234,8 @@ export class NetworkService {
    */
   async checkPort(id: string): Promise<PortCheck> {
     const inst = this.manager.get(id);
+    const edition = editionOf(inst.cfg.type);
+    if (edition !== 'java') throw new UserError(edition === 'hytale' ? 'Port Hytale serveru (QUIC) zvenku zatím ověřit neumím.' : 'Port nového Bedrocku (NetherNet) zvenku zatím ověřit neumím.');
     const ip = await publicIp();
     if (!ip) throw new UserError('Nepodařilo se zjistit veřejnou IP. Jsi připojený k internetu?');
     if (inst.status === 'starting' || inst.status === 'stopping' || inst.launching) throw new UserError('Počkej, až server naběhne nebo se vypne.');
@@ -350,6 +370,9 @@ export class NetworkService {
 
   async createPlayitTunnel(id: string): Promise<ServerNetwork> {
     const inst = this.manager.get(id);
+    const edition = editionOf(inst.cfg.type);
+    if (edition === 'hytale') throw new UserError(`Pro Hytale vytvoř na playit.gg tunel typu UDP na port ${inst.cfg.port} ručně.`);
+    if (edition === 'bedrock') throw new UserError('playit.gg zatím nový Bedrock (NetherNet) neumí.');
     const secret = this.secret();
     if (!secret) throw new UserError('Nejdřív propoj účet playit.gg.');
     await this.refreshTunnels(true);

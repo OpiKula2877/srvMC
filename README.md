@@ -17,6 +17,8 @@ Instalace obsahuje jen panel. Serverové soubory a správná Java se stáhnou a�
 | Arclight | GitHub releases IzzelAliz/Arclight (Forge, NeoForge i Fabric varianta) |
 | Modpacky | Modrinth `.mrpack` – loader podle modpacku, jen soubory pro server |
 | Mody, pluginy | Modrinth, Hangar (PaperMC), SpigotMC přes Spiget |
+| Bedrock, Bedrock Preview | oficiální odkazy Mojangu (net-secondary.web.minecraft-services.net), kontrola MD5 z hlavičky |
+| Hytale (experimentální) | oficiální hytale-downloader (podpis Hypixel Studios se ověřuje) |
 | Java | Eclipse Temurin přes api.adoptium.net |
 
 Stažené soubory jdou do sdílené cache. Hash (SHA-1 nebo SHA-256) se kontroluje po každém stažení i při použití z cache.
@@ -84,7 +86,7 @@ apps/desktop       Electron: okno, ikona v oznamovací oblasti, balí jádro i p
 - Servery se spouštějí bez shellu, s polem argumentů. Vlastní JVM argumenty musí začínat `-`.
 - Program playit dostává tajný klíč v proměnné prostředí, ne v příkazové řádce. Stahuje se jen pevná verze s kontrolou SHA-256.
 
-## Stav (fáze 1–7)
+## Stav (fáze 1–8)
 
 Fáze 1: vytvoření serveru (Vanilla, Paper, Fabric), automatická Java, start, stop, restart a násilné ukončení, živá konzole s historií příkazů, grafy CPU a RAM, hráči online, nastavení RAM, portu, JVM a časového pásma, autostart, mazání serveru. Když zavřeš okno, servery běží dál v oznamovací oblasti.
 
@@ -129,7 +131,13 @@ Fáze 7 – záložka **Síť a doména**:
 - **DuckDNS** – zdarma `něco.duckdns.org`, adresa se aktualizuje každých 10 minut.
 - **Vlastní doména** – podle cíle (veřejná IP, DuckDNS, playit tunel) srvMC vypíše záznamy A / CNAME / SRV pro registrátora a ověří je přes veřejné DNS (1.1.1.1, 8.8.8.8).
 
-Další fáze: Bedrock, Bedrock Preview a Hytale, potom Discord, Geyser, statistiky, víc uživatelů, BlueMap a Velocity (viz plán). CurseForge přijde, až bude kam zadat API klíč.
+Fáze 8 – Bedrock, Bedrock Preview a Hytale:
+
+- **Bedrock / Preview** – Bedrock Dedicated Server běží jako vlastní program (bez Javy a RAM nastavení). Konzole, hráči (povolený seznam podle jména, operátoři podle XUID – dohledá se z připojení hráče nebo přes playerdb.co, záložně GeyserMC; Bedrock nemá bany), vlastnosti `server.properties` pro Bedrock, světy ve složce `worlds/` s importem `.mcworld`, zálohy za běhu přes `save hold` / `save query` / `save resume`, plánovač, hlídání pádů a limit disku.
+- Bedrock od verze 26 používá jen přenos **NetherNet**: TCP handshake na portu serveru a hru přes UDP. srvMC připne UDP porty na blok port…port+19 (`server-udp-ports`), aby šly přesměrovat; UPnP otevře TCP port i UDP blok. Probouzení při připojení, kontrola portu zvenku a playit.gg zatím pro nový Bedrock nejdou. Prázdný povolený seznam, který Mojang zapíná, srvMC při instalaci vypne (jako bílou listinu u Javy).
+- **Hytale** (Early Access, experimentální) – hytale-downloader se přihlásí k účtu Hytale přes kód (odkaz se ukáže v panelu), stáhne `Server/HytaleServer.jar` a `Assets.zip`, server běží na Javě 25 s `--bind 0.0.0.0:<port>` (UDP, QUIC). Po prvním startu srvMC pošle `auth login device`, ukáže odkaz k přihlášení a po úspěchu uloží přihlášení (`auth persistence Encrypted`). Nastavení je v `config.json`, svět ve složce `universe`. Hráče, mody a kontrolu portu zatím panel u Hytale neřeší.
+
+Další fáze: Discord, Geyser, statistiky hráčů, víc uživatelů panelu, BlueMap a Velocity (viz plán). CurseForge přijde, až bude kam zadat API klíč.
 
 ## Ikona
 

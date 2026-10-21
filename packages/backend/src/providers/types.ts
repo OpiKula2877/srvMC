@@ -14,7 +14,8 @@ export interface InstallContext {
   javaMajor: number;
   paths: Paths;
   log(text: string): void;
-  progress(text: string, pct: number | null): void;
+  /** `link`: a page the user has to open (sign-in), shown as a button next to the progress. */
+  progress(text: string, pct: number | null, link?: string): void;
   /** Runs Java with `args` (output goes to the server console). Rejects on a non-zero exit code. */
   run(args: string[], opts?: { cwd?: string; timeoutMs?: number; onLine?: (line: string) => void; java?: string }): Promise<void>;
   /** Path to a full JDK of `javaMajor` (with javac), downloaded on first use. */
@@ -32,6 +33,8 @@ export interface InstallPlan {
   /** The Minecraft version to show when the requested "version" was something else (a modpack id). */
   displayVersion?: string;
   modpack?: ModpackInfo;
+  /** The install step returns [program, ...args] of a native server (Bedrock); no Java is needed. */
+  native?: boolean;
 }
 
 export interface PlanEnv {

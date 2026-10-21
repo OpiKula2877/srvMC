@@ -3,17 +3,20 @@ import { EventEmitter } from 'node:events';
 import { copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { CreateServerRequest, LogLine, ScheduledTask, ServerConfig, ServerInfo, TaskKind, UpdateServerRequest } from '@srvmc/shared';
+import { BEDROCK_UDP_PORTS, editionOf, portProtocol, serverTypeInfo, type ServerType, type CreateServerRequest, type LogLine, type ScheduledTask, type ServerConfig, type ServerInfo, type TaskKind, type UpdateServerRequest } from '@srvmc/shared';
+import { rememberXuid } from './bedrockplayers.ts';
 import { applyChunkyLine, isChunkyInstalled } from './chunky.ts';
 import { downloadToCache } from './download.ts';
 import { platformArgs, runJava } from './installer.ts';
 import { levelOf, reapOrphan, ServerInstance } from './instance.ts';
 import { ensureJava } from './java.ts';
 import { buildJvmArgs, splitJvmArgs } from './jvm.ts';
-import { isPortFree } from './net.ts';
+import { isPortFree, isUdpPortFree } from './net.ts';
 import type { Paths } from './paths.ts';
 import { updateServerProperties } from './properties.ts';
 import { providerFor, UserError } from './providers/index.ts';
+import { bedrockPortProps } from './providers/bedrock.ts';
+import { hytaleVersion } from './providers/hytale.ts';
 import type { ServerStore } from './store.ts';
 
 export class NotFoundError extends Error {
@@ -76,6 +79,8 @@ export class ServerManager extends EventEmitter {
     });
     void this.refreshPregen(inst);
     inst.on('metrics', (point) => this.emit('metrics', cfg.id, point));
+    inst.on('persist', () => void this.persist());
+    inst.on('xuid', (name: string, xuid: string) => void rememberXuid(inst.dir, name, xuid).catch(() => undefined));
     this.instances.set(cfg.id, inst);
     this.emit('added', inst);
     return inst;
@@ -109,6 +114,7 @@ export class ServerManager extends EventEmitter {
       diskUsageMb: inst.diskUsageMb,
       tps: inst.tps,
       lastCrash: inst.lastCrash,
+      notice: inst.notice,
     };
   }
 
@@ -146,9 +152,14 @@ export class ServerManager extends EventEmitter {
     return [...this.instances.values()].find((i) => i.cfg.port === port && i.cfg.id !== exceptId);
   }
 
-  async suggestPort(start = 25565): Promise<number> {
-    for (let port = start; port < start + 200; port++) {
-      if (!this.portTaken(port) && (await isPortFree(port))) return port;
+  /** A free port for a new server of `type`: from 25565 (Java), 19132 in blocks of 20 (Bedrock and its UDP ports) or 5520 (Hytale, UDP). */
+  async suggestPort(type: ServerType = 'vanilla'): Promise<number> {
+    const start = serverTypeInfo(type).defaultPort;
+    const udp = portProtocol(type) === 'UDP';
+    const step = editionOf(type) === 'bedrock' ? BEDROCK_UDP_PORTS : 1;
+    for (let port = start; port < start + 400 * step; port += step) {
+      if (this.portTaken(port)) continue;
+      if (udp ? await isUdpPortFree(port) : await isPortFree(port)) return port;
     }
     return start;
   }
@@ -205,9 +216,10 @@ export class ServerManager extends EventEmitter {
       inst.setInstall({ step: 'plan', pct: null, text: 'Zjišťuji, co je potřeba stáhnout' });
       const plan = await provider.plan(cfg.version, cfg.build, { paths: this.paths });
       const what = plan.modpack ? `modpack ${plan.modpack.title} ${plan.modpack.versionNumber} (${plan.modpack.loader} ${plan.displayVersion})` : `${cfg.type} ${cfg.version} (build ${plan.build})`;
-      inst.pushLog('system', `Instaluji ${what}, Java ${plan.javaMajor}`);
+      inst.pushLog('system', `Instaluji ${what}${plan.native ? '' : `, Java ${plan.javaMajor}`}`);
 
-      const java = await ensureJava(this.paths, plan.javaMajor, (text, pct) => inst.setInstall({ step: 'java', pct, text }));
+      // Native servers (Bedrock) bring their own program; nobody needs Java for them.
+      const java = plan.native ? '' : await ensureJava(this.paths, plan.javaMajor, (text, pct) => inst.setInstall({ step: 'java', pct, text }));
 
       for (const file of plan.files) {
         const src = await downloadToCache(this.paths, file, (done, total) =>
@@ -228,7 +240,7 @@ export class ServerManager extends EventEmitter {
           javaMajor: plan.javaMajor,
           paths: this.paths,
           log: (text) => inst.pushLog('system', text),
-          progress: (text, pct) => inst.setInstall({ step: 'installer', pct, text }),
+          progress: (text, pct, link) => inst.setInstall({ step: 'installer', pct, text, ...(link && { link }) }),
           ensureJdk: () => ensureJava(this.paths, plan.javaMajor, (text, pct) => inst.setInstall({ step: 'java', pct, text }), 'jdk'),
           run: (args, opts) =>
             runJava(opts?.java ?? java, args, {
@@ -243,16 +255,24 @@ export class ServerManager extends EventEmitter {
       }
       if (launchArgs.length === 0) throw new UserError('Instalace neurčila, jak server spustit.');
 
-      inst.setInstall({ step: 'config', pct: null, text: 'Připravuji server.properties a EULA' });
-      await writeFile(path.join(inst.dir, 'eula.txt'), `# Souhlas s https://aka.ms/MinecraftEULA udělen v srvMC ${new Date().toISOString()}\neula=true\n`);
-      await this.writeProperties(inst, { 'server-port': String(cfg.port), 'query.port': String(cfg.port), motd: cfg.name });
+      const edition = editionOf(cfg.type);
+      inst.setInstall({ step: 'config', pct: null, text: 'Připravuji nastavení serveru' });
+      if (edition === 'java') {
+        await writeFile(path.join(inst.dir, 'eula.txt'), `# Souhlas s https://aka.ms/MinecraftEULA udělen v srvMC ${new Date().toISOString()}\neula=true\n`);
+        await this.writeProperties(inst, { 'server-port': String(cfg.port), 'query.port': String(cfg.port), motd: cfg.name });
+      } else if (edition === 'bedrock') {
+        // Mojang ships an empty, enabled allow list; like Java's white list it starts off.
+        await this.writeProperties(inst, { ...bedrockPortProps(cfg.port), 'server-name': cfg.name, 'allow-list': 'false' });
+      }
 
       cfg.build = plan.build;
       if (plan.displayVersion) cfg.version = plan.displayVersion;
+      if (edition === 'hytale') cfg.version = (await hytaleVersion(this.paths.runtimes)) ?? cfg.version;
       if (plan.modpack) cfg.modpack = plan.modpack;
-      cfg.javaMajor = plan.javaMajor;
+      cfg.javaMajor = plan.native ? undefined : plan.javaMajor;
+      cfg.runtime = plan.native ? 'native' : undefined;
       cfg.launchArgs = launchArgs;
-      cfg.launchJar = launchArgs.find((a) => a.endsWith('.jar') && !a.startsWith('@')) ?? launchArgs.find((a) => a.startsWith('@'))?.slice(1);
+      cfg.launchJar = plan.native ? launchArgs[0] : (launchArgs.find((a) => a.endsWith('.jar') && !a.startsWith('@')) ?? launchArgs.find((a) => a.startsWith('@'))?.slice(1));
       cfg.installed = true;
       await this.persist();
       inst.installing = false;
@@ -285,11 +305,18 @@ export class ServerManager extends EventEmitter {
     inst.launching = true;
     try {
       for (const guard of this.startGuards) await guard(inst);
-      if (!(await isPortFree(cfg.port))) throw new UserError(`Port ${cfg.port} je obsazený jiným programem.`);
-      const java = await ensureJava(this.paths, cfg.javaMajor ?? 21, (text, pct) => inst.setInstall({ step: 'java', pct, text }));
-      inst.setInstall(undefined);
-      await this.refreshPregen(inst);
-      inst.start(java, [...buildJvmArgs(cfg), ...platformArgs(launch), 'nogui']);
+      const free = portProtocol(cfg.type) === 'UDP' ? await isUdpPortFree(cfg.port) : await isPortFree(cfg.port);
+      if (!free) throw new UserError(`Port ${cfg.port} je obsazený jiným programem.`);
+      if (cfg.runtime === 'native') {
+        inst.start(path.join(inst.dir, launch[0]!), launch.slice(1));
+      } else {
+        const java = await ensureJava(this.paths, cfg.javaMajor ?? 21, (text, pct) => inst.setInstall({ step: 'java', pct, text }));
+        inst.setInstall(undefined);
+        await this.refreshPregen(inst);
+        // Hytale takes its port on the command line and does not know Minecraft's "nogui".
+        const tail = editionOf(cfg.type) === 'hytale' ? ['--bind', `0.0.0.0:${cfg.port}`] : ['nogui'];
+        inst.start(java, [...buildJvmArgs(cfg), ...platformArgs(launch), ...tail]);
+      }
     } finally {
       inst.launching = false;
       // A failed start lets the watchers (wake listener) take the port back.
@@ -361,7 +388,14 @@ export class ServerManager extends EventEmitter {
     if (patch.port !== undefined && patch.port !== cfg.port) {
       this.validatePort(patch.port, id);
       cfg.port = patch.port;
-      if (cfg.installed) await this.writeProperties(inst, { 'server-port': String(cfg.port), 'query.port': String(cfg.port) });
+      const edition = editionOf(cfg.type);
+      // Hytale gets its port on the command line at every start.
+      if (cfg.installed && edition !== 'hytale') {
+        await this.writeProperties(
+          inst,
+          edition === 'bedrock' ? bedrockPortProps(cfg.port) : { 'server-port': String(cfg.port), 'query.port': String(cfg.port) },
+        );
+      }
     }
     if (patch.ramMaxMb !== undefined) {
       this.validateRam(patch.ramMaxMb);

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
-import { DEFAULT_BACKUP_KEEP, type BackupInfo, type BackupSchedule, type PregenRequest, type ServerInfo, type WorldInfo } from '@srvmc/shared';
+import { DEFAULT_BACKUP_KEEP, editionOf, type BackupInfo, type BackupSchedule, type PregenRequest, type ServerInfo, type WorldInfo } from '@srvmc/shared';
 import { api } from '../../api.ts';
 import { MenuButton, Progress, Slider, Toggle } from '../../components/Controls.tsx';
 import { Dropdown } from '../../components/Dropdown.tsx';
 import { Icon, Spinner } from '../../components/Icon.tsx';
 import { ConfirmDialog, useToast } from '../../components/Overlays.tsx';
 import { ago, bytes, dateTime, nameColor } from '../../format.ts';
+import { href } from '../../router.ts';
 
 const WORLD_TYPES = [
   { value: 'minecraft:normal', label: 'Normální' },
@@ -33,7 +34,7 @@ const KIND_LABEL: Record<BackupInfo['kind'], string> = { manual: 'ruční', auto
 
 const PREGEN_SUPPORTED = new Set(['paper', 'purpur', 'spigot', 'fabric', 'quilt', 'forge', 'neoforge', 'arclight']);
 
-function NewWorldDialog({ onCreate, onCancel }: { onCreate: (b: { name: string; seed: string; type: string }) => void; onCancel: () => void }) {
+function NewWorldDialog({ onCreate, onCancel, bedrock }: { onCreate: (b: { name: string; seed: string; type: string }) => void; onCancel: () => void; bedrock: boolean }) {
   const [name, setName] = useState('');
   const [seed, setSeed] = useState('');
   const [type, setType] = useState('minecraft:normal');
@@ -65,7 +66,7 @@ function NewWorldDialog({ onCreate, onCancel }: { onCreate: (b: { name: string; 
           <span className="label">Seed (nepovinné)</span>
           <input className="input mono" value={seed} maxLength={64} placeholder="prázdné = náhodný" onChange={(e) => setSeed(e.target.value)} />
         </label>
-        <Dropdown label="Typ světa" value={type} options={WORLD_TYPES} onChange={setType} searchable={false} />
+        {!bedrock && <Dropdown label="Typ světa" value={type} options={WORLD_TYPES} onChange={setType} searchable={false} />}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button type="button" className="btn ghost" onClick={onCancel}>
             Zrušit
@@ -401,6 +402,8 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const running = server.status !== 'stopped' && server.status !== 'crashed' && server.status !== 'error';
+  const edition = editionOf(server.type);
+  const bedrock = edition === 'bedrock';
 
   const load = useCallback(() => api.worlds(server.id).then(setWorlds).catch((err: Error) => toast('error', 'Světy se nepodařilo načíst', err.message)), [server.id, toast]);
 
@@ -422,10 +425,10 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
 
   const importFile = async (file: File | undefined) => {
     if (!file) return;
-    if (!/\.zip$/i.test(file.name)) return toast('error', 'Nahraj svět jako .zip');
+    if (!/\.(zip|mcworld)$/i.test(file.name)) return toast('error', bedrock ? 'Nahraj svět jako .mcworld nebo .zip' : 'Nahraj svět jako .zip');
     setUpload({ name: file.name, pct: 0 });
     try {
-      const r = await api.importWorld(server.id, file, importName.trim() || file.name.replace(/\.zip$/i, ''), activate && !running, (pct) => setUpload({ name: file.name, pct }));
+      const r = await api.importWorld(server.id, file, importName.trim() || file.name.replace(/\.(zip|mcworld)$/i, ''), activate && !running, (pct) => setUpload({ name: file.name, pct }));
       setWorlds(r.worlds);
       toast('ok', `Svět nahrán jako „${r.name}“`, activate && !running ? 'Je nastavený jako aktivní.' : undefined);
       setImportName('');
@@ -441,6 +444,22 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
     setDragOver(false);
     void importFile(e.dataTransfer.files[0]);
   };
+
+  if (edition === 'hytale') {
+    return (
+      <div className="row">
+        <div className="col-main">
+          <div className="empty">
+            <span style={{ fontWeight: 600 }}>Svět Hytale je ve složce universe</span>
+            <a className="btn" href={href({ page: 'server', id: server.id, tab: 'soubory', file: 'universe' })}>
+              Otevřít v Souborech
+            </a>
+          </div>
+        </div>
+        <BackupsPanel server={server} />
+      </div>
+    );
+  }
 
   return (
     <div className="row">
@@ -493,14 +512,14 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
                     <path d="M12 21V9M7 14l5-5 5 5M4 3h16" />
                   </svg>
                 </span>
-                <span style={{ fontWeight: 600 }}>Přetáhni sem svět (.zip)</span>
+                <span style={{ fontWeight: 600 }}>{bedrock ? 'Přetáhni sem svět (.mcworld nebo .zip)' : 'Přetáhni sem svět (.zip)'}</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
                   <input className="input mono" style={{ width: 200 }} value={importName} maxLength={48} placeholder="název (nepovinné)" aria-label="Název nahraného světa" onChange={(e) => setImportName(e.target.value)} />
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: running ? 'var(--muted)' : 'var(--text-2)' }}>
                     <input type="checkbox" className="check" checked={activate && !running} disabled={running} onChange={(e) => setActivate(e.target.checked)} />
                     Nastavit jako aktivní
                   </label>
-                  <input ref={fileRef} type="file" accept=".zip,application/zip" hidden onChange={(e) => void importFile(e.target.files?.[0])} />
+                  <input ref={fileRef} type="file" accept={bedrock ? '.mcworld,.zip,application/zip' : '.zip,application/zip'} hidden onChange={(e) => void importFile(e.target.files?.[0])} />
                   <button type="button" className="btn primary" disabled={!!server.task} onClick={() => fileRef.current?.click()}>
                     Vybrat soubor
                   </button>
@@ -517,6 +536,7 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
 
       {newOpen && (
         <NewWorldDialog
+          bedrock={bedrock}
           onCancel={() => setNewOpen(false)}
           onCreate={(b) => {
             setNewOpen(false);

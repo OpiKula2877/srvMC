@@ -1,7 +1,7 @@
 import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import extractZip from 'extract-zip';
-import { DEFAULT_BACKUP_KEEP, type BackupInfo, type BackupKind, type BackupSchedule, type ServerConfig } from '@srvmc/shared';
+import { DEFAULT_BACKUP_KEEP, editionOf, type BackupInfo, type BackupKind, type BackupSchedule, type ServerConfig } from '@srvmc/shared';
 import { trashPaths } from './files.ts';
 import type { ServerInstance } from './instance.ts';
 import type { ServerManager } from './manager.ts';
@@ -12,8 +12,9 @@ import { collectFiles, writeZip } from './zip.ts';
 const NAME_RE = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})_(manual|auto|safety)\.zip$/;
 
 // Everything the server re-creates or re-downloads by itself stays out of backups.
-const SKIP_TOP = new Set(['cache', 'libraries', 'versions', 'logs', 'crash-reports', '.paper-remapped', 'bundler']);
-const SKIP_ANY = /(^|\/)session\.lock$|(^|\/)\.srvmc\.pid$|\.srvmc-[a-z]+(-\d+)?($|\/)|\.part$/;
+// Bedrock's program files and Hytale's Server/ + Assets.zip come back with a reinstall too.
+const SKIP_TOP = new Set(['cache', 'libraries', 'versions', 'logs', 'crash-reports', '.paper-remapped', 'bundler', 'definitions', 'Server', 'Assets.zip', 'bedrock_server']);
+const SKIP_ANY = /(^|\/)session\.lock$|(^|\/)\.srvmc\.pid$|\.srvmc-[a-z]+(-\d+)?($|\/)|\.part$|^[^/]+\.(exe|dll|pdb)$/;
 
 export function backupFileName(kind: BackupKind, d = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
@@ -111,6 +112,10 @@ export class BackupService {
    */
   async pauseSaves(inst: ServerInstance): Promise<() => void> {
     if (inst.status !== 'running') return () => undefined;
+    const edition = editionOf(inst.cfg.type);
+    if (edition === 'bedrock') return this.holdBedrock(inst);
+    // Hytale has no documented way to pause saving; its files are copied as they are.
+    if (edition === 'hytale') return () => undefined;
     inst.sendCommand('save-off');
     const saved = inst.waitForLine(/Saved the game|All dimensions are saved|Saved the world/i, 120_000);
     inst.sendCommand('save-all flush');
@@ -120,6 +125,26 @@ export class BackupService {
       if (resumed) return;
       resumed = true;
       if (inst.running) inst.sendCommand('save-on');
+    };
+  }
+
+  /** Bedrock: "save hold" freezes the world files; "save query" says when they can be copied. */
+  private async holdBedrock(inst: ServerInstance): Promise<() => void> {
+    inst.sendCommand('save hold');
+    // Asking right away only earns "A previous save has not been completed" in red.
+    await new Promise((r) => setTimeout(r, 1500));
+    let ready = false;
+    for (let i = 0; i < 30 && !ready && inst.running; i++) {
+      const answer = inst.waitForLine(/Files are now ready to be copied|Data saved/i, 2000);
+      inst.sendCommand('save query');
+      ready = !!(await answer);
+    }
+    if (!ready) inst.pushLog('warn', 'Server nepotvrdil uložení světa, pokračuji i tak.');
+    let resumed = false;
+    return () => {
+      if (resumed) return;
+      resumed = true;
+      if (inst.running) inst.sendCommand('save resume');
     };
   }
 

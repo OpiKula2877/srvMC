@@ -3,7 +3,8 @@ import { EventEmitter } from 'node:events';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import readline from 'node:readline';
-import type { CrashInfo, InstallProgress, LogLevel, LogLine, MetricPoint, PregenStatus, ServerConfig, ServerStatus, TaskProgress } from '@srvmc/shared';
+import { editionOf, type CrashInfo, type Edition, type InstallProgress, type LogLevel, type LogLine, type MetricPoint, type PregenStatus, type ServerConfig, type ServerStatus, type TaskProgress } from '@srvmc/shared';
+import { parseDeviceLogin } from './providers/hytale.ts';
 import { UserError } from './providers/index.ts';
 import { ProcessSampler } from './stats.ts';
 
@@ -29,7 +30,9 @@ export async function reapOrphan(dir: string, runtimesDir: string): Promise<numb
   await rm(path.join(dir, PID_FILE), { force: true });
   if (!Number.isInteger(pid) || pid <= 0) return null;
   const exe = await processPath(pid);
-  if (!exe || !path.resolve(exe).toLowerCase().startsWith(path.resolve(runtimesDir).toLowerCase())) return null;
+  // Ours: Java from srvMC's runtimes, or a native server program inside the server folder (Bedrock).
+  const inside = (base: string) => !!exe && path.resolve(exe).toLowerCase().startsWith(path.resolve(base).toLowerCase() + path.sep);
+  if (!inside(runtimesDir) && !inside(dir)) return null;
   try {
     process.kill(pid);
     return pid;
@@ -44,6 +47,11 @@ const METRIC_LIMIT = 300;
 const DONE_RE = /Done \([\d.,]+s\)!/;
 const JOIN_RE = /\]: ([A-Za-z0-9_.]{1,16}) joined the game/;
 const LEAVE_RE = /\]: ([A-Za-z0-9_.]{1,16}) left the game/;
+// Bedrock: "[2026-10-21 12:00:00:123 INFO] Player connected: Big Steve, xuid: 2535…"
+const BEDROCK_JOIN_RE = /Player connected: (.+?), xuid: (\d*)/;
+const BEDROCK_LEAVE_RE = /Player disconnected: (.+?), xuid/;
+/** Hytale does not document a "ready" line; when none of these shows, a running process counts after this long. */
+const HYTALE_READY_AFTER = 90_000;
 const ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]/g;
 
 export function levelOf(text: string): LogLevel {
@@ -52,7 +60,13 @@ export function levelOf(text: string): LogLevel {
   return 'info';
 }
 
-export function parsePlayerEvent(text: string): { join?: string; leave?: string } {
+export function parsePlayerEvent(text: string, edition: Edition = 'java'): { join?: string; leave?: string; xuid?: string } {
+  if (edition === 'bedrock') {
+    const j = BEDROCK_JOIN_RE.exec(text);
+    if (j) return { join: j[1], ...(j[2] && { xuid: j[2] }) };
+    const l = BEDROCK_LEAVE_RE.exec(text);
+    return l ? { leave: l[1] } : {};
+  }
   const j = JOIN_RE.exec(text);
   if (j) return { join: j[1] };
   const l = LEAVE_RE.exec(text);
@@ -60,7 +74,9 @@ export function parsePlayerEvent(text: string): { join?: string; leave?: string 
   return {};
 }
 
-export function isDoneLine(text: string): boolean {
+export function isDoneLine(text: string, edition: Edition = 'java'): boolean {
+  if (edition === 'bedrock') return /\bServer started\./.test(text);
+  if (edition === 'hytale') return /Server started|Hytale Server Booted|Listening on/i.test(text);
   return DONE_RE.test(text);
 }
 
@@ -87,6 +103,8 @@ export class ServerInstance extends EventEmitter {
   sleeping = false;
   diskUsageMb?: number;
   lastCrash?: CrashInfo;
+  notice?: { text: string; link?: string };
+  private login: { link?: string; code?: string } = {};
 
   private proc?: ChildProcess;
   private sampler?: ProcessSampler;
@@ -161,7 +179,16 @@ export class ServerInstance extends EventEmitter {
     this.stopRequested = false;
     this.players.clear();
     this.setStatus('starting', '');
-    this.pushLog('system', `Spouštím ${this.cfg.launchJar} · Java ${this.cfg.javaMajor} · ${this.cfg.ramMaxMb} MB RAM`);
+    const edition = editionOf(this.cfg.type);
+    this.pushLog('system', this.cfg.runtime === 'native' ? `Spouštím ${this.cfg.launchJar}` : `Spouštím ${this.cfg.launchJar} · Java ${this.cfg.javaMajor} · ${this.cfg.ramMaxMb} MB RAM`);
+    if (edition === 'hytale') {
+      setTimeout(() => {
+        if (this.proc === proc && this.status === 'starting') {
+          this.pushLog('system', 'Hytale nenapsal, že je připravený, ale běží – beru ho jako spuštěný.');
+          this.ready();
+        }
+      }, HYTALE_READY_AFTER).unref();
+    }
 
     const proc = spawn(java, args, { cwd: this.dir, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     this.proc = proc;
@@ -202,16 +229,48 @@ export class ServerInstance extends EventEmitter {
     const level = levelOf(text);
     this.pushLog(fromStderr && level === 'info' ? 'warn' : level, text);
 
-    if (this.status === 'starting' && isDoneLine(text)) {
-      this.pushLog('system', 'Server je připravený. Hráči se mohou připojit.');
-      this.setStatus('running');
-    }
-    const ev = parsePlayerEvent(text);
+    const edition = editionOf(this.cfg.type);
+    if (this.status === 'starting' && isDoneLine(text, edition)) this.ready();
+    if (edition === 'hytale') this.watchHytaleLogin(text);
+    const ev = parsePlayerEvent(text, edition);
     if (ev.join) {
       this.players.add(ev.join);
+      if (ev.xuid) this.emit('xuid', ev.join, ev.xuid);
       this.emit('status');
     } else if (ev.leave) {
       this.players.delete(ev.leave);
+      this.emit('status');
+    }
+  }
+
+  private ready(): void {
+    this.pushLog('system', 'Server je připravený. Hráči se mohou připojit.');
+    this.setStatus('running');
+    // A new Hytale server has to sign in to the owner's account once before players can join.
+    if (editionOf(this.cfg.type) === 'hytale' && !this.cfg.hytaleAuthed) {
+      try {
+        this.sendCommand('auth login device');
+      } catch {
+        // went down meanwhile
+      }
+    }
+  }
+
+  /** Shows the Hytale sign-in link as a notice and keeps the credentials once it worked. */
+  private watchHytaleLogin(text: string): void {
+    if (/Authentication successful/i.test(text)) {
+      this.notice = undefined;
+      this.login = {};
+      if (!this.cfg.hytaleAuthed) {
+        this.sendCommand('auth persistence Encrypted');
+        this.cfg.hytaleAuthed = true;
+        this.emit('persist');
+      }
+      this.emit('status');
+      return;
+    }
+    if (parseDeviceLogin(text, this.login) && this.login.link) {
+      this.notice = { text: `Přihlas server k účtu Hytale${this.login.code ? ` – kód ${this.login.code}` : ''}`, link: this.login.link };
       this.emit('status');
     }
   }

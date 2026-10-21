@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import type { ServerInfo, SystemInfo } from '@srvmc/shared';
+import { editionOf, type Edition, type ServerInfo, type SystemInfo } from '@srvmc/shared';
 import { api } from '../api.ts';
 import { Progress, RamPicker, Sparkline, StatusPill, Toggle } from '../components/Controls.tsx';
 import { Dropdown } from '../components/Dropdown.tsx';
@@ -48,11 +48,16 @@ const TABS: { id: string; label: string; phase?: number }[] = [
   { id: 'sit', label: 'Síť a doména' },
 ];
 
-const QUICK = ['list', 'save-all', 'time set day', 'weather clear', 'say Restart za 5 minut'];
+const QUICK: Record<Edition, string[]> = {
+  java: ['list', 'save-all', 'time set day', 'weather clear', 'say Restart za 5 minut'],
+  bedrock: ['list', 'time set day', 'weather clear', 'say Restart za 5 minut', 'allowlist list'],
+  hytale: ['auth status', 'auth login device', 'auth persistence Encrypted', 'help'],
+};
 
 // Paper prints "[12:00:00 INFO]: ", vanilla "[12:00:00] [Server thread/INFO]: ", Forge-family servers add
-// a logger name ("[minecraft/MinecraftServer]"). The panel shows its own time column.
-const SERVER_PREFIX_RE = /^\[\d{2}:\d{2}:\d{2}(?: [A-Z]+)?\](?: \[[^\]]+\])*: ?/;
+// a logger name ("[minecraft/MinecraftServer]"), Bedrock "[2026-10-21 12:00:00:123 INFO] ".
+// The panel shows its own time column.
+const SERVER_PREFIX_RE = /^\[(?:\d{4}-\d{2}-\d{2} )?\d{2}:\d{2}:\d{2}(?::\d{3})?(?: [A-Z]+)?\](?: \[[^\]]+\])*:? ?/;
 
 function Console({ server }: { server: ServerInfo }) {
   const toast = useToast();
@@ -132,7 +137,7 @@ function Console({ server }: { server: ServerInfo }) {
         ))}
       </div>
       <div className="quick">
-        {QUICK.map((q) => (
+        {QUICK[editionOf(server.type)].map((q) => (
           <button key={q} type="button" disabled={!running} onClick={() => void send(q)}>
             {q}
           </button>
@@ -230,6 +235,8 @@ function Metrics({ server }: { server: ServerInfo }) {
 }
 
 function Settings({ server, system }: { server: ServerInfo; system: SystemInfo | null }) {
+  // Bedrock is a native program: no Java heap, flags or time zone to set.
+  const isJava = server.runtime !== 'native';
   const toast = useToast();
   const [name, setName] = useState(server.name);
   const [port, setPort] = useState(server.port);
@@ -286,7 +293,8 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
             <input className="input mono" inputMode="numeric" value={port} onChange={(e) => setPort(Number(e.target.value.replace(/\D/g, '')) || 0)} />
           </label>
         </div>
-        <RamPicker id="ram-edit" label="Max RAM" valueMb={ramMb} maxMb={maxMb} onChange={setRamMb} />
+        {isJava && <RamPicker id="ram-edit" label="Max RAM" valueMb={ramMb} maxMb={maxMb} onChange={setRamMb} />}
+        {isJava && (
         <div className="grid-auto" style={{ ['--min' as string]: '240px', gap: 14 }}>
           <Dropdown
             label="Optimalizace Javy"
@@ -302,9 +310,12 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
             <input className="input mono" value={extra} placeholder="-Duser.timezone=Europe/Prague" onChange={(e) => setExtra(e.target.value)} />
           </label>
         </div>
-        <div style={{ maxWidth: 420 }}>
-          <Dropdown label="Časové pásmo serveru" value={timezone} options={TIMEZONES} onChange={setTimezone} searchable />
-        </div>
+        )}
+        {isJava && (
+          <div style={{ maxWidth: 420 }}>
+            <Dropdown label="Časové pásmo serveru" value={timezone} options={TIMEZONES} onChange={setTimezone} searchable />
+          </div>
+        )}
         <Toggle label="Spustit server se zapnutím srvMC" checked={autoStart} onChange={setAutoStart} />
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button type="button" className="btn primary" disabled={!dirty || busy} onClick={save}>
@@ -318,7 +329,7 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
           Hlídání a spánek
         </h2>
         <Toggle label="Po pádu restartovat (max 3× za 10 min)" checked={crashRestart} onChange={setCrashRestart} />
-        <Toggle label="Probudit, když se někdo připojí" checked={wakeOnJoin} onChange={setWakeOnJoin} />
+        {editionOf(server.type) === 'java' && <Toggle label="Probudit, když se někdo připojí" checked={wakeOnJoin} onChange={setWakeOnJoin} />}
         <Dropdown label="Uspat, když nikdo nehraje" value={sleepAfter} options={SLEEP_OPTIONS} onChange={setSleepAfter} searchable={false} />
         <Toggle label="Limit disku" checked={diskOn} onChange={setDiskOn} />
         {diskOn && (
@@ -412,7 +423,7 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
               {!server.modpack && server.build && server.build !== 'official' ? ` · build ${server.build}` : ''}
             </span>
             {server.javaMajor && <span>· Java {server.javaMajor}</span>}
-            <span>· {gb(server.ramMaxMb)} RAM</span>
+            {server.runtime !== 'native' && <span>· {gb(server.ramMaxMb)} RAM</span>}
           </div>
         </div>
         <div style={{ width: 260, maxWidth: '100%' }}>
@@ -463,6 +474,21 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
             <span>{server.install.pct != null ? `${server.install.pct} %` : ''}</span>
           </div>
           <Progress pct={server.install.pct} />
+          {server.install.link && (
+            <a className="btn primary" style={{ alignSelf: 'flex-start' }} href={server.install.link} target="_blank" rel="noreferrer">
+              Otevřít přihlášení
+            </a>
+          )}
+        </div>
+      )}
+      {server.notice && (
+        <div className="banner info" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+          <strong>{server.notice.text}</strong>
+          {server.notice.link && (
+            <a className="btn sm primary" href={server.notice.link} target="_blank" rel="noreferrer">
+              Otevřít přihlášení
+            </a>
+          )}
         </div>
       )}
       {server.task && (

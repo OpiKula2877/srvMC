@@ -7,7 +7,9 @@ import {
   MANAGED_PROPERTY_KEYS,
   MAX_UPLOAD,
   PROPERTY_KEY_RE,
+  editionOf,
   propertyDef,
+  type Edition,
   type AddPlayerRequest,
   type LogFileInfo,
   type PlayerListKind,
@@ -53,13 +55,13 @@ function notWhileRunning(inst: ServerInstance, what: string): void {
 }
 
 /** Validates edited server.properties values against what the panel knows about each key. */
-export function checkPropertyValues(values: Record<string, unknown>): Record<string, string> {
+export function checkPropertyValues(values: Record<string, unknown>, edition: Edition = 'java'): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, raw] of Object.entries(values)) {
     if (!PROPERTY_KEY_RE.test(key)) throw new UserError(`Neplatný klíč: ${key}`);
     if (MANAGED_PROPERTY_KEYS.has(key)) throw new UserError(`${key} se mění v záložce Nastavení.`);
     if (typeof raw !== 'string' || raw.length > 1000) throw new UserError(`Neplatná hodnota pro ${key}.`);
-    const def = propertyDef(key);
+    const def = propertyDef(key, edition);
     if (def?.type === 'bool' && raw !== 'true' && raw !== 'false') throw new UserError(`${def.label}: zapnuto nebo vypnuto.`);
     if (def?.type === 'int') {
       const n = Number(raw);
@@ -112,7 +114,7 @@ export function registerContentRoutes(app: FastifyInstance, manager: ServerManag
   );
   app.post<{ Params: { id: string }; Body: { name: string; reason?: string } }>(
     '/api/servers/:id/kick',
-    { schema: { body: { type: 'object', required: ['name'], properties: { name: { type: 'string', maxLength: 16 }, reason: { type: 'string', maxLength: 200 } } } } },
+    { schema: { body: { type: 'object', required: ['name'], properties: { name: { type: 'string', maxLength: 24 }, reason: { type: 'string', maxLength: 200 } } } } },
     async (req, reply) => {
       kickPlayer(inst(req.params.id), req.body.name, req.body.reason);
       reply.code(204);
@@ -130,7 +132,7 @@ export function registerContentRoutes(app: FastifyInstance, manager: ServerManag
     async (req) => {
       const i = inst(req.params.id);
       if (!i.cfg.installed) throw new UserError('Server ještě není nainstalovaný.');
-      await updateServerProperties(i.dir, checkPropertyValues(req.body.values));
+      await updateServerProperties(i.dir, checkPropertyValues(req.body.values, editionOf(i.cfg.type)));
       const { values, exists } = await readServerProperties(i.dir);
       return { values: Object.fromEntries(values), exists };
     },

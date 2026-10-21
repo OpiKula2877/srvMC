@@ -1,7 +1,8 @@
 import { readFile, rename, stat, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
-import { PLAYER_NAME_RE, type AddPlayerRequest, type PlayerEntry, type PlayerListKind, type PlayersInfo } from '@srvmc/shared';
+import { editionOf, PLAYER_NAME_RE, type AddPlayerRequest, type PlayerEntry, type PlayerListKind, type PlayersInfo } from '@srvmc/shared';
+import { bedrockAddPlayer, bedrockKick, bedrockPlayersInfo, bedrockRemovePlayer, bedrockSetAllowList } from './bedrockplayers.ts';
 import type { ServerInstance } from './instance.ts';
 import { readServerProperties, updateServerProperties } from './properties.ts';
 import { UserError } from './providers/index.ts';
@@ -108,7 +109,16 @@ async function runListCommand(inst: ServerInstance, kind: PlayerListKind, comman
   throw new UserError(reply ? `Server odpověděl: ${reply}` : 'Server příkaz nepotvrdil.');
 }
 
+function isBedrock(inst: ServerInstance): boolean {
+  return editionOf(inst.cfg.type) === 'bedrock';
+}
+
+function noPlayerLists(inst: ServerInstance): void {
+  if (editionOf(inst.cfg.type) === 'hytale') throw new UserError('Hráče na Hytale serveru zatím spravuj příkazy v konzoli.');
+}
+
 export async function playersInfo(inst: ServerInstance): Promise<PlayersInfo> {
+  if (isBedrock(inst)) return bedrockPlayersInfo(inst);
   const dir = inst.dir;
   const [whitelist, ops, bans, ips, props] = await Promise.all([
     readList(dir, 'whitelist'),
@@ -125,6 +135,7 @@ export async function playersInfo(inst: ServerInstance): Promise<PlayersInfo> {
     whitelistEnabled: props.values.get('white-list') === 'true',
     onlineMode: (props.values.get('online-mode') ?? 'true') !== 'false',
     online: [...inst.players],
+    edition: editionOf(inst.cfg.type),
   };
 }
 
@@ -134,6 +145,8 @@ export async function playersInfo(inst: ServerInstance): Promise<PlayersInfo> {
  */
 export async function addPlayer(inst: ServerInstance, kind: PlayerListKind, req: AddPlayerRequest): Promise<void> {
   if (!inst.cfg.installed) throw new UserError('Server ještě není nainstalovaný.');
+  noPlayerLists(inst);
+  if (isBedrock(inst)) return bedrockAddPlayer(inst, kind, req);
   const name = req.name.trim();
   validate(kind, name);
   const reason = cleanReason(req.reason);
@@ -174,6 +187,8 @@ export async function addPlayer(inst: ServerInstance, kind: PlayerListKind, req:
 }
 
 export async function removePlayer(inst: ServerInstance, kind: PlayerListKind, key: string): Promise<void> {
+  noPlayerLists(inst);
+  if (isBedrock(inst)) return bedrockRemovePlayer(inst, kind, key);
   const name = key.trim();
   validate(kind, name);
   if (!(await readList(inst.dir, kind)).some((r) => keyOf(kind, r) === name.toLowerCase())) throw new UserError(`${name} v seznamu není.`);
@@ -191,6 +206,8 @@ export async function removePlayer(inst: ServerInstance, kind: PlayerListKind, k
 }
 
 export async function setWhitelistEnabled(inst: ServerInstance, enabled: boolean): Promise<void> {
+  noPlayerLists(inst);
+  if (isBedrock(inst)) return bedrockSetAllowList(inst, enabled);
   if (inst.running) {
     const file = path.join(inst.dir, 'server.properties');
     const before = await mtime(file);
@@ -202,6 +219,7 @@ export async function setWhitelistEnabled(inst: ServerInstance, enabled: boolean
 }
 
 export function kickPlayer(inst: ServerInstance, name: string, reason?: string): void {
+  if (isBedrock(inst)) return bedrockKick(inst, name, reason);
   if (!PLAYER_NAME_RE.test(name)) throw new UserError('Neplatné jméno hráče.');
   const why = cleanReason(reason);
   inst.sendCommand(`kick ${name}${why ? ` ${why}` : ''}`);

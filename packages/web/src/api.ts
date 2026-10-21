@@ -68,7 +68,7 @@ export const api = {
   system: () => request<SystemInfo>('GET', '/api/system'),
   versions: (type: ServerType, snapshots: boolean) => request<GameVersion[]>('GET', `/api/types/${type}/versions?snapshots=${snapshots}`),
   builds: (type: ServerType, version: string) => request<BuildInfo[]>('GET', `/api/types/${type}/builds?version=${encodeURIComponent(version)}`),
-  suggestPort: () => request<{ port: number }>('GET', '/api/ports/suggest'),
+  suggestPort: (type: ServerType) => request<{ port: number }>('GET', `/api/ports/suggest?type=${type}`),
   servers: () => request<ServerInfo[]>('GET', '/api/servers'),
   create: (body: CreateServerRequest) => request<ServerInfo>('POST', '/api/servers', body),
   update: (id: string, body: UpdateServerRequest) => request<ServerInfo>('PATCH', `/api/servers/${id}`, body),

@@ -2,6 +2,7 @@
 // player joins, keeps the disk limit, measures TPS and records the load history.
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { editionOf } from '@srvmc/shared';
 import { analyzeCrash } from './crash.ts';
 import { checkDiskRoom, folderSize, sizeMb } from './disk.ts';
 import type { MetricHistory } from './history.ts';
@@ -188,6 +189,8 @@ export class Supervisor {
   private wantsWake(inst: ServerInstance): boolean {
     return (
       !!inst.cfg.wakeOnJoin &&
+      // The listener speaks the Java protocol only: Bedrock (NetherNet) and Hytale (QUIC) cannot be answered yet.
+      editionOf(inst.cfg.type) === 'java' &&
       inst.cfg.installed &&
       !inst.running &&
       !inst.launching &&
@@ -215,20 +218,16 @@ export class Supervisor {
       listener = undefined;
     }
     if (want && !listener) {
-      listener = new WakeListener({
-        port: inst.cfg.port,
-        kickMessage: 'Server se probouzí. Připoj se znovu za chvilku.',
-        status: () => this.wakeStatus(inst),
-        onJoin: (name) => {
-          this.listeners.delete(id);
-          inst.sleeping = false;
-          inst.pushLog('system', `${name ?? 'Hráč'} se chce připojit – probouzím server.`);
-          void this.manager.start(id).catch((err: Error) => {
-            inst.pushLog('error', `Probuzení selhalo: ${err.message}`);
-            void this.syncWake(inst);
-          });
-        },
-      });
+      const onJoin = (name: string | null) => {
+        this.listeners.delete(id);
+        inst.sleeping = false;
+        inst.pushLog('system', `${name ?? 'Hráč'} se chce připojit – probouzím server.`);
+        void this.manager.start(id).catch((err: Error) => {
+          inst.pushLog('error', `Probuzení selhalo: ${err.message}`);
+          void this.syncWake(inst);
+        });
+      };
+      listener = new WakeListener({ port: inst.cfg.port, kickMessage: 'Server se probouzí. Připoj se znovu za chvilku.', status: () => this.wakeStatus(inst), onJoin });
       try {
         await listener.open();
         this.listeners.set(id, listener);

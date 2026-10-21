@@ -126,7 +126,11 @@ export function NetworkTab({ server }: { server: ServerInfo }) {
   if (!net || !srv) return <Spinner />;
 
   const port = srv.port;
-  const withPort = (host: string) => (port === 25565 ? host : `${host}:${port}`);
+  const java = srv.edition === 'java';
+  const hytale = srv.edition === 'hytale';
+  const udp = srv.udpRange ? `${srv.udpRange[0]}–${srv.udpRange[1]}` : null;
+  // Java leaves out the default port; Bedrock and Hytale players type it in a field of its own.
+  const withPort = (host: string) => (java && port === 25565 ? host : `${host}:${port}`);
   const playit = net.playit;
   const tunnel = srv.playit;
   const portTone = check ? (check.open ? 'ok' : 'warn') : undefined;
@@ -136,8 +140,8 @@ export function NetworkTab({ server }: { server: ServerInfo }) {
       <section aria-label="Stav sítě" className="grid-auto" style={{ ['--min' as string]: '200px', gap: 12 }}>
         <Tile label="Adresa v síti doma" value={net.lanIp ?? '–'} />
         <Tile label="Veřejná IP" value={net.publicIp ?? '–'} />
-        <Tile label={`Port ${port} z internetu`} value={check ? (check.open ? 'otevřený' : 'zavřený') : 'neověřeno'} tone={portTone}>
-          <button type="button" className="btn sm" style={{ alignSelf: 'flex-start' }} disabled={!!busy || !net.publicIp} onClick={() => void run('check', () => api.checkPort(server.id), setCheck)}>
+        <Tile label={`Port ${port}${hytale ? ' (UDP)' : ''} z internetu`} value={!java ? 'neověřitelné' : check ? (check.open ? 'otevřený' : 'zavřený') : 'neověřeno'} tone={portTone}>
+          <button type="button" className="btn sm" style={{ alignSelf: 'flex-start' }} disabled={!!busy || !net.publicIp || !java} onClick={() => void run('check', () => api.checkPort(server.id), setCheck)}>
             {busy === 'check' ? <Spinner size={14} /> : null}
             Ověřit
           </button>
@@ -186,6 +190,10 @@ export function NetworkTab({ server }: { server: ServerInfo }) {
                 ) : (
                   <CopyAddress value={tunnel.address} />
                 )
+              ) : hytale ? (
+                <span className="muted small">Pro Hytale vytvoř na playit.gg tunel UDP na port {port} ručně.</span>
+              ) : !java ? (
+                <span className="muted small">playit.gg zatím nový Bedrock (NetherNet) neumí.</span>
               ) : (
                 <button type="button" className="btn primary" disabled={!!busy} onClick={() => void run('tunnel', () => api.createTunnel(server.id), setSrv, 'Tunel vytvořen')}>
                   {busy === 'tunnel' ? <Spinner size={14} /> : null}
@@ -236,7 +244,13 @@ export function NetworkTab({ server }: { server: ServerInfo }) {
                   </>,
                   'Najdi „Přesměrování portů“, „Port forwarding“ nebo „Virtuální server“.',
                   <>
-                    Přidej pravidlo: TCP, port <span className="mono">{port}</span> → <span className="mono">{net.lanIp ?? 'IP tohoto počítače'}</span>, port <span className="mono">{port}</span>.
+                    Přidej pravidlo: {srv.protocol}, port <span className="mono">{port}</span>
+                    {udp && (
+                      <>
+                        {' '}
+                        a druhé: UDP, porty <span className="mono">{udp}</span>
+                      </>
+                    )} → <span className="mono">{net.lanIp ?? 'IP tohoto počítače'}</span>, port <span className="mono">{port}</span>.
                   </>,
                   'Ulož a klikni nahoře na Ověřit.',
                 ]}
@@ -393,7 +407,7 @@ export function NetworkTab({ server }: { server: ServerInfo }) {
                         </tbody>
                       </table>
                     </div>
-                    <span className="muted small">SRV záznam umožní adresu bez portu.</span>
+                    <span className="muted small">{java ? 'SRV záznam umožní adresu bez portu.' : `${hytale ? 'Hytale' : 'Bedrock'} SRV záznamy nečte – hráči zadají i port ${port}.`}</span>
                   </>
                 )}
                 {domainCheck && <div className={`banner ${domainCheck.ok ? 'ok' : 'error'}`}>{domainCheck.message}</div>}

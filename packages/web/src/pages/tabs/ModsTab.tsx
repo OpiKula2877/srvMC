@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
-import type { ContentHit, ContentSource, ContentTarget, InstalledContent, ServerInfo } from '@srvmc/shared';
+import { editionOf, type ContentHit, type ContentSource, type ContentTarget, type InstalledContent, type ServerInfo } from '@srvmc/shared';
 import { api } from '../../api.ts';
 import { Progress, Toggle } from '../../components/Controls.tsx';
 import { Dropdown } from '../../components/Dropdown.tsx';
@@ -252,8 +252,17 @@ export function ModsTab({ server }: { server: ServerInfo }) {
   if (targets.length === 0) {
     return (
       <div className="empty">
-        <span style={{ fontWeight: 600 }}>Vanilla server neumí mody ani pluginy</span>
-        <span className="muted">Pro pluginy vytvoř server Paper nebo Purpur, pro mody Fabric, Forge nebo NeoForge.</span>
+        {editionOf(server.type) === 'java' ? (
+          <>
+            <span style={{ fontWeight: 600 }}>Vanilla server neumí mody ani pluginy</span>
+            <span className="muted">Pro pluginy vytvoř server Paper nebo Purpur, pro mody Fabric, Forge nebo NeoForge.</span>
+          </>
+        ) : (
+          <>
+            <span style={{ fontWeight: 600 }}>{editionOf(server.type) === 'bedrock' ? 'Add-ony pro Bedrock zatím neumím' : 'Mody pro Hytale zatím neumím'}</span>
+            <span className="muted">Můžeš je nahrát ručně v Souborech.</span>
+          </>
+        )}
       </div>
     );
   }

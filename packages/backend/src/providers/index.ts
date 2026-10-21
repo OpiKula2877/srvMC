@@ -1,7 +1,9 @@
 import type { ServerType } from '@srvmc/shared';
 import { arclight } from './arclight.ts';
+import { bedrock, bedrockPreview } from './bedrock.ts';
 import { fabric } from './fabric.ts';
 import { forge, neoforge } from './forge.ts';
+import { hytale } from './hytale.ts';
 import { modpack } from './modpack.ts';
 import { paper } from './paper.ts';
 import { purpur } from './purpur.ts';
@@ -21,6 +23,9 @@ export const providers: Partial<Record<ServerType, Provider>> = {
   neoforge,
   arclight,
   modpack,
+  bedrock,
+  'bedrock-preview': bedrockPreview,
+  hytale,
 };
 
 export function providerFor(type: ServerType): Provider | undefined {

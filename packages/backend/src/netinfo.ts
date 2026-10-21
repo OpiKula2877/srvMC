@@ -62,11 +62,12 @@ export function detectCgnat(routerIp: string | null, publicAddr: string | null):
  * on the port (the server, or srvMC's sleep listener).
  */
 export async function checkFromInternet(address: string): Promise<boolean> {
+  const a = encodeURIComponent(address);
   try {
-    const res = await fetchJson<{ online: boolean }>(`https://api.mcstatus.io/v2/status/java/${encodeURIComponent(address)}?timeout=5`, { timeoutMs: 15_000 });
+    const res = await fetchJson<{ online: boolean }>(`https://api.mcstatus.io/v2/status/java/${a}?timeout=5`, { timeoutMs: 15_000 });
     return res.online;
   } catch {
-    const res = await fetchJson<{ online: boolean }>(`https://api.mcsrvstat.us/3/${encodeURIComponent(address)}`, { timeoutMs: 15_000 });
+    const res = await fetchJson<{ online: boolean }>(`https://api.mcsrvstat.us/3/${a}`, { timeoutMs: 15_000 });
     return res.online;
   }
 }

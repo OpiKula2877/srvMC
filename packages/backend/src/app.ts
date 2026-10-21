@@ -23,7 +23,7 @@ import type { SecretBox } from './secrets.ts';
 import { ServerStore } from './store.ts';
 import { Supervisor } from './supervisor.ts';
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.8.0';
 
 export interface BackendOptions {
   /** Port to listen on. 0 picks a free one. Default 8420. */
@@ -126,7 +126,9 @@ function registerRoutes(app: FastifyInstance, manager: ServerManager, paths: Pat
     if (!req.query.version) throw new UserError('Chybí verze.');
     return provider(req.params.type).listBuilds(req.query.version);
   });
-  app.get('/api/ports/suggest', async () => ({ port: await manager.suggestPort() }));
+  app.get<{ Querystring: { type?: string } }>('/api/ports/suggest', async (req) => ({
+    port: await manager.suggestPort(SERVER_TYPE_IDS.includes(req.query.type as ServerType) ? (req.query.type as ServerType) : 'vanilla'),
+  }));
 
   app.get('/api/servers', () => manager.list());
   app.post<{ Body: CreateServerRequest }>('/api/servers', { schema: createSchema }, async (req, reply) => {

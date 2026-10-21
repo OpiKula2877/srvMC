@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { SERVER_TYPES, serverTypeInfo, type BuildInfo, type GameVersion, type ModpackHit, type ModpackVersion, type ServerType, type SystemInfo } from '@srvmc/shared';
+import { editionOf, SERVER_TYPES, serverTypeInfo, type BuildInfo, type GameVersion, type ModpackHit, type ModpackVersion, type ServerType, type SystemInfo } from '@srvmc/shared';
 import { api } from '../api.ts';
 import { RamPicker, Toggle } from '../components/Controls.tsx';
 import { Dropdown } from '../components/Dropdown.tsx';
@@ -20,6 +20,9 @@ const SOURCES: Partial<Record<ServerType, string>> = {
   neoforge: 'maven.neoforged.net – NeoForge installer',
   arclight: 'GitHub IzzelAliz/Arclight',
   modpack: 'modrinth.com',
+  bedrock: 'minecraft.net (oficiální Bedrock Dedicated Server)',
+  'bedrock-preview': 'minecraft.net (Bedrock Preview)',
+  hytale: 'hytale-downloader od Hypixel Studios',
 };
 
 const PACK_LOADERS: Record<string, string> = { fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge' };
@@ -110,6 +113,9 @@ const NOTES: Partial<Record<ServerType, string>> = {
   arclight: 'Arclight umí mody i Bukkit pluginy zároveň. Při prvním startu si stáhne knihovny.',
   quilt: 'Quilt umí i většinu Fabric modů.',
   modpack: 'Stáhnu loader modpacku a jen mody, které potřebuje server. Mody jen pro hráče (shadery, minimapy…) vynechám.',
+  bedrock: 'Pro mobily, konzole a Minecraft for Windows. Hráči musí mít stejnou verzi hry.',
+  'bedrock-preview': 'Jen pro hráče s aplikací Minecraft Preview. Běžná hra se na Preview server nepřipojí.',
+  hytale: 'Experimentální (Hytale je v Early Access). Při stahování i po prvním startu se přihlásíš k účtu Hytale, který hru vlastní.',
 };
 
 export function NewServer({ system }: { system: SystemInfo | null }) {
@@ -135,9 +141,16 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
   // Leave 2 GB for Windows; never more than 32 GB (Java gets slower with huge heaps).
   const maxMb = Math.max(1024, Math.min(32768, Math.floor(((system?.totalMemMb ?? 16384) - 2048) / 256) * 256));
 
+  const edition = editionOf(type);
+
   useEffect(() => {
-    void api.suggestPort().then((r) => setPort(r.port)).catch(() => undefined);
-  }, []);
+    void api.suggestPort(type).then((r) => setPort(r.port)).catch(() => undefined);
+  }, [type]);
+
+  // Hytale needs 4 GB at least; Bedrock is a native program without a Java heap.
+  useEffect(() => {
+    if (edition === 'hytale') setRamMb((m) => Math.max(m, 4096));
+  }, [edition]);
 
   useEffect(() => {
     if (system) setRamMb((m) => Math.min(m, maxMb));
@@ -182,7 +195,7 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
   const versionOptions = useMemo(() => (versions ?? []).map((v) => ({ value: v.id, label: v.id })), [versions]);
   const buildOptions = useMemo(() => (builds ?? []).map((b) => ({ value: b.id, label: b.label })), [builds]);
 
-  const finalName = name.trim() || (isPack ? (pack?.title ?? 'Modpack') : `${info.name} ${version ?? ''}`.trim());
+  const finalName = name.trim() || (isPack ? (pack?.title ?? 'Modpack') : editionOf(type) === 'hytale' ? 'Hytale server' : `${info.name} ${version ?? ''}`.trim());
   const canCreate = eula && !busy && (isPack ? !!pack && !!packVersion : !!version && !!build);
 
   const create = async () => {
@@ -250,15 +263,25 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
                 <h2 id="h-verze" className="h2">
                   2. Verze – {info.name}
                 </h2>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, color: 'var(--text-2)' }}>
-                  <input type="checkbox" className="check" checked={snapshots} onChange={(e) => setSnapshots(e.target.checked)} />
-                  Zobrazit snapshoty a testovací verze
-                </label>
+                {edition === 'java' && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, color: 'var(--text-2)' }}>
+                    <input type="checkbox" className="check" checked={snapshots} onChange={(e) => setSnapshots(e.target.checked)} />
+                    Zobrazit snapshoty a testovací verze
+                  </label>
+                )}
               </div>
               {loadError && <div className="banner error">Nepodařilo se načíst seznam verzí: {loadError}. Zkontroluj připojení k internetu.</div>}
               <div className="grid-auto" style={{ ['--min' as string]: '240px', gap: 14 }}>
-                <Dropdown label="Verze Minecraftu" value={version} options={versionOptions} onChange={setVersion} loading={!versions && !loadError} searchable mono />
-                <Dropdown label="Build / loader" value={build} options={buildOptions} onChange={setBuild} loading={!!version && !builds && !loadError} />
+                <Dropdown
+                  label={edition === 'hytale' ? 'Verze Hytale' : 'Verze Minecraftu'}
+                  value={version}
+                  options={edition === 'hytale' ? versionOptions.map((o) => ({ ...o, label: 'Nejnovější' })) : versionOptions}
+                  onChange={setVersion}
+                  loading={!versions && !loadError}
+                  searchable={edition === 'java'}
+                  mono
+                />
+                <Dropdown label={edition === 'hytale' ? 'Kanál' : edition === 'bedrock' ? 'Sestavení' : 'Build / loader'} value={build} options={buildOptions} onChange={setBuild} loading={!!version && !builds && !loadError} />
               </div>
             </section>
           )}
@@ -277,7 +300,7 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
                 <input className="input mono" inputMode="numeric" value={port} onChange={(e) => setPort(Number(e.target.value.replace(/\D/g, '')) || 0)} />
               </label>
             </div>
-            <RamPicker id="ram" label="RAM pro server" valueMb={ramMb} maxMb={maxMb} onChange={setRamMb} />
+            {edition !== 'bedrock' && <RamPicker id="ram" label="RAM pro server" valueMb={ramMb} maxMb={maxMb} onChange={setRamMb} />}
             <Toggle label="Po instalaci server rovnou spustit" checked={startAfter} onChange={setStartAfter} />
           </section>
         </div>
@@ -296,26 +319,63 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
             </div>
           </div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10, color: 'var(--text-2)' }}>
-            <li>{isPack ? 'Loader a serverové mody modpacku s kontrolou SHA' : 'Serverový soubor s kontrolou SHA'}</li>
-            <li>Správná Java (Temurin), jen když ještě chybí</li>
-            <li>eula.txt a server.properties s portem {port}</li>
+            {edition === 'bedrock' ? (
+              <>
+                <li>Bedrock server (zip) s kontrolou MD5</li>
+                <li>Bez Javy – běží jako samostatný program</li>
+                <li>
+                  server.properties s portem {port} (TCP) a UDP {port}–{port + 19}
+                </li>
+              </>
+            ) : edition === 'hytale' ? (
+              <>
+                <li>hytale-downloader s ověřeným podpisem</li>
+                <li>Server a Assets.zip po přihlášení k účtu Hytale</li>
+                <li>Java 25 (Temurin) a UDP port {port}</li>
+              </>
+            ) : (
+              <>
+                <li>{isPack ? 'Loader a serverové mody modpacku s kontrolou SHA' : 'Serverový soubor s kontrolou SHA'}</li>
+                <li>Správná Java (Temurin), jen když ještě chybí</li>
+                <li>eula.txt a server.properties s portem {port}</li>
+              </>
+            )}
           </ul>
           {NOTES[type] && <div className="banner info">{NOTES[type]}</div>}
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, color: 'var(--text-2)' }}>
             <input type="checkbox" className="check" checked={eula} onChange={(e) => setEula(e.target.checked)} style={{ marginTop: 1 }} />
-            <span>
-              Souhlasím s{' '}
-              <a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noreferrer">
-                Minecraft EULA
-              </a>
-            </span>
+            {edition === 'hytale' ? (
+              <span>
+                Souhlasím s podmínkami{' '}
+                <a href="https://hytale.com" target="_blank" rel="noreferrer">
+                  Hytale
+                </a>{' '}
+                a mám účet, který hru vlastní
+              </span>
+            ) : (
+              <span>
+                Souhlasím s{' '}
+                <a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noreferrer">
+                  Minecraft EULA
+                </a>
+                {edition === 'bedrock' && (
+                  <>
+                    {' '}
+                    a{' '}
+                    <a href="https://go.microsoft.com/fwlink/?LinkId=521839" target="_blank" rel="noreferrer">
+                      zásadami ochrany osobních údajů
+                    </a>
+                  </>
+                )}
+              </span>
+            )}
           </label>
           <button type="button" className="btn primary" style={{ minHeight: 48, fontSize: 15, fontWeight: 700 }} disabled={!canCreate} onClick={create}>
             {busy ? <Spinner /> : null}
             Vytvořit a stáhnout
           </button>
           {isPack && ramMb < 4096 && <div className="banner info">Modpacky obvykle potřebují aspoň 4–6 GB RAM.</div>}
-          {system && ramMb > system.freeMemMb && (
+          {system && edition !== 'bedrock' && ramMb > system.freeMemMb && (
             <div className="banner info">Teď je volných jen {gb(system.freeMemMb)} RAM. Server se spustí, ale Windows může zpomalit.</div>
           )}
         </aside>

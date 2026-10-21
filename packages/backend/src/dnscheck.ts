@@ -24,16 +24,19 @@ export interface RecordContext {
   duckdns?: string;
   /** Where the playit tunnel ends up (host from playit's own SRV record). */
   playit?: { host: string; port: number } | null;
+  /** Java clients follow SRV records; Bedrock and Hytale do not, so their players type the port. */
+  srv?: boolean;
 }
 
 /** The records for the chosen target. SRV lets players leave out the port (Java only). */
 export function recordsFor(d: DomainConfig, ctx: RecordContext): DnsRecord[] {
   const name = d.sub || '@';
   const srvName = d.sub ? `_minecraft._tcp.${d.sub}` : '_minecraft._tcp';
-  const srv = (port: number, target: string): DnsRecord => ({ type: 'SRV', name: srvName, value: `0 5 ${port} ${target}` });
+  const useSrv = ctx.srv !== false;
+  const srv = (port: number, target: string): DnsRecord[] => (useSrv ? [{ type: 'SRV', name: srvName, value: `0 5 ${port} ${target}` }] : []);
   if (d.target === 'ip') {
     const out: DnsRecord[] = [{ type: 'A', name, value: ctx.publicIp ?? '?' }];
-    if (ctx.port !== 25565) out.push(srv(ctx.port, fullHost(d)));
+    if (ctx.port !== 25565) out.push(...srv(ctx.port, fullHost(d)));
     return out;
   }
   if (d.target === 'duckdns') {
@@ -41,11 +44,11 @@ export function recordsFor(d: DomainConfig, ctx: RecordContext): DnsRecord[] {
     const duck = `${ctx.duckdns}.duckdns.org`;
     // A CNAME cannot sit on the bare domain; there the address goes in directly.
     const out: DnsRecord[] = [d.sub ? { type: 'CNAME', name, value: duck } : { type: 'A', name, value: ctx.publicIp ?? '?' }];
-    if (ctx.port !== 25565) out.push(srv(ctx.port, duck));
+    if (ctx.port !== 25565) out.push(...srv(ctx.port, duck));
     return out;
   }
   if (!ctx.playit) return [];
-  const out: DnsRecord[] = [srv(ctx.playit.port, ctx.playit.host)];
+  const out: DnsRecord[] = srv(ctx.playit.port, ctx.playit.host);
   if (d.sub) out.unshift({ type: 'CNAME', name, value: ctx.playit.host });
   return out;
 }

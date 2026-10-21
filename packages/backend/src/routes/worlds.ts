@@ -4,7 +4,7 @@ import { rm, stat, statfs } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { PregenRequest } from '@srvmc/shared';
+import { editionOf, type PregenRequest } from '@srvmc/shared';
 import type { BackupService } from '../backups.ts';
 import { installChunky, pregenCommand, startPregen } from '../chunky.ts';
 import { checkDiskRoom } from '../disk.ts';
@@ -12,7 +12,17 @@ import { saveUpload } from '../files.ts';
 import type { ServerManager } from '../manager.ts';
 import type { Paths } from '../paths.ts';
 import { UserError } from '../providers/index.ts';
-import { checkWorldName, findWorlds, importWorld, setActiveWorld, trashWorld, worldFolders } from '../worlds.ts';
+import type { ServerInstance } from '../instance.ts';
+import { checkWorldName, findWorlds, importWorld, setActiveWorld, trashWorld, worldBase, worldFolders } from '../worlds.ts';
+
+/** Folder with the world folders; Hytale keeps its universe elsewhere and is not handled here yet. */
+function worldsOf(inst: ServerInstance): string {
+  const edition = editionOf(inst.cfg.type);
+  if (edition === 'hytale') throw new UserError('Světy Hytale (složka universe) zatím spravuj v Souborech.');
+  return worldBase(inst.dir, edition);
+}
+
+const listWorlds = (inst: ServerInstance) => (editionOf(inst.cfg.type) === 'hytale' ? Promise.resolve([]) : findWorlds(inst.dir, worldsOf(inst)));
 import { collectFiles, zipStream } from '../zip.ts';
 
 const MAX_WORLD_UPLOAD = 20 * 1024 * 1024 * 1024;
@@ -32,12 +42,13 @@ export function registerWorldRoutes(app: FastifyInstance, manager: ServerManager
   };
 
   // Worlds
-  app.get<{ Params: { id: string } }>('/api/servers/:id/worlds', (req) => findWorlds(manager.get(req.params.id).dir));
+  app.get<{ Params: { id: string } }>('/api/servers/:id/worlds', (req) => listWorlds(manager.get(req.params.id)));
 
   app.post<{ Params: { id: string; name: string } }>('/api/servers/:id/worlds/:name/activate', async (req) => {
     const inst = stopped(req.params.id, 'přepnutí světa');
+    worldsOf(inst);
     await setActiveWorld(inst.dir, req.params.name);
-    return findWorlds(inst.dir);
+    return listWorlds(inst);
   });
 
   app.post<{ Params: { id: string }; Body: { name: string; seed?: string; type?: string } }>(
@@ -55,9 +66,11 @@ export function registerWorldRoutes(app: FastifyInstance, manager: ServerManager
     async (req) => {
       const inst = stopped(req.params.id, 'založení světa');
       checkWorldName(req.body.name);
-      if ((await worldFolders(inst.dir, req.body.name)).length) throw new UserError('Svět s tímto názvem už existuje.');
-      await setActiveWorld(inst.dir, req.body.name, { 'level-seed': req.body.seed ?? '', ...(req.body.type ? { 'level-type': req.body.type } : {}) });
-      return findWorlds(inst.dir);
+      if ((await worldFolders(worldsOf(inst), req.body.name)).length) throw new UserError('Svět s tímto názvem už existuje.');
+      // Bedrock has no level-type key; its new worlds are always the default kind.
+      const type: Record<string, string> = req.body.type && editionOf(inst.cfg.type) === 'java' ? { 'level-type': req.body.type } : {};
+      await setActiveWorld(inst.dir, req.body.name, { 'level-seed': req.body.seed ?? '', ...type });
+      return listWorlds(inst);
     },
   );
 
@@ -67,29 +80,30 @@ export function registerWorldRoutes(app: FastifyInstance, manager: ServerManager
     async (req) => {
       const inst = stopped(req.params.id, 'reset světa');
       checkWorldName(req.params.name);
-      await trashWorld(inst.dir, req.params.name, path.join(paths.trash, inst.cfg.id));
+      await trashWorld(inst.dir, req.params.name, path.join(paths.trash, inst.cfg.id), worldsOf(inst));
       if (req.body?.seed !== undefined) await setActiveWorld(inst.dir, req.params.name, { 'level-seed': req.body.seed });
       inst.pushLog('system', `Svět ${req.params.name} přesunut do koše. Nový se vygeneruje při startu.`);
-      return findWorlds(inst.dir);
+      return listWorlds(inst);
     },
   );
 
   app.delete<{ Params: { id: string; name: string } }>('/api/servers/:id/worlds/:name', async (req) => {
     const inst = stopped(req.params.id, 'mazání světa');
-    const worlds = await findWorlds(inst.dir);
+    const worlds = await listWorlds(inst);
     if (worlds.find((w) => w.name === req.params.name)?.active) throw new UserError('Aktivní svět nejde smazat. Nejdřív přepni na jiný.');
-    await trashWorld(inst.dir, req.params.name, path.join(paths.trash, inst.cfg.id));
-    return findWorlds(inst.dir);
+    await trashWorld(inst.dir, req.params.name, path.join(paths.trash, inst.cfg.id), worldsOf(inst));
+    return listWorlds(inst);
   });
 
   app.get<{ Params: { id: string; name: string } }>('/api/servers/:id/worlds/:name/download', async (req, reply) => {
     const inst = manager.get(req.params.id);
     checkWorldName(req.params.name);
-    const folders = await worldFolders(inst.dir, req.params.name);
+    const base = worldsOf(inst);
+    const folders = await worldFolders(base, req.params.name);
     if (folders.length === 0) throw new UserError('Svět ještě neexistuje.');
     const resume = await backups.pauseSaves(inst);
     try {
-      const items = await collectFiles(inst.dir, folders, (rel) => /(^|\/)session\.lock$/.test(rel));
+      const items = await collectFiles(base, folders, (rel) => /(^|\/)session\.lock$/.test(rel));
       const stream = zipStream(items);
       stream.once('close', resume);
       stream.once('end', resume);
@@ -108,6 +122,7 @@ export function registerWorldRoutes(app: FastifyInstance, manager: ServerManager
     async (req) => {
       const inst = manager.get(req.params.id);
       if (inst.task) throw new UserError('Počkej, až doběhne úloha na serveru.');
+      const base = worldsOf(inst);
       const declared = Number(req.headers['content-length'] ?? 0);
       if (declared > MAX_WORLD_UPLOAD) throw new UserError('Svět je moc velký (max 20 GB).');
       const fs = await statfs(inst.dir).catch(() => null);
@@ -121,11 +136,11 @@ export function registerWorldRoutes(app: FastifyInstance, manager: ServerManager
       const zip = path.join(inst.dir, tmpName);
       try {
         const name = await manager.runTask(inst.cfg.id, 'import', 'Rozbaluji svět', (report) =>
-          importWorld(inst.dir, zip, req.query.name ?? '', (pct) => report(pct, 'Rozbaluji svět')),
+          importWorld(inst.dir, zip, req.query.name ?? '', (pct) => report(pct, 'Rozbaluji svět'), base),
         );
         if (req.query.activate === '1') await setActiveWorld(inst.dir, name);
         inst.pushLog('system', `Svět nahrán jako „${name}“.`);
-        return { name, worlds: await findWorlds(inst.dir) };
+        return { name, worlds: await listWorlds(inst) };
       } finally {
         await rm(zip, { force: true });
         manager.emit('files-changed', inst.cfg.id);

@@ -57,6 +57,7 @@ export interface RunOptions {
   cwd: string;
   timeoutMs?: number;
   onLine?: (line: string) => void;
+  env?: NodeJS.ProcessEnv;
 }
 
 /** Tools started by an installer (Maven in BuildTools) find Java through JAVA_HOME and PATH, so point both at ours. */
@@ -68,8 +69,13 @@ export function javaEnv(java: string): NodeJS.ProcessEnv {
 
 /** Runs Java to completion, streaming its output line by line. */
 export function runJava(java: string, args: string[], opts: RunOptions): Promise<void> {
+  return runProgram(java, args, { ...opts, env: javaEnv(java) });
+}
+
+/** Runs a program to completion, streaming its output line by line. */
+export function runProgram(exe: string, args: string[], opts: RunOptions): Promise<void> {
   return new Promise((resolve, reject) => {
-    const p = spawn(java, args, { cwd: opts.cwd, env: javaEnv(java), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    const p = spawn(exe, args, { cwd: opts.cwd, env: opts.env ?? process.env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     const timer = setTimeout(() => {
       p.kill('SIGKILL');
       reject(new UserError('Instalátor běžel moc dlouho a byl ukončen.'));

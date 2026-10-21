@@ -39,11 +39,38 @@ export const SERVER_TYPES: ServerTypeInfo[] = [
   { id: 'neoforge', name: 'NeoForge', tag: 'Mody · nový Forge', color: '#E08A4F', defaultPort: 25565, available: true },
   { id: 'arclight', name: 'Arclight', tag: 'Mody + pluginy', color: '#6FC3C9', defaultPort: 25565, available: true },
   { id: 'modpack', name: 'Modpack', tag: 'Modrinth', color: '#5BD27A', defaultPort: 25565, available: true },
-  { id: 'bedrock', name: 'Bedrock', tag: 'Mobil · konzole · Win10', color: '#6AA9FF', defaultPort: 19132, available: false, phase: 8 },
-  { id: 'bedrock-preview', name: 'Bedrock Preview', tag: 'Testovací Bedrock', color: '#9CC6FF', defaultPort: 19132, available: false, phase: 8 },
+  { id: 'bedrock', name: 'Bedrock', tag: 'Mobil · konzole · Win10', color: '#6AA9FF', defaultPort: 19132, available: true },
+  { id: 'bedrock-preview', name: 'Bedrock Preview', tag: 'Testovací Bedrock', color: '#9CC6FF', defaultPort: 19132, available: true },
   { id: 'velocity', name: 'Velocity', tag: 'Proxy · síť serverů', color: '#4FB5A5', defaultPort: 25577, available: false, phase: 9 },
-  { id: 'hytale', name: 'Hytale', tag: 'Experimentální', color: '#F07A6A', defaultPort: 5520, available: false, phase: 8 },
+  { id: 'hytale', name: 'Hytale', tag: 'Experimentální', color: '#F07A6A', defaultPort: 5520, available: true },
 ];
+
+/** Which game a server type belongs to: decides files, commands, ports and what the panel offers. */
+export type Edition = 'java' | 'bedrock' | 'hytale';
+
+export function editionOf(type: ServerType): Edition {
+  if (type === 'bedrock' || type === 'bedrock-preview') return 'bedrock';
+  if (type === 'hytale') return 'hytale';
+  return 'java';
+}
+
+/** The protocol of the server's main port: TCP for Java and Bedrock (NetherNet handshake), UDP for Hytale (QUIC). */
+export function portProtocol(type: ServerType): 'TCP' | 'UDP' {
+  return editionOf(type) === 'hytale' ? 'UDP' : 'TCP';
+}
+
+/**
+ * Bedrock 26+ speaks NetherNet: a TCP handshake on the server port, gameplay over UDP ports the
+ * server picks per player. srvMC pins those to port … port + BEDROCK_UDP_PORTS - 1 so they can be forwarded.
+ */
+export const BEDROCK_UDP_PORTS = 20;
+
+export function bedrockUdpRange(port: number): [number, number] {
+  return [port, port + BEDROCK_UDP_PORTS - 1];
+}
+
+/** Xbox gamertags: letters, digits and spaces, newer ones with a #1234 suffix. */
+export const GAMERTAG_RE = /^[A-Za-z0-9][A-Za-z0-9 ]{0,15}(#\d{1,4})?$/;
 
 export function serverTypeInfo(type: ServerType): ServerTypeInfo {
   const info = SERVER_TYPES.find((t) => t.id === type);
@@ -74,6 +101,10 @@ export interface ServerConfig {
   launchJar?: string;
   /** Launch arguments after the JVM options (e.g. ["-jar", "x.jar"] or ["@libraries/…/win_args.txt"]). */
   launchArgs?: string[];
+  /** "native": launchArgs[0] is a program in the server folder (Bedrock), started without Java. */
+  runtime?: 'native';
+  /** Hytale: the server signed in to the owner's Hytale account and keeps the credentials. */
+  hytaleAuthed?: boolean;
   eulaAccepted: boolean;
   autoStart: boolean;
   installed: boolean;
@@ -168,6 +199,11 @@ export interface NetworkOverview {
 
 export interface ServerNetwork {
   port: number;
+  /** Main port: TCP (Java, Bedrock), UDP (Hytale). */
+  protocol: 'TCP' | 'UDP';
+  edition: Edition;
+  /** Bedrock: the UDP ports for gameplay that also need forwarding. */
+  udpRange?: [number, number];
   upnp: { enabled: boolean; mapped: boolean; error?: string };
   /** playit.gg address of the tunnel to this server's port. */
   playit: PlayitTunnel | null;
@@ -251,6 +287,8 @@ export interface InstallProgress {
   /** 0–100, or null when the length is unknown. */
   pct: number | null;
   text: string;
+  /** A page the user has to open (e.g. to sign in), shown as a button. */
+  link?: string;
 }
 
 export type TaskKind = 'backup' | 'restore' | 'import' | 'export' | 'content';
@@ -278,6 +316,8 @@ export interface ServerInfo extends ServerConfig {
   /** Latest ticks per second, when the server type can report it. */
   tps?: number;
   lastCrash?: CrashInfo;
+  /** Something the user has to do now, e.g. sign the Hytale server in at a link. */
+  notice?: { text: string; link?: string };
 }
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'cmd' | 'system';
@@ -381,6 +421,8 @@ export interface PlayersInfo {
   whitelistEnabled: boolean;
   onlineMode: boolean;
   online: string[];
+  /** Bedrock has an allow list and operators (by XUID) but no ban lists. */
+  edition: Edition;
 }
 
 export interface AddPlayerRequest {

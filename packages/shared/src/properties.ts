@@ -99,11 +99,56 @@ export const PROPERTY_DEFS: PropertyDef[] = [
   { key: 'query.port', label: 'Query port', group: 'ostatni', type: 'int', default: '25565', managed: true },
 ];
 
-export function propertyDef(key: string): PropertyDef | undefined {
-  return PROPERTY_DEFS.find((d) => d.key === key);
+const opts = (...pairs: [string, string][]) => pairs.map(([value, label]) => ({ value, label }));
+
+/** Bedrock Dedicated Server keys (a different set than Java's). */
+export const BEDROCK_PROPERTY_DEFS: PropertyDef[] = [
+  { key: 'gamemode', label: 'Herní režim', group: 'hra', type: 'enum', default: 'survival', options: opts(['survival', 'Survival'], ['creative', 'Creative'], ['adventure', 'Adventure']) },
+  { key: 'force-gamemode', label: 'Vynutit herní režim při připojení', group: 'hra', type: 'bool', default: 'false' },
+  { key: 'difficulty', label: 'Obtížnost', group: 'hra', type: 'enum', default: 'easy', options: opts(['peaceful', 'Mírumilovná'], ['easy', 'Lehká'], ['normal', 'Normální'], ['hard', 'Těžká']) },
+  { key: 'allow-cheats', label: 'Povolit cheaty (příkazy)', group: 'hra', type: 'bool', default: 'false' },
+  { key: 'server-name', label: 'Název v seznamu serverů', group: 'hra', type: 'string', default: 'Dedicated Server' },
+
+  { key: 'max-players', label: 'Max. hráčů', group: 'hraci', type: 'int', default: '10', min: 1, max: 1000 },
+  { key: 'online-mode', label: 'Ověřovat účty přes Xbox Live', group: 'hraci', type: 'bool', default: 'true' },
+  { key: 'allow-list', label: 'Povolený seznam hráčů', group: 'hraci', type: 'bool', default: 'false', managed: true },
+  {
+    key: 'default-player-permission-level',
+    label: 'Výchozí oprávnění nového hráče',
+    group: 'hraci',
+    type: 'enum',
+    default: 'member',
+    options: opts(['visitor', 'Návštěvník'], ['member', 'Člen'], ['operator', 'Operátor']),
+  },
+  { key: 'player-idle-timeout', label: 'Vyhodit nečinné po (min, 0 = nikdy)', group: 'hraci', type: 'int', default: '30', min: 0, max: 1440 },
+  { key: 'chat-restriction', label: 'Omezení chatu', group: 'hraci', type: 'enum', default: 'None', options: opts(['None', 'Žádné'], ['Dropped', 'Zprávy zahazovat'], ['Disabled', 'Chat vypnutý']) },
+  { key: 'disable-player-interaction', label: 'Zakázat interakci mezi hráči', group: 'hraci', type: 'bool', default: 'false' },
+
+  { key: 'level-seed', label: 'Seed nového světa', group: 'svet', type: 'string', default: '' },
+  { key: 'view-distance', label: 'Dohled (chunky)', group: 'svet', type: 'int', default: '32', min: 5, max: 96 },
+  { key: 'tick-distance', label: 'Simulační vzdálenost', group: 'svet', type: 'int', default: '4', min: 4, max: 12 },
+  { key: 'level-name', label: 'Aktivní svět', group: 'svet', type: 'string', default: 'Bedrock level', managed: true },
+
+  { key: 'max-threads', label: 'Max. vláken (0 = co nejvíc)', group: 'vykon', type: 'int', default: '8', min: 0, max: 256 },
+  { key: 'enable-lan-visibility', label: 'Viditelný v síti doma', group: 'vykon', type: 'bool', default: 'true' },
+  { key: 'client-side-chunk-generation-enabled', label: 'Generování chunků u hráče', group: 'vykon', type: 'bool', default: 'true' },
+
+  { key: 'texturepack-required', label: 'Vyžadovat resource pack světa', group: 'resource', type: 'bool', default: 'false' },
+
+  { key: 'server-port', label: 'Port', group: 'ostatni', type: 'int', default: '19132', managed: true },
+  { key: 'server-portv6', label: 'Port IPv6', group: 'ostatni', type: 'int', default: '19133', managed: true },
+  { key: 'server-udp-ports', label: 'UDP porty pro hru', group: 'ostatni', type: 'string', default: '', managed: true },
+];
+
+export function propertyDefsFor(edition: 'java' | 'bedrock' | 'hytale' = 'java'): PropertyDef[] {
+  return edition === 'bedrock' ? BEDROCK_PROPERTY_DEFS : PROPERTY_DEFS;
+}
+
+export function propertyDef(key: string, edition: 'java' | 'bedrock' | 'hytale' = 'java'): PropertyDef | undefined {
+  return propertyDefsFor(edition).find((d) => d.key === key);
 }
 
 /** Keys the panel writes itself; the generic properties endpoint refuses them. */
-export const MANAGED_PROPERTY_KEYS = new Set(['server-port', 'query.port']);
+export const MANAGED_PROPERTY_KEYS = new Set(['server-port', 'query.port', 'server-portv6', 'server-udp-ports']);
 
 export const PROPERTY_KEY_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
