@@ -31,6 +31,7 @@ import type { ServerInstance } from '../instance.ts';
 import type { ServerManager } from '../manager.ts';
 import type { Paths } from '../paths.ts';
 import { addPlayer, kickPlayer, playersInfo, removePlayer, setWhitelistEnabled } from '../players.ts';
+import { checkDiskRoom } from '../disk.ts';
 import { readServerProperties, updateServerProperties } from '../properties.ts';
 import { UserError } from '../providers/index.ts';
 
@@ -199,7 +200,10 @@ export function registerContentRoutes(app: FastifyInstance, manager: ServerManag
     async (req, reply) => {
       const declared = Number(req.headers['content-length'] ?? 0);
       if (declared > MAX_UPLOAD) throw new UserError('Soubor je moc velký (max 1 GB).');
-      await saveUpload(inst(req.params.id).dir, req.query.path ?? '', req.query.name, req.body, MAX_UPLOAD, req.query.overwrite === '1');
+      const i = inst(req.params.id);
+      checkDiskRoom(i.cfg, i.diskUsageMb, declared);
+      await saveUpload(i.dir, req.query.path ?? '', req.query.name, req.body, MAX_UPLOAD, req.query.overwrite === '1');
+      manager.emit('files-changed', i.cfg.id);
       reply.code(204);
     },
   );

@@ -66,7 +66,10 @@ const LOOK: Record<ServerStatus, StatusLook> = {
   error: { label: 'Chyba', dot: 'var(--red)', bg: 'var(--red-soft)', fg: 'var(--red-text)' },
 };
 
+const SLEEPING: StatusLook = { label: 'Spí', dot: 'var(--blue)', bg: 'var(--blue-soft)', fg: 'var(--blue-text)' };
+
 export function statusLook(s: ServerInfo, now = Date.now()): StatusLook {
+  if (s.sleeping && (s.status === 'stopped' || s.status === 'crashed')) return SLEEPING;
   const look = LOOK[s.status];
   if (s.status === 'running' && s.startedAt) return { ...look, label: `Běží ${duration(now - s.startedAt)}` };
   if (s.status === 'installing' && s.install?.pct != null) return { ...look, label: `Instaluje se ${s.install.pct} %` };

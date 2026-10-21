@@ -252,7 +252,7 @@ button:disabled { cursor: not-allowed; }
 
 .seg { display: flex; flex-wrap: wrap; gap: 8px; }
 .seg-btn { min-height: 44px; padding: 0 16px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; background: var(--surface); color: var(--text-2); border: 1px solid var(--line); }
-.seg-btn[aria-selected='true'] { background: #18301f; color: var(--text); border-color: var(--green); }
+.seg-btn[aria-selected='true'], .seg-btn[aria-pressed='true'] { background: #18301f; color: var(--text); border-color: var(--green); }
 .seg-btn .count { min-width: 22px; padding: 1px 7px; border-radius: 999px; font-size: 12px; background: var(--line); }
 .seg-btn[aria-selected='true'] .count { background: #25482f; }
 

@@ -9,6 +9,7 @@ export interface Paths {
   runtimes: string;
   backups: string;
   trash: string;
+  metrics: string;
   serversFile: string;
 }
 
@@ -20,12 +21,13 @@ export function makePaths(root = process.env.SRVMC_HOME ?? path.join(os.homedir(
     runtimes: path.join(root, 'runtimes'),
     backups: path.join(root, 'backups'),
     trash: path.join(root, 'trash'),
+    metrics: path.join(root, 'metrics'),
     serversFile: path.join(root, 'servers.json'),
   };
 }
 
 export async function ensureDirs(paths: Paths): Promise<void> {
-  for (const dir of [paths.root, paths.servers, paths.cache, paths.runtimes, paths.backups, paths.trash]) {
+  for (const dir of [paths.root, paths.servers, paths.cache, paths.runtimes, paths.backups, paths.trash, paths.metrics]) {
     await mkdir(dir, { recursive: true });
   }
 }

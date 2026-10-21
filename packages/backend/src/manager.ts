@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { CreateServerRequest, LogLine, ServerConfig, ServerInfo, TaskKind, UpdateServerRequest } from '@srvmc/shared';
+import type { CreateServerRequest, LogLine, ScheduledTask, ServerConfig, ServerInfo, TaskKind, UpdateServerRequest } from '@srvmc/shared';
 import { applyChunkyLine, isChunkyInstalled } from './chunky.ts';
 import { downloadToCache } from './download.ts';
 import { platformArgs, runJava } from './installer.ts';
@@ -26,10 +26,12 @@ const mb = (bytes: number) => (bytes / MB).toFixed(1).replace('.', ',');
 
 /**
  * Owns every server: persistence, installation, lifecycle. Events:
- * 'server' (ServerInfo), 'deleted' (id), 'log' (id, LogLine[]), 'metrics' (id, MetricPoint).
+ * 'server' (ServerInfo), 'deleted' (id), 'log' (id, LogLine[]), 'metrics' (id, MetricPoint),
+ * 'added' (ServerInstance), 'configured' (id, after a settings change), 'files-changed' (id).
  */
 export class ServerManager extends EventEmitter {
   private readonly instances = new Map<string, ServerInstance>();
+  private readonly startGuards: ((inst: ServerInstance) => Promise<void>)[] = [];
 
   constructor(
     private readonly paths: Paths,
@@ -75,6 +77,7 @@ export class ServerManager extends EventEmitter {
     void this.refreshPregen(inst);
     inst.on('metrics', (point) => this.emit('metrics', cfg.id, point));
     this.instances.set(cfg.id, inst);
+    this.emit('added', inst);
     return inst;
   }
 
@@ -102,6 +105,10 @@ export class ServerManager extends EventEmitter {
       pregen: inst.pregen,
       lastError: inst.lastError,
       dir: inst.dir,
+      sleeping: inst.sleeping || undefined,
+      diskUsageMb: inst.diskUsageMb,
+      tps: inst.tps,
+      lastCrash: inst.lastCrash,
     };
   }
 
@@ -273,13 +280,45 @@ export class ServerManager extends EventEmitter {
     const launch = cfg.launchArgs ?? (cfg.launchJar ? ['-jar', cfg.launchJar] : null);
     if (!cfg.installed || !launch) throw new UserError('Server ještě není nainstalovaný.');
     if (inst.task && inst.task.kind !== 'backup') throw new UserError('Počkej, až doběhne obnova nebo import světa.');
-    if (!(await isPortFree(cfg.port))) throw new UserError(`Port ${cfg.port} je obsazený jiným programem.`);
+    if (inst.launching) return this.info(inst);
 
-    const java = await ensureJava(this.paths, cfg.javaMajor ?? 21, (text, pct) => inst.setInstall({ step: 'java', pct, text }));
-    inst.setInstall(undefined);
-    await this.refreshPregen(inst);
-    inst.start(java, [...buildJvmArgs(cfg), ...platformArgs(launch), 'nogui']);
+    inst.launching = true;
+    try {
+      for (const guard of this.startGuards) await guard(inst);
+      if (!(await isPortFree(cfg.port))) throw new UserError(`Port ${cfg.port} je obsazený jiným programem.`);
+      const java = await ensureJava(this.paths, cfg.javaMajor ?? 21, (text, pct) => inst.setInstall({ step: 'java', pct, text }));
+      inst.setInstall(undefined);
+      await this.refreshPregen(inst);
+      inst.start(java, [...buildJvmArgs(cfg), ...platformArgs(launch), 'nogui']);
+    } finally {
+      inst.launching = false;
+      // A failed start lets the watchers (wake listener) take the port back.
+      if (!inst.running) inst.emit('status');
+    }
     return this.info(inst);
+  }
+
+  /** Checks that run before every start, e.g. freeing the port from the wake listener. They may throw. */
+  addStartGuard(guard: (inst: ServerInstance) => Promise<void>): void {
+    this.startGuards.push(guard);
+  }
+
+  all(): ServerInstance[] {
+    return [...this.instances.values()];
+  }
+
+  async setSchedule(id: string, tasks: ScheduledTask[]): Promise<void> {
+    const inst = this.get(id);
+    inst.cfg.schedule = tasks.length ? tasks : undefined;
+    await this.persist();
+  }
+
+  async recordTaskRun(id: string, taskId: string, result: string): Promise<void> {
+    const task = this.instances.get(id)?.cfg.schedule?.find((t) => t.id === taskId);
+    if (!task) return;
+    task.lastRun = Date.now();
+    task.lastResult = result;
+    await this.persist();
   }
 
   async stop(id: string): Promise<ServerInfo> {
@@ -342,8 +381,13 @@ export class ServerManager extends EventEmitter {
       cfg.backupTime = patch.backupTime;
     }
     if (patch.backupKeep !== undefined) cfg.backupKeep = Math.min(100, Math.max(1, Math.round(patch.backupKeep)));
+    if (patch.crashRestart !== undefined) cfg.crashRestart = patch.crashRestart;
+    if (patch.wakeOnJoin !== undefined) cfg.wakeOnJoin = patch.wakeOnJoin;
+    if (patch.sleepAfterMin !== undefined) cfg.sleepAfterMin = Math.min(24 * 60, Math.max(0, Math.round(patch.sleepAfterMin))) || undefined;
+    if (patch.diskLimitMb !== undefined) cfg.diskLimitMb = Math.min(10 * 1024 * 1024, Math.max(0, Math.round(patch.diskLimitMb))) || undefined;
     await this.persist();
     inst.emit('status');
+    this.emit('configured', id);
     return this.info(inst);
   }
 

@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AuthMode, ContentHit, ContentSource } from '@srvmc/shared';
 import { getAuthState, setAuthMode } from '../auth.ts';
 import { checkUpdates, checkUploadedJar, contentTargets, installContent, listInstalled, modrinthLoaders, removeContent, setEnabled, targetFor, updateContent, type ContentContext } from '../content.ts';
+import { checkDiskRoom } from '../disk.ts';
 import { saveUpload, validName } from '../files.ts';
 import { readJarMeta } from '../jarmeta.ts';
 import type { ServerManager } from '../manager.ts';
@@ -24,7 +25,10 @@ const offsetOf = (v?: string) => Math.max(0, Math.min(10_000, Number(v) || 0));
 export function registerModRoutes(app: FastifyInstance, manager: ServerManager, paths: Paths): void {
   const inst = (id: string) => manager.get(id);
   const ctxFor = (id: string): ContentContext => ({ paths, trashDir: path.join(paths.trash, id) });
-  const afterChange = (id: string) => manager.refreshPregen(inst(id));
+  const afterChange = async (id: string) => {
+    await manager.refreshPregen(inst(id));
+    manager.emit('files-changed', id);
+  };
 
   app.get<{ Params: { id: string } }>('/api/servers/:id/content/targets', (req) => contentTargets(inst(req.params.id).cfg));
 
@@ -79,6 +83,7 @@ export function registerModRoutes(app: FastifyInstance, manager: ServerManager, 
     },
     async (req) => {
       const { id } = req.params;
+      checkDiskRoom(inst(id).cfg, inst(id).diskUsageMb);
       const result = await manager.runTask(id, 'content', 'Stahuji', () => installContent(inst(id), ctxFor(id), req.body.source, req.body.id, req.body.folder));
       await afterChange(id);
       return result;
@@ -123,6 +128,7 @@ export function registerModRoutes(app: FastifyInstance, manager: ServerManager, 
       const { name } = req.query;
       if (!validName(name) || !/\.jar$/i.test(name)) throw new UserError('Nahrát jde jen soubor .jar.');
       if (Number(req.headers['content-length'] ?? 0) > MAX_JAR) throw new UserError('Jar je moc velký (max 200 MB).');
+      checkDiskRoom(i.cfg, i.diskUsageMb, Number(req.headers['content-length'] ?? 0));
       const final = path.join(i.dir, target.folder, name);
       if (req.query.overwrite !== '1' && (await stat(final).catch(() => null))) throw new UserError(`Soubor ${name} už na serveru je.`);
       if (i.running && (await stat(final).catch(() => null))) throw new UserError('Nejdřív server zastav – za běhu má Windows jary zamčené.');

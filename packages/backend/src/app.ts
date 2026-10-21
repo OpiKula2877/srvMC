@@ -11,12 +11,16 @@ import { ServerManager } from './manager.ts';
 import { ensureDirs, makePaths, type Paths } from './paths.ts';
 import { providerFor, UserError } from './providers/index.ts';
 import { BackupService } from './backups.ts';
+import { MetricHistory } from './history.ts';
 import { registerContentRoutes } from './routes/content.ts';
 import { registerModRoutes } from './routes/mods.ts';
+import { registerMonitorRoutes } from './routes/monitor.ts';
 import { registerWorldRoutes } from './routes/worlds.ts';
+import { Scheduler } from './scheduler.ts';
 import { ServerStore } from './store.ts';
+import { Supervisor } from './supervisor.ts';
 
-export const VERSION = '0.5.0';
+export const VERSION = '0.6.0';
 
 export interface BackendOptions {
   /** Port to listen on. 0 picks a free one. Default 8420. */
@@ -73,6 +77,10 @@ const updateSchema = {
       backupSchedule: { type: 'string', enum: ['off', 'hourly', '6h', 'daily', 'weekly'] },
       backupTime: { type: 'string', maxLength: 5 },
       backupKeep: { type: 'integer', minimum: 1, maximum: 100 },
+      crashRestart: { type: 'boolean' },
+      wakeOnJoin: { type: 'boolean' },
+      sleepAfterMin: { type: 'integer', minimum: 0, maximum: 1440 },
+      diskLimitMb: { type: 'integer', minimum: 0, maximum: 10485760 },
     },
   },
 } as const;
@@ -199,10 +207,14 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   app.addContentTypeParser('image/png', { parseAs: 'buffer', bodyLimit: 512 * 1024 }, (_req, body, done) => done(null, body));
 
   const backups = new BackupService(manager, paths);
+  const history = new MetricHistory(paths.metrics);
+  const supervisor = new Supervisor(manager, history);
+  const scheduler = new Scheduler(manager, backups);
   registerRoutes(app, manager, paths);
   registerContentRoutes(app, manager, paths);
   registerModRoutes(app, manager, paths);
   registerWorldRoutes(app, manager, backups, paths);
+  registerMonitorRoutes(app, manager, history, scheduler);
 
   if (opts.webDir) {
     await app.register(fastifyStatic, {
@@ -228,6 +240,8 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
 
   if (opts.autoStartServers) void manager.autoStart();
   backups.start();
+  supervisor.start();
+  scheduler.start();
 
   return {
     port,
@@ -235,6 +249,8 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
     manager,
     async close() {
       backups.stop();
+      scheduler.stop();
+      await supervisor.stop();
       await manager.stopAll();
       for (const ws of clients) ws.close();
       await app.close();

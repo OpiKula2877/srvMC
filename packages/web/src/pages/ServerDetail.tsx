@@ -13,13 +13,25 @@ import { FilesTab } from './tabs/FilesTab.tsx';
 import { LogsTab } from './tabs/LogsTab.tsx';
 import { OptionsTab } from './tabs/OptionsTab.tsx';
 import { PlayersTab } from './tabs/PlayersTab.tsx';
+import { GraphsTab } from './tabs/GraphsTab.tsx';
 import { ModsTab } from './tabs/ModsTab.tsx';
+import { ScheduleTab } from './tabs/ScheduleTab.tsx';
 import { WorldsTab } from './tabs/WorldsTab.tsx';
 
 const TIMEZONES = (() => {
   const zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : ['Europe/Prague', 'Europe/Bratislava', 'UTC'];
   return [{ value: '', label: 'Podle počítače' }, ...zones.map((z) => ({ value: z, label: z.replace(/_/g, ' ') }))];
 })();
+
+const SLEEP_OPTIONS = [
+  { value: '0', label: 'Nikdy' },
+  { value: '5', label: 'Po 5 minutách' },
+  { value: '10', label: 'Po 10 minutách' },
+  { value: '15', label: 'Po 15 minutách' },
+  { value: '30', label: 'Po 30 minutách' },
+  { value: '60', label: 'Po hodině' },
+  { value: '120', label: 'Po 2 hodinách' },
+];
 
 const TABS: { id: string; label: string; phase?: number }[] = [
   { id: 'konzole', label: 'Konzole' },
@@ -30,7 +42,8 @@ const TABS: { id: string; label: string; phase?: number }[] = [
   { id: 'soubory', label: 'Soubory' },
   { id: 'svety', label: 'Světy' },
   { id: 'mody', label: 'Mody a pluginy' },
-  { id: 'planovac', label: 'Plánovač', phase: 6 },
+  { id: 'grafy', label: 'Grafy' },
+  { id: 'planovac', label: 'Plánovač' },
   { id: 'sit', label: 'Síť a doména', phase: 7 },
 ];
 
@@ -182,6 +195,14 @@ function Metrics({ server }: { server: ServerInfo }) {
         </div>
         <Sparkline values={recent.map((p) => p.memMb)} max={server.ramMaxMb * 1.15} color="var(--green)" height={60} label="Využití paměti" />
       </div>
+      {last?.tps !== undefined && (
+        <div className="card tight kv" style={{ alignItems: 'baseline' }}>
+          <span className="muted" style={{ fontSize: 13 }}>
+            TPS
+          </span>
+          <span style={{ fontFamily: 'var(--display)', fontSize: 20, fontWeight: 600, color: last.tps < 15 ? 'var(--amber-text)' : undefined }}>{last.tps.toFixed(1).replace('.', ',')}</span>
+        </div>
+      )}
       <div className="card tight stack" style={{ gap: 10 }}>
         <span style={{ fontWeight: 600 }}>Online hráči ({server.players.length})</span>
         {server.players.length === 0 ? (
@@ -216,7 +237,13 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
   const [extra, setExtra] = useState(server.extraJvmArgs);
   const [autoStart, setAutoStart] = useState(server.autoStart);
   const [timezone, setTimezone] = useState(server.timezone ?? '');
+  const [crashRestart, setCrashRestart] = useState(server.crashRestart !== false);
+  const [wakeOnJoin, setWakeOnJoin] = useState(!!server.wakeOnJoin);
+  const [sleepAfter, setSleepAfter] = useState(String(server.sleepAfterMin ?? 0));
+  const [diskOn, setDiskOn] = useState(!!server.diskLimitMb);
+  const [diskGb, setDiskGb] = useState(server.diskLimitMb ? String(Math.round((server.diskLimitMb / 1024) * 10) / 10).replace('.', ',') : '10');
   const [busy, setBusy] = useState(false);
+  const diskMb = diskOn ? Math.round((Number(diskGb.replace(',', '.')) || 0) * 1024) : 0;
   const maxMb = Math.max(1024, Math.min(32768, Math.floor(((system?.totalMemMb ?? 16384) - 1024) / 256) * 256));
   const dirty =
     name !== server.name ||
@@ -225,12 +252,17 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
     flags !== server.jvmFlags ||
     extra !== server.extraJvmArgs ||
     autoStart !== server.autoStart ||
-    timezone !== (server.timezone ?? '');
+    timezone !== (server.timezone ?? '') ||
+    crashRestart !== (server.crashRestart !== false) ||
+    wakeOnJoin !== !!server.wakeOnJoin ||
+    Number(sleepAfter) !== (server.sleepAfterMin ?? 0) ||
+    diskMb !== (server.diskLimitMb ?? 0);
 
   const save = async () => {
     setBusy(true);
     try {
-      await api.update(server.id, { name, port, ramMaxMb: ramMb, jvmFlags: flags, extraJvmArgs: extra, autoStart, timezone });
+      if (diskOn && diskMb < 1024) throw new Error('Limit disku musí být aspoň 1 GB.');
+      await api.update(server.id, { name, port, ramMaxMb: ramMb, jvmFlags: flags, extraJvmArgs: extra, autoStart, timezone, crashRestart, wakeOnJoin, sleepAfterMin: Number(sleepAfter), diskLimitMb: diskMb });
       toast('ok', 'Uloženo', isActive(server) ? 'Port, RAM a Java argumenty se projeví po restartu.' : undefined);
     } catch (err) {
       toast('error', 'Uložení selhalo', (err as Error).message);
@@ -278,6 +310,37 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
             Uložit změny
           </button>
         </div>
+      </section>
+
+      <section className="col-side card stack" style={{ gap: 14 }} aria-labelledby="h-watch">
+        <h2 id="h-watch" className="h2">
+          Hlídání a spánek
+        </h2>
+        <Toggle label="Po pádu restartovat (max 3× za 10 min)" checked={crashRestart} onChange={setCrashRestart} />
+        <Toggle label="Probudit, když se někdo připojí" checked={wakeOnJoin} onChange={setWakeOnJoin} />
+        <Dropdown label="Uspat, když nikdo nehraje" value={sleepAfter} options={SLEEP_OPTIONS} onChange={setSleepAfter} searchable={false} />
+        <Toggle label="Limit disku" checked={diskOn} onChange={setDiskOn} />
+        {diskOn && (
+          <label className="field">
+            <span className="label">Největší velikost složky serveru</span>
+            <span className="unit-input">
+              <input inputMode="decimal" aria-label="Limit disku v GB" value={diskGb} onChange={(e) => setDiskGb(e.target.value.replace(/[^0-9,.]/g, ''))} />
+              <span className="muted">GB</span>
+            </span>
+          </label>
+        )}
+        {server.diskUsageMb !== undefined && (
+          <div className="stack" style={{ gap: 6 }}>
+            <div className="kv" style={{ fontSize: 13 }}>
+              <span className="muted">Složka serveru</span>
+              <span style={{ color: diskMb && server.diskUsageMb > diskMb ? 'var(--red-text)' : undefined }}>
+                {gb(server.diskUsageMb)}
+                {diskMb ? ` z ${gb(diskMb)}` : ''}
+              </span>
+            </div>
+            {diskMb > 0 && <Progress pct={Math.min(100, Math.round((server.diskUsageMb / diskMb) * 100))} />}
+          </div>
+        )}
       </section>
     </div>
   );
@@ -410,7 +473,17 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
           <Progress pct={server.task.pct} />
         </div>
       )}
-      {(s === 'crashed' || s === 'error') && server.lastError && <div className="banner error">{server.lastError}</div>}
+      {s === 'crashed' && server.lastCrash ? (
+        <div className="banner error" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', alignItems: 'baseline' }}>
+          <strong>Server spadl: {server.lastCrash.summary}</strong>
+          {server.lastCrash.suspects.length > 0 && <span>Podezřelé: {server.lastCrash.suspects.join(', ')}</span>}
+          <a href={href({ page: 'server', id: server.id, tab: 'zaznamy' })} style={{ color: 'inherit' }}>
+            {server.lastCrash.report ? 'Crash report' : 'Záznamy'}
+          </a>
+        </div>
+      ) : (
+        (s === 'crashed' || s === 'error') && server.lastError && <div className="banner error">{server.lastError}</div>
+      )}
 
       <nav className="tabs" aria-label="Sekce serveru">
         {TABS.map((t) =>
@@ -434,7 +507,9 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
       {tab === 'soubory' && <FilesTab key={file ?? ''} server={server} openFile={file} />}
       {tab === 'svety' && <WorldsTab server={server} />}
       {tab === 'mody' && <ModsTab key={server.id} server={server} />}
-      {!['nastaveni', 'hraci', 'moznosti', 'zaznamy', 'soubory', 'svety', 'mody'].includes(tab) && (
+      {tab === 'grafy' && <GraphsTab key={server.id} server={server} />}
+      {tab === 'planovac' && <ScheduleTab key={server.id} server={server} />}
+      {!['nastaveni', 'hraci', 'moznosti', 'zaznamy', 'soubory', 'svety', 'mody', 'grafy', 'planovac'].includes(tab) && (
         <div className="row">
           <Console server={server} />
           <Metrics server={server} />

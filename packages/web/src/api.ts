@@ -12,6 +12,8 @@ import {
   type DirListing,
   type FileContent,
   type GameVersion,
+  type HistoryPoint,
+  type HistoryRange,
   type InstalledContent,
   type InstallResult,
   type LogFileInfo,
@@ -22,6 +24,8 @@ import {
   type PlayerListKind,
   type PlayersInfo,
   type PregenRequest,
+  type ScheduledTask,
+  type ScheduleState,
   type ServerInfo,
   type ServerType,
   type SystemInfo,
@@ -139,6 +143,11 @@ export const api = {
 
   searchModpacks: (q: string, offset: number) => request<ModpackHit[]>('GET', `/api/modpacks/search?${new URLSearchParams({ q, offset: String(offset) })}`),
   modpackVersions: (project: string) => request<ModpackVersion[]>('GET', `/api/modpacks/${encodeURIComponent(project)}/versions`),
+
+  history: (id: string, range: HistoryRange) => request<HistoryPoint[]>('GET', `/api/servers/${id}/history?range=${range}`),
+  schedule: (id: string) => request<ScheduleState>('GET', `/api/servers/${id}/schedule`),
+  saveSchedule: (id: string, tasks: (Omit<ScheduledTask, 'id'> & { id?: string })[]) => request<ScheduleState>('PUT', `/api/servers/${id}/schedule`, { tasks }),
+  runTask: (id: string, task: string) => request<{ result: string }>('POST', `/api/servers/${id}/schedule/${encodeURIComponent(task)}/run`),
 
   auth: (id: string) => request<AuthState>('GET', `/api/servers/${id}/auth`),
   setAuth: (id: string, mode: AuthMode) => request<AuthState>('PUT', `/api/servers/${id}/auth`, { mode }),

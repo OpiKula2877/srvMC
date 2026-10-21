@@ -62,6 +62,7 @@ Vše je v `%USERPROFILE%\srvMC` (jinou složku nastavíš proměnnou `SRVMC_HOME
 - `runtimes\temurin-<verze>\` – Java
 - `backups\<id>\` – zálohy (`RRRR-MM-DD_HH-MM-SS_<druh>.zip`)
 - `trash\<id>\` – smazané soubory a světy (jde je ručně vrátit)
+- `metrics\<id>\` – historie zátěže po minutách (jeden soubor na den, drží se 31 dní)
 - `servers.json` – seznam serverů a jejich nastavení
 
 ## Struktura
@@ -81,7 +82,7 @@ apps/desktop       Electron: okno, ikona v oznamovací oblasti, balí jádro i p
 - Každá změna přes API musí nést hlavičku `x-srvmc: 1`.
 - Servery se spouštějí bez shellu, s polem argumentů. Vlastní JVM argumenty musí začínat `-`.
 
-## Stav (fáze 1–5)
+## Stav (fáze 1–6)
 
 Fáze 1: vytvoření serveru (Vanilla, Paper, Fabric), automatická Java, start, stop, restart a násilné ukončení, živá konzole s historií příkazů, grafy CPU a RAM, hráči online, nastavení RAM, portu, JVM a časového pásma, autostart, mazání serveru. Když zavřeš okno, servery běží dál v oznamovací oblasti.
 
@@ -109,7 +110,15 @@ Fáze 5:
 - **Modpacky** – výběr z Modrinthu přímo v průvodci. Nainstaluje se loader modpacku (Fabric, Quilt, Forge, NeoForge), jen serverové soubory a `overrides`. Cesty mimo složku serveru a spustitelné skripty se přeskočí.
 - **Placené i neplacené účty** – na Paperu, Purpuru a Spigotu AuthMe Reloaded + PacketEvents (placení hráči napíšou jednou `/premium`), na Fabricu a Quiltu EasyAuth. Vypne `online-mode` i `enforce-secure-profile`. Při návratu na „jen placené“ se auth pluginy vypnou, ne smažou.
 
-Další fáze: grafy a plánovač, crash hlídač, síť a doména, Bedrock (viz plán). CurseForge přijde, až bude kam zadat API klíč.
+Fáze 6:
+
+- **Grafy** – procesor, paměť, hráči a TPS za hodinu, 24 hodin, 7 a 30 dní, s tooltipem a tabulkou. Historie se ukládá po minutách na disk. TPS se měří jednou za minutu (`tps` na Paperu/Purpuru/Spigotu/Arclightu, `forge tps` / `neoforge tps`, `tick query` na Vanille, Fabricu a Quiltu od 1.20.3) a odpověď se do konzole nevypisuje.
+- **Plánovač** – restart, zapnutí, vypnutí, záloha nebo příkaz ve vybrané dny a čas, nebo opakovaně po 15 minutách až 24 hodinách. Před restartem a vypnutím odpočet v chatu (5 min, 1 min, 10 s), když někdo hraje. Tlačítko „Spustit teď“ a poslední výsledek u každé úlohy.
+- **Crash hlídač** – po pádu přečte crash report a konec konzole, napíše příčinu (došla paměť, obsazený port, chybějící mod, stará Java, chyba mixinu…) a podezřelé mody nebo pluginy. Restartuje za 10 s, nejvýš 3× za 10 minut; když by restart nepomohl, nechá server vypnutý. Server, který 5 minut neodpovídá na měření TPS, ukončí jako zamrzlý.
+- **Spánek a probuzení** – server se může sám vypnout, když nikdo nehraje. Vypnutý server s probouzením odpovídá v seznamu serverů „Spí · připoj se a probudí se“ a při pokusu o připojení se spustí (hráč se připojí znovu za chvilku). Při prvním použití se může ozvat Windows firewall – srvMC poslouchá na portu serveru.
+- **Limit disku** – velikost složky serveru se počítá každých 5 minut. Nad limitem varování, nad limitem o 10 % se server zastaví a nespustí, dokud se neuvolní místo. Nahrávání souborů, světů a jarů i instalace modů limit hlídají.
+
+Další fáze: síť a doména, Bedrock, Discord a další (viz plán). CurseForge přijde, až bude kam zadat API klíč.
 
 ## Ikona
 

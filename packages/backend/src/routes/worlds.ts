@@ -7,6 +7,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { PregenRequest } from '@srvmc/shared';
 import type { BackupService } from '../backups.ts';
 import { installChunky, pregenCommand, startPregen } from '../chunky.ts';
+import { checkDiskRoom } from '../disk.ts';
 import { saveUpload } from '../files.ts';
 import type { ServerManager } from '../manager.ts';
 import type { Paths } from '../paths.ts';
@@ -112,6 +113,8 @@ export function registerWorldRoutes(app: FastifyInstance, manager: ServerManager
       const fs = await statfs(inst.dir).catch(() => null);
       if (fs && declared * 2.5 > fs.bavail * fs.bsize) throw new UserError('Na disku není dost místa na rozbalení světa.');
       if (req.query.activate === '1' && inst.running) throw new UserError('Pro nastavení jako aktivní nejdřív server zastav.');
+      // A zipped world unpacks to roughly twice its size.
+      checkDiskRoom(inst.cfg, inst.diskUsageMb, declared * 2);
 
       const tmpName = `.srvmc-import-${Date.now()}.zip`;
       await saveUpload(inst.dir, '', tmpName, req.body, MAX_WORLD_UPLOAD, false);
@@ -125,6 +128,7 @@ export function registerWorldRoutes(app: FastifyInstance, manager: ServerManager
         return { name, worlds: await findWorlds(inst.dir) };
       } finally {
         await rm(zip, { force: true });
+        manager.emit('files-changed', inst.cfg.id);
       }
     },
   );

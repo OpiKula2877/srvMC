@@ -85,6 +85,67 @@ export interface ServerConfig {
   backupKeep?: number;
   /** Set for servers created from a modpack. */
   modpack?: ModpackInfo;
+  /** Start again after a crash (at most 3 times in 10 minutes). Default: on. */
+  crashRestart?: boolean;
+  /** While stopped, answer the server list ping on the port and start when a player tries to join. */
+  wakeOnJoin?: boolean;
+  /** Stop the server after this many minutes without players. 0 or missing = never. */
+  sleepAfterMin?: number;
+  /** Soft size limit of the server folder in MB. 0 or missing = no limit. */
+  diskLimitMb?: number;
+  schedule?: ScheduledTask[];
+}
+
+export type ScheduleAction = 'restart' | 'start' | 'stop' | 'backup' | 'command';
+
+export interface ScheduledTask {
+  id: string;
+  action: ScheduleAction;
+  /** For 'command': the console command (without a slash). */
+  command?: string;
+  /** 'days': at `time` on the chosen weekdays; 'interval': every `everyMin` minutes, counted from `time`. */
+  repeat: 'days' | 'interval';
+  /** "HH:MM" */
+  time: string;
+  /** Weekdays for 'days', 0 = Sunday … 6 = Saturday. */
+  days: number[];
+  everyMin?: number;
+  /** Count down in chat (5 min, 1 min, 10 s) before a restart or stop. */
+  warn: boolean;
+  enabled: boolean;
+  lastRun?: number;
+  /** What happened the last time: "ok", or why it was skipped or failed. */
+  lastResult?: string;
+}
+
+export interface ScheduleState {
+  tasks: ScheduledTask[];
+  /** Next run per task id (ms), null when disabled. */
+  next: Record<string, number | null>;
+}
+
+/** What srvMC worked out after a crash. */
+export interface CrashInfo {
+  at: number;
+  /** Plain-language cause when known, else the crash description or exception. */
+  summary: string;
+  /** Mods or plugins the crash points at. */
+  suspects: string[];
+  /** Crash report file in crash-reports/, when one was written. */
+  report?: string;
+  /** Restarting would only crash again (port taken, missing mod, wrong Java…). */
+  permanent?: boolean;
+}
+
+export type HistoryRange = '1h' | '24h' | '7d' | '30d';
+
+/** One bucket of the load history: average CPU, peak RAM and players, lowest TPS. */
+export interface HistoryPoint {
+  t: number;
+  cpu: number;
+  memMb: number;
+  players: number;
+  tps: number | null;
 }
 
 export interface ModpackInfo {
@@ -125,6 +186,13 @@ export interface ServerInfo extends ServerConfig {
   pregen?: PregenStatus;
   lastError?: string;
   dir: string;
+  /** The wake-on-join listener holds the port: the server is stopped but wakes when someone joins. */
+  sleeping?: boolean;
+  /** Size of the server folder, refreshed every few minutes. */
+  diskUsageMb?: number;
+  /** Latest ticks per second, when the server type can report it. */
+  tps?: number;
+  lastCrash?: CrashInfo;
 }
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'cmd' | 'system';
@@ -140,6 +208,8 @@ export interface MetricPoint {
   /** CPU usage of the server process, 0–100 % of the whole machine. */
   cpu: number;
   memMb: number;
+  players?: number;
+  tps?: number;
 }
 
 export interface GameVersion {
@@ -176,6 +246,10 @@ export interface UpdateServerRequest {
   backupSchedule?: BackupSchedule;
   backupTime?: string;
   backupKeep?: number;
+  crashRestart?: boolean;
+  wakeOnJoin?: boolean;
+  sleepAfterMin?: number;
+  diskLimitMb?: number;
 }
 
 export interface SystemInfo {

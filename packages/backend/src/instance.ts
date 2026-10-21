@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import readline from 'node:readline';
-import type { InstallProgress, LogLevel, LogLine, MetricPoint, PregenStatus, ServerConfig, ServerStatus, TaskProgress } from '@srvmc/shared';
+import type { CrashInfo, InstallProgress, LogLevel, LogLine, MetricPoint, PregenStatus, ServerConfig, ServerStatus, TaskProgress } from '@srvmc/shared';
 import { UserError } from './providers/index.ts';
 import { ProcessSampler } from './stats.ts';
 
@@ -75,14 +75,24 @@ export class ServerInstance extends EventEmitter {
   lastError?: string;
   install?: InstallProgress;
   installing = false;
+  /** Set while srvMC prepares a start (Java check, guards) before the process exists. */
+  launching = false;
   task?: TaskProgress;
   pregen: PregenStatus = { installed: false, state: 'idle', pct: 0, chunks: 0 };
   readonly log: LogLine[] = [];
   readonly metrics: MetricPoint[] = [];
+  /** Latest ticks per second and when they were measured. */
+  tps?: number;
+  tpsAt?: number;
+  sleeping = false;
+  diskUsageMb?: number;
+  lastCrash?: CrashInfo;
 
   private proc?: ChildProcess;
   private sampler?: ProcessSampler;
   private stopRequested = false;
+  /** While set, console lines matching `re` are answers to a probe and stay out of the log. */
+  private quiet?: { re: RegExp; until: number; onLine: (text: string) => void };
   private pending: LogLine[] = [];
   private flushTimer?: NodeJS.Timeout;
 
@@ -171,7 +181,9 @@ export class ServerInstance extends EventEmitter {
     if (proc.pid) {
       void writeFile(path.join(this.dir, PID_FILE), String(proc.pid)).catch(() => undefined);
       this.sampler = new ProcessSampler(proc.pid, 2000, (cpu, memMb) => {
-        const point: MetricPoint = { t: Date.now(), cpu, memMb };
+        const now = Date.now();
+        const tps = this.tpsAt && now - this.tpsAt < 150_000 ? this.tps : undefined;
+        const point: MetricPoint = { t: now, cpu, memMb, players: this.players.size, ...(tps !== undefined && { tps }) };
         this.metrics.push(point);
         if (this.metrics.length > METRIC_LIMIT) this.metrics.splice(0, this.metrics.length - METRIC_LIMIT);
         this.emit('metrics', point);
@@ -183,6 +195,10 @@ export class ServerInstance extends EventEmitter {
   private onLine(raw: string, fromStderr: boolean): void {
     const text = raw.replace(ANSI_RE, '').replace(/\r$/, '');
     if (text.trim() === '' || text.trim() === '>') return;
+    if (this.quiet && Date.now() < this.quiet.until && this.quiet.re.test(text)) {
+      this.quiet.onLine(text);
+      return;
+    }
     const level = levelOf(text);
     this.pushLog(fromStderr && level === 'info' ? 'warn' : level, text);
 
@@ -207,9 +223,14 @@ export class ServerInstance extends EventEmitter {
     this.proc = undefined;
     this.players.clear();
     this.startedAt = undefined;
+    this.quiet = undefined;
+    this.tps = undefined;
+    this.tpsAt = undefined;
     const crashed = !this.stopRequested && code !== 0;
     if (crashed) {
-      const msg = `Server spadl (kód ${code ?? signal}).`;
+      // Windows reports exit codes as unsigned 32-bit numbers (4294967295 = -1).
+      const shown = code !== null && code > 2 ** 31 ? code - 2 ** 32 : (code ?? signal);
+      const msg = `Server spadl (kód ${shown}).`;
       this.pushLog('error', msg);
       this.setStatus('crashed', msg);
     } else {
@@ -228,6 +249,36 @@ export class ServerInstance extends EventEmitter {
     if (clean === 'stop') this.stopRequested = true;
     this.pushLog('cmd', `> ${clean}`);
     stdin.write(`${clean}\n`);
+  }
+
+  /**
+   * Sends a command whose answer stays out of the console (lines matching `answer` within the
+   * timeout). Resolves with the first value `parse` reads, or null when nothing came back.
+   */
+  probe<T>(command: string, answer: RegExp, parse: (line: string) => T | null, timeoutMs = 5000): Promise<T | null> {
+    const stdin = this.proc?.stdin;
+    if (!stdin?.writable || this.quiet) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      let settled = false;
+      const quiet = {
+        re: answer,
+        until: Date.now() + timeoutMs,
+        onLine: (text: string) => {
+          const v = parse(text);
+          if (v !== null && !settled) {
+            settled = true;
+            resolve(v);
+          }
+        },
+      };
+      this.quiet = quiet;
+      // The window stays open after the answer, so its remaining lines are hidden too.
+      setTimeout(() => {
+        if (this.quiet === quiet) this.quiet = undefined;
+        if (!settled) resolve(null);
+      }, timeoutMs);
+      stdin.write(`${command}\n`);
+    });
   }
 
   waitForExit(timeoutMs: number): Promise<boolean> {
@@ -261,9 +312,10 @@ export class ServerInstance extends EventEmitter {
     }
   }
 
-  kill(): void {
+  /** Ends the process at once. `asCrash` treats it as a crash (a frozen server), so the crash watchdog reacts. */
+  kill(asCrash = false): void {
     if (!this.proc) return;
-    this.stopRequested = true;
+    this.stopRequested = !asCrash;
     this.proc.kill('SIGKILL');
   }
 }
