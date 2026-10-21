@@ -71,10 +71,13 @@ export const spigot: Provider = {
               const work = path.join(ctx.paths.cache, 'buildtools-work');
               await mkdir(work, { recursive: true });
               await mkdir(outDir, { recursive: true });
-              ctx.progress(`Kompiluji ${variant === 'spigot' ? 'Spigot' : 'CraftBukkit'} ${mc} – poprvé to trvá 5–15 minut`, null);
+              // BuildTools compiles with Maven, which needs javac – a JRE is not enough.
+              const jdk = await ctx.ensureJdk();
+              ctx.progress(`Kompiluji ${variant === 'spigot' ? 'Spigot' : 'CraftBukkit'} ${mc} – poprvé to trvá 10–30 minut`, null);
               let stage = '';
               await ctx.run(['-jar', buildToolsJar, '--rev', mc, '--compile', variant.toUpperCase(), '--output-dir', outDir, '--final-name', jarName, '--nogui'], {
                 cwd: work,
+                java: jdk,
                 timeoutMs: 60 * 60_000,
                 onLine: (line) => {
                   const s = /Cloning|Pulling|Applying|Patching|Decompil|Remapping|Building|Compiling|Downloading/i.exec(line)?.[0];

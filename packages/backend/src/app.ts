@@ -15,7 +15,7 @@ import { registerContentRoutes } from './routes/content.ts';
 import { registerWorldRoutes } from './routes/worlds.ts';
 import { ServerStore } from './store.ts';
 
-export const VERSION = '0.4.0';
+export const VERSION = '0.4.1';
 
 export interface BackendOptions {
   /** Port to listen on. 0 picks a free one. Default 8420. */

@@ -70,24 +70,29 @@ function untar(file: string, dest: string): Promise<void> {
 
 export type JavaProgress = (text: string, pct: number | null) => void;
 
-const pending = new Map<number, Promise<string>>();
+/** 'jre' runs servers; 'jdk' adds the compiler that BuildTools (Maven) needs. */
+export type JavaKind = 'jre' | 'jdk';
+
+const pending = new Map<string, Promise<string>>();
 
 /** Returns the path of a Java executable for `major`, downloading Eclipse Temurin on first use. */
-export function ensureJava(paths: Paths, major: number, onProgress?: JavaProgress): Promise<string> {
-  const running = pending.get(major);
+export function ensureJava(paths: Paths, major: number, onProgress?: JavaProgress, kind: JavaKind = 'jre'): Promise<string> {
+  const key = `${major}-${kind}`;
+  const running = pending.get(key);
   if (running) return running;
-  const job = installJava(paths, major, onProgress).finally(() => pending.delete(major));
-  pending.set(major, job);
+  const job = installJava(paths, major, kind, onProgress).finally(() => pending.delete(key));
+  pending.set(key, job);
   return job;
 }
 
-async function installJava(paths: Paths, major: number, onProgress?: JavaProgress): Promise<string> {
-  const home = runtimeDir(paths, major);
+async function installJava(paths: Paths, major: number, kind: JavaKind, onProgress?: JavaProgress): Promise<string> {
+  const home = kind === 'jdk' ? `${runtimeDir(paths, major)}-jdk` : runtimeDir(paths, major);
   const bin = javaBinary(home);
   if (await exists(bin)) return bin;
 
   let asset: AdoptiumAsset | undefined;
-  for (const imageType of ['jre', 'jdk'] as const) {
+  // A JRE is enough to run a server; when no JRE exists for a version, the JDK works too.
+  for (const imageType of kind === 'jdk' ? (['jdk'] as const) : (['jre', 'jdk'] as const)) {
     const assets = await fetchJson<AdoptiumAsset[]>(adoptiumUrl(major, imageType)).catch(() => []);
     asset = assets[0];
     if (asset) break;
@@ -95,13 +100,14 @@ async function installJava(paths: Paths, major: number, onProgress?: JavaProgres
   if (!asset) throw new Error(`Java ${major} není pro tento systém k dispozici.`);
 
   const pkg = asset.binary.package;
-  onProgress?.(`Stahuji Javu ${major} (${asset.release_name})`, 0);
+  const label = kind === 'jdk' ? `Java ${major} JDK` : `Javu ${major}`;
+  onProgress?.(`Stahuji ${label} (${asset.release_name})`, 0);
   const file = await downloadToCache(paths, { url: pkg.link, fileName: pkg.name, sha256: pkg.checksum, size: pkg.size }, (done, total) =>
-    onProgress?.(`Stahuji Javu ${major}`, total ? Math.round((done / total) * 100) : null),
+    onProgress?.(`Stahuji ${label}`, total ? Math.round((done / total) * 100) : null),
   );
 
-  onProgress?.(`Rozbaluji Javu ${major}`, null);
-  const tmp = path.join(paths.runtimes, `.tmp-${major}-${Date.now()}`);
+  onProgress?.(`Rozbaluji ${label}`, null);
+  const tmp = path.join(paths.runtimes, `.tmp-${major}-${kind}-${Date.now()}`);
   await mkdir(tmp, { recursive: true });
   try {
     if (pkg.name.endsWith('.zip')) await extractZip(file, { dir: tmp });

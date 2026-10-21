@@ -16,7 +16,9 @@ export interface InstallContext {
   log(text: string): void;
   progress(text: string, pct: number | null): void;
   /** Runs Java with `args` (output goes to the server console). Rejects on a non-zero exit code. */
-  run(args: string[], opts?: { cwd?: string; timeoutMs?: number; onLine?: (line: string) => void }): Promise<void>;
+  run(args: string[], opts?: { cwd?: string; timeoutMs?: number; onLine?: (line: string) => void; java?: string }): Promise<void>;
+  /** Path to a full JDK of `javaMajor` (with javac), downloaded on first use. */
+  ensureJdk(): Promise<string>;
 }
 
 export interface InstallPlan {

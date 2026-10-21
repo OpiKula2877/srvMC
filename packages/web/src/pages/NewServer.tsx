@@ -22,7 +22,7 @@ const SOURCES: Partial<Record<ServerType, string>> = {
 };
 
 const NOTES: Partial<Record<ServerType, string>> = {
-  spigot: 'Spigot nemá oficiální stažení. BuildTools ho poprvé kompiluje 5–15 minut a potřebuje Git (na Windows si ho stáhne sám). Další servery stejné verze už jsou hned.',
+  spigot: 'Spigot nemá oficiální stažení. BuildTools ho poprvé kompiluje 10–30 minut (stáhne si Git i JDK sám). Další servery stejné verze už jsou hned.',
   forge: 'Instalátor stáhne knihovny Forge. První spuštění trvá déle.',
   neoforge: 'Instalátor stáhne knihovny NeoForge. První spuštění trvá déle.',
   arclight: 'Arclight umí mody i Bukkit pluginy zároveň. Při prvním startu si stáhne knihovny.',

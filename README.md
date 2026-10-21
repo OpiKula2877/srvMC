@@ -97,7 +97,7 @@ Fáze 3:
 - **Pre-generace** – Chunky se stáhne z Modrinthu (i se závislostmi). Poloměr, tvar, dimenze, hranice světa a živý průběh s odhadem času.
 - Když srvMC spadne a server zůstane běžet, při dalším startu se osiřelý proces najde a ukončí.
 
-Fáze 4: Purpur, Spigot a CraftBukkit (BuildTools, sestavený jar se ukládá do `cache\spigot` a další servery stejné verze ho použijí hned), Quilt, Forge, NeoForge a Arclight. Instalátory běží s výstupem v konzoli serveru. Forge a NeoForge se spouští podle `run.bat`/`run.sh`, které instalátor vytvoří (args soubory, shim jar, u starých verzí přímo forge jar).
+Fáze 4: Purpur, Spigot a CraftBukkit (BuildTools s vlastním JDK, první sestavení trvá 10–30 minut, jar se ukládá do `cache\spigot` a další servery stejné verze ho použijí hned), Quilt (výchozí je nejnovější Quilt Loader – poslední „stabilní“ verze nové Minecrafty nespustí), Forge, NeoForge a Arclight. Instalátory běží s výstupem v konzoli serveru. Forge a NeoForge se spouští podle `run.bat`/`run.sh`, které instalátor vytvoří (args soubory, shim jar, u starých verzí přímo forge jar).
 
 Další fáze: mody, pluginy a modpacky, grafy a plánovač, síť a doména (viz plán).
 

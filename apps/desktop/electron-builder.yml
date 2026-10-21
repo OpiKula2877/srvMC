@@ -13,6 +13,9 @@ files:
   - dist/**/*
   - package.json
   - '!dist/**/*.map'
+# The ES module main process and the panel files are served straight from disk; inside an asar
+# archive the core never came up, so the app ships as a plain folder.
+asar: false
 
 win:
   target:

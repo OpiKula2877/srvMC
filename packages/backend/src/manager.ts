@@ -221,8 +221,9 @@ export class ServerManager extends EventEmitter {
           paths: this.paths,
           log: (text) => inst.pushLog('system', text),
           progress: (text, pct) => inst.setInstall({ step: 'installer', pct, text }),
+          ensureJdk: () => ensureJava(this.paths, plan.javaMajor, (text, pct) => inst.setInstall({ step: 'java', pct, text }), 'jdk'),
           run: (args, opts) =>
-            runJava(java, args, {
+            runJava(opts?.java ?? java, args, {
               cwd: opts?.cwd ?? inst.dir,
               timeoutMs: opts?.timeoutMs,
               onLine: (line) => {

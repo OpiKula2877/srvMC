@@ -27,17 +27,19 @@ export const quilt: Provider = {
     return games.filter((g) => g.stable || includeSnapshots).map((g) => ({ id: g.version, type: g.stable ? 'release' : 'snapshot' }));
   },
 
+  // Quilt's last "stable" loader is years old and cannot read classes of current Minecraft
+  // (built for Java 25), so the newest loader is the recommended one even when it is a beta.
   async listBuilds(mc) {
-    return (await loadersFor(mc)).map(({ loader }) => ({
+    return (await loadersFor(mc)).map(({ loader }, i) => ({
       id: loader.version,
-      label: `Quilt Loader ${loader.version}`,
-      channel: /beta|alpha|pre|rc/i.test(loader.version) ? 'beta' : 'stable',
+      label: `Quilt Loader ${loader.version}${i === 0 ? ' (doporučeno)' : ''}`,
+      channel: i === 0 || !/beta|alpha|pre|rc/i.test(loader.version) ? 'stable' : 'beta',
     }));
   },
 
   async plan(mc, build) {
     const builds = await this.listBuilds(mc);
-    const loader = build ?? (builds.find((b) => b.channel === 'stable') ?? builds[0])?.id;
+    const loader = build ?? builds[0]?.id;
     if (!loader || !builds.some((b) => b.id === loader)) throw new UserError(`Quilt Loader pro ${mc} neexistuje.`);
     const installers = await cached('quilt-installers', 10 * 60_000, () => fetchJson<QuiltInstaller[]>(`${META}/versions/installer`));
     const inst = installers[0];
