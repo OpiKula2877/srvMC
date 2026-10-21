@@ -15,6 +15,8 @@ Instalace obsahuje jen panel. Serverové soubory a správná Java se stáhnou a�
 | Forge | maven.minecraftforge.net – installer `--installServer` |
 | NeoForge | maven.neoforged.net – installer `--installServer` |
 | Arclight | GitHub releases IzzelAliz/Arclight (Forge, NeoForge i Fabric varianta) |
+| Modpacky | Modrinth `.mrpack` – loader podle modpacku, jen soubory pro server |
+| Mody, pluginy | Modrinth, Hangar (PaperMC), SpigotMC přes Spiget |
 | Java | Eclipse Temurin přes api.adoptium.net |
 
 Stažené soubory jdou do sdílené cache. Hash (SHA-1 nebo SHA-256) se kontroluje po každém stažení i při použití z cache.
@@ -67,7 +69,7 @@ Vše je v `%USERPROFILE%\srvMC` (jinou složku nastavíš proměnnou `SRVMC_HOME
 ```
 packages/shared    typy a konstanty sdílené jádrem a panelem
 packages/backend   jádro: Fastify API + WebSocket, instalace, procesy serverů
-  src/providers/   jeden soubor na typ serveru (vanilla, paper, fabric)
+  src/providers/   jeden soubor na typ serveru (vanilla, paper, fabric, forge, modpack…)
 packages/web       panel v Reactu (vlastní dropdowny, scrollbary, přepínače)
 apps/desktop       Electron: okno, ikona v oznamovací oblasti, balí jádro i panel
 ```
@@ -79,7 +81,7 @@ apps/desktop       Electron: okno, ikona v oznamovací oblasti, balí jádro i p
 - Každá změna přes API musí nést hlavičku `x-srvmc: 1`.
 - Servery se spouštějí bez shellu, s polem argumentů. Vlastní JVM argumenty musí začínat `-`.
 
-## Stav (fáze 1–4)
+## Stav (fáze 1–5)
 
 Fáze 1: vytvoření serveru (Vanilla, Paper, Fabric), automatická Java, start, stop, restart a násilné ukončení, živá konzole s historií příkazů, grafy CPU a RAM, hráči online, nastavení RAM, portu, JVM a časového pásma, autostart, mazání serveru. Když zavřeš okno, servery běží dál v oznamovací oblasti.
 
@@ -99,7 +101,15 @@ Fáze 3:
 
 Fáze 4: Purpur, Spigot a CraftBukkit (BuildTools s vlastním JDK, první sestavení trvá 10–30 minut, jar se ukládá do `cache\spigot` a další servery stejné verze ho použijí hned), Quilt (výchozí je nejnovější Quilt Loader – poslední „stabilní“ verze nové Minecrafty nespustí), Forge, NeoForge a Arclight. Instalátory běží s výstupem v konzoli serveru. Forge a NeoForge se spouští podle `run.bat`/`run.sh`, které instalátor vytvoří (args soubory, shim jar, u starých verzí přímo forge jar).
 
-Další fáze: mody, pluginy a modpacky, grafy a plánovač, síť a doména (viz plán).
+Fáze 5:
+
+- **Mody a pluginy** – hledání na Modrinthu, Hangaru a SpigotMC s filtrem na loader a verzi serveru. Instalace i se závislostmi, mody jen pro hráče (shadery, minimapy…) server odmítne. Prémiové pluginy a ty, co se stahují jen z webu autora, mají odkaz na web.
+- **Nainstalované** – zapnout a vypnout (`.jar.disabled`), smazat do koše, kontrola aktualizací přes Modrinth a aktualizace jedním klikem (starý jar jde do koše). Ručně přidané jary se rozpoznají podle hashe. Měnit jde jen vypnutý server, protože Windows drží jary zamčené.
+- **Ruční nahrání jaru** – srvMC přečte `plugin.yml`, `fabric.mod.json` nebo `mods.toml` a nepustí plugin mezi mody, mod pro jiný loader ani mod jen pro klienta.
+- **Modpacky** – výběr z Modrinthu přímo v průvodci. Nainstaluje se loader modpacku (Fabric, Quilt, Forge, NeoForge), jen serverové soubory a `overrides`. Cesty mimo složku serveru a spustitelné skripty se přeskočí.
+- **Placené i neplacené účty** – na Paperu, Purpuru a Spigotu AuthMe Reloaded + PacketEvents (placení hráči napíšou jednou `/premium`), na Fabricu a Quiltu EasyAuth. Vypne `online-mode` i `enforce-secure-profile`. Při návratu na „jen placené“ se auth pluginy vypnou, ne smažou.
+
+Další fáze: grafy a plánovač, crash hlídač, síť a doména, Bedrock (viz plán). CurseForge přijde, až bude kam zadat API klíč.
 
 ## Ikona
 

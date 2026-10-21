@@ -76,3 +76,13 @@ export function statusLook(s: ServerInfo, now = Date.now()): StatusLook {
 export function isActive(s: ServerInfo): boolean {
   return s.status === 'running' || s.status === 'starting' || s.status === 'stopping';
 }
+
+/** What runs on the server: the type, or a modpack's name. */
+export function typeName(s: ServerInfo): string {
+  return s.type === 'modpack' ? (s.modpack?.title ?? 'modpack') : s.type;
+}
+
+/** The Minecraft version; a modpack only knows it once installed (until then "version" is the pack id). */
+export function mcVersion(s: ServerInfo): string {
+  return s.type === 'modpack' && !s.modpack ? '…' : s.version;
+}

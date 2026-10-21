@@ -38,7 +38,7 @@ export const SERVER_TYPES: ServerTypeInfo[] = [
   { id: 'forge', name: 'Forge', tag: 'Mody · klasika', color: '#8C9BAB', defaultPort: 25565, available: true },
   { id: 'neoforge', name: 'NeoForge', tag: 'Mody · nový Forge', color: '#E08A4F', defaultPort: 25565, available: true },
   { id: 'arclight', name: 'Arclight', tag: 'Mody + pluginy', color: '#6FC3C9', defaultPort: 25565, available: true },
-  { id: 'modpack', name: 'Modpack', tag: 'Modrinth · CurseForge', color: '#5BD27A', defaultPort: 25565, available: false, phase: 5 },
+  { id: 'modpack', name: 'Modpack', tag: 'Modrinth', color: '#5BD27A', defaultPort: 25565, available: true },
   { id: 'bedrock', name: 'Bedrock', tag: 'Mobil · konzole · Win10', color: '#6AA9FF', defaultPort: 19132, available: false, phase: 8 },
   { id: 'bedrock-preview', name: 'Bedrock Preview', tag: 'Testovací Bedrock', color: '#9CC6FF', defaultPort: 19132, available: false, phase: 8 },
   { id: 'velocity', name: 'Velocity', tag: 'Proxy · síť serverů', color: '#4FB5A5', defaultPort: 25577, available: false, phase: 9 },
@@ -83,6 +83,19 @@ export interface ServerConfig {
   backupTime?: string;
   /** How many automatic backups to keep. */
   backupKeep?: number;
+  /** Set for servers created from a modpack. */
+  modpack?: ModpackInfo;
+}
+
+export interface ModpackInfo {
+  source: 'modrinth';
+  projectId: string;
+  versionId: string;
+  title: string;
+  versionNumber: string;
+  /** The mod loader the pack runs on; the server behaves like that type. */
+  loader: ServerType;
+  iconUrl?: string;
 }
 
 export type BackupSchedule = 'off' | 'hourly' | '6h' | 'daily' | 'weekly';
@@ -94,7 +107,7 @@ export interface InstallProgress {
   text: string;
 }
 
-export type TaskKind = 'backup' | 'restore' | 'import' | 'export';
+export type TaskKind = 'backup' | 'restore' | 'import' | 'export' | 'content';
 
 /** A long job running on a server (backup, restore, world import). Only one at a time. */
 export interface TaskProgress {
@@ -295,6 +308,79 @@ export interface PregenRequest {
 }
 
 export const DEFAULT_BACKUP_KEEP = 7;
+
+// ---- Mods, plugins, modpacks ----
+
+export type ContentKind = 'mod' | 'plugin';
+export type ContentSource = 'modrinth' | 'hangar' | 'spigot';
+
+/** Where content goes on a server type: plugins/ for Bukkit-family, mods/ for mod loaders. */
+export interface ContentTarget {
+  kind: ContentKind;
+  folder: 'plugins' | 'mods';
+  sources: ContentSource[];
+}
+
+export interface ContentHit {
+  source: ContentSource;
+  id: string;
+  title: string;
+  author: string;
+  description: string;
+  downloads: number;
+  iconUrl?: string;
+  url: string;
+  /** Mods that only run in the game client; the server does not need them. */
+  clientOnly?: boolean;
+  /** Can srvMC download it, or only the author's website can (premium / external). */
+  installable: boolean;
+  installed?: boolean;
+}
+
+export interface InstalledContent {
+  file: string;
+  folder: 'plugins' | 'mods';
+  enabled: boolean;
+  size: number;
+  name: string;
+  version?: string;
+  source?: ContentSource;
+  projectId?: string;
+  iconUrl?: string;
+  update?: { versionId: string; versionNumber: string };
+}
+
+export interface InstallResult {
+  installed: string[];
+  /** Dependencies srvMC could not fetch (external sites, client-only). */
+  skipped: string[];
+}
+
+export interface ModpackHit {
+  id: string;
+  title: string;
+  author: string;
+  description: string;
+  downloads: number;
+  iconUrl?: string;
+  versions: string[];
+}
+
+export interface ModpackVersion {
+  id: string;
+  name: string;
+  versionNumber: string;
+  gameVersions: string[];
+  loaders: string[];
+}
+
+export type AuthMode = 'online' | 'hybrid' | 'offline';
+
+export interface AuthState {
+  mode: AuthMode;
+  /** The server type supports the password + premium bypass mode. */
+  hybridSupported: boolean;
+}
 
 export * from './properties.ts';
 export * from './motd.ts';

@@ -196,8 +196,9 @@ export class ServerManager extends EventEmitter {
     const provider = providerFor(cfg.type)!;
     try {
       inst.setInstall({ step: 'plan', pct: null, text: 'Zjišťuji, co je potřeba stáhnout' });
-      const plan = await provider.plan(cfg.version, cfg.build);
-      inst.pushLog('system', `Instaluji ${cfg.type} ${cfg.version} (build ${plan.build}), Java ${plan.javaMajor}`);
+      const plan = await provider.plan(cfg.version, cfg.build, { paths: this.paths });
+      const what = plan.modpack ? `modpack ${plan.modpack.title} ${plan.modpack.versionNumber} (${plan.modpack.loader} ${plan.displayVersion})` : `${cfg.type} ${cfg.version} (build ${plan.build})`;
+      inst.pushLog('system', `Instaluji ${what}, Java ${plan.javaMajor}`);
 
       const java = await ensureJava(this.paths, plan.javaMajor, (text, pct) => inst.setInstall({ step: 'java', pct, text }));
 
@@ -240,6 +241,8 @@ export class ServerManager extends EventEmitter {
       await this.writeProperties(inst, { 'server-port': String(cfg.port), 'query.port': String(cfg.port), motd: cfg.name });
 
       cfg.build = plan.build;
+      if (plan.displayVersion) cfg.version = plan.displayVersion;
+      if (plan.modpack) cfg.modpack = plan.modpack;
       cfg.javaMajor = plan.javaMajor;
       cfg.launchArgs = launchArgs;
       cfg.launchJar = launchArgs.find((a) => a.endsWith('.jar') && !a.startsWith('@')) ?? launchArgs.find((a) => a.startsWith('@'))?.slice(1);

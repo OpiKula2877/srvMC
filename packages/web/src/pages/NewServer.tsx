@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { SERVER_TYPES, serverTypeInfo, type BuildInfo, type GameVersion, type ServerType, type SystemInfo } from '@srvmc/shared';
+import { SERVER_TYPES, serverTypeInfo, type BuildInfo, type GameVersion, type ModpackHit, type ModpackVersion, type ServerType, type SystemInfo } from '@srvmc/shared';
 import { api } from '../api.ts';
 import { RamPicker, Toggle } from '../components/Controls.tsx';
 import { Dropdown } from '../components/Dropdown.tsx';
@@ -19,7 +19,89 @@ const SOURCES: Partial<Record<ServerType, string>> = {
   forge: 'maven.minecraftforge.net – Forge installer',
   neoforge: 'maven.neoforged.net – NeoForge installer',
   arclight: 'GitHub IzzelAliz/Arclight',
+  modpack: 'modrinth.com',
 };
+
+const PACK_LOADERS: Record<string, string> = { fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge' };
+const compact = new Intl.NumberFormat('cs', { notation: 'compact', maximumFractionDigits: 1 });
+
+function ModpackPicker({ pack, onPick, versionId, onVersion }: { pack: ModpackHit | null; onPick: (p: ModpackHit) => void; versionId?: string; onVersion: (id: string | undefined) => void }) {
+  const toast = useToast();
+  const [query, setQuery] = useState('');
+  const [packs, setPacks] = useState<ModpackHit[] | null>(null);
+  const [versions, setVersions] = useState<ModpackVersion[] | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    const t = setTimeout(
+      () =>
+        void api
+          .searchModpacks(query.trim(), 0)
+          .then((list) => live && setPacks(list))
+          .catch((err: Error) => live && toast('error', 'Hledání modpacků selhalo', err.message)),
+      query ? 350 : 0,
+    );
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [query, toast]);
+
+  useEffect(() => {
+    if (!pack) return;
+    let live = true;
+    setVersions(null);
+    onVersion(undefined);
+    api
+      .modpackVersions(pack.id)
+      .then((list) => {
+        if (!live) return;
+        const usable = list.filter((v) => v.loaders.some((l) => PACK_LOADERS[l]));
+        setVersions(usable);
+        onVersion(usable[0]?.id);
+      })
+      .catch((err: Error) => live && toast('error', 'Verze modpacku se nepodařilo načíst', err.message));
+    return () => {
+      live = false;
+    };
+  }, [pack, toast, onVersion]);
+
+  const versionOptions = (versions ?? []).map((v) => ({
+    value: v.id,
+    label: `${v.versionNumber} · ${v.gameVersions.join(', ')} · ${v.loaders.map((l) => PACK_LOADERS[l]).filter(Boolean).join(', ')}`,
+  }));
+
+  return (
+    <>
+      <label className="searchbox" style={{ minHeight: 44 }}>
+        <Icon name="search" size={18} />
+        <span className="sr-only">Hledat modpack</span>
+        <input value={query} maxLength={100} placeholder="např. Cobblemon, All the Mods…" onChange={(e) => setQuery(e.target.value)} />
+        {packs === null && <Spinner size={16} />}
+      </label>
+      <div className="stack" style={{ gap: 6, maxHeight: 360, overflowY: 'auto' }}>
+        {packs?.length === 0 && <span className="muted">Nic jsem nenašel.</span>}
+        {packs?.map((p) => (
+          <button key={p.id} type="button" className="list-item" aria-current={pack?.id === p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }} onClick={() => onPick(p)}>
+            {p.iconUrl ? (
+              <img src={p.iconUrl} alt="" width={40} height={40} loading="lazy" style={{ borderRadius: 8, flex: 'none', objectFit: 'cover' }} />
+            ) : (
+              <span style={{ width: 40, height: 40, borderRadius: 8, flex: 'none', background: 'var(--raised)' }} />
+            )}
+            <span className="stack" style={{ gap: 2, minWidth: 0 }}>
+              <span style={{ fontWeight: 600 }}>{p.title}</span>
+              <span className="muted small">
+                {p.author} · {compact.format(p.downloads)} stažení
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+      {pack && <Dropdown label={`Verze – ${pack.title}`} value={versionId} options={versionOptions} onChange={onVersion} loading={versions === null} searchable mono />}
+      {pack && versions?.length === 0 && <div className="banner error">Tenhle modpack nemá verzi pro Fabric, Quilt, Forge ani NeoForge.</div>}
+    </>
+  );
+}
 
 const NOTES: Partial<Record<ServerType, string>> = {
   spigot: 'Spigot nemá oficiální stažení. BuildTools ho poprvé kompiluje 10–30 minut (stáhne si Git i JDK sám). Další servery stejné verze už jsou hned.',
@@ -27,6 +109,7 @@ const NOTES: Partial<Record<ServerType, string>> = {
   neoforge: 'Instalátor stáhne knihovny NeoForge. První spuštění trvá déle.',
   arclight: 'Arclight umí mody i Bukkit pluginy zároveň. Při prvním startu si stáhne knihovny.',
   quilt: 'Quilt umí i většinu Fabric modů.',
+  modpack: 'Stáhnu loader modpacku a jen mody, které potřebuje server. Mody jen pro hráče (shadery, minimapy…) vynechám.',
 };
 
 export function NewServer({ system }: { system: SystemInfo | null }) {
@@ -44,6 +127,9 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
   const [eula, setEula] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string>();
+  const [pack, setPack] = useState<ModpackHit | null>(null);
+  const [packVersion, setPackVersion] = useState<string>();
+  const isPack = type === 'modpack';
 
   const info = serverTypeInfo(type);
   // Leave 2 GB for Windows; never more than 32 GB (Java gets slower with huge heaps).
@@ -58,6 +144,7 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
   }, [system, maxMb]);
 
   useEffect(() => {
+    if (type === 'modpack') return;
     let live = true;
     setVersions(null);
     setLoadError(undefined);
@@ -75,7 +162,7 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
   }, [type, snapshots]);
 
   useEffect(() => {
-    if (!version) return;
+    if (!version || type === 'modpack') return;
     let live = true;
     setBuilds(null);
     setBuild(undefined);
@@ -95,14 +182,16 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
   const versionOptions = useMemo(() => (versions ?? []).map((v) => ({ value: v.id, label: v.id })), [versions]);
   const buildOptions = useMemo(() => (builds ?? []).map((b) => ({ value: b.id, label: b.label })), [builds]);
 
-  const finalName = name.trim() || `${info.name} ${version ?? ''}`.trim();
-  const canCreate = eula && !!version && !!build && !busy;
+  const finalName = name.trim() || (isPack ? (pack?.title ?? 'Modpack') : `${info.name} ${version ?? ''}`.trim());
+  const canCreate = eula && !busy && (isPack ? !!pack && !!packVersion : !!version && !!build);
 
   const create = async () => {
-    if (!version) return;
+    const v = isPack ? pack?.id : version;
+    const b = isPack ? packVersion : build;
+    if (!v) return;
     setBusy(true);
     try {
-      const server = await api.create({ name: finalName, type, version, build, port, ramMaxMb: ramMb, eulaAccepted: eula, startAfterInstall: startAfter });
+      const server = await api.create({ name: finalName.slice(0, 48), type, version: v, build: b, port, ramMaxMb: ramMb, eulaAccepted: eula, startAfterInstall: startAfter });
       upsertServer(server);
       toast('info', 'Server se připravuje', 'Stahuji soubory z oficiálních zdrojů.');
       navigate({ page: 'server', id: server.id, tab: 'konzole' });
@@ -124,7 +213,7 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
         </div>
         <ol className="steps">
           <li className="done">1 Typ</li>
-          <li className={version ? 'done' : ''}>2 Verze</li>
+          <li className={(isPack ? packVersion : version) ? 'done' : ''}>2 Verze</li>
           <li className={eula ? 'done' : ''}>3 Nastavení</li>
           <li>4 Stažení a start</li>
         </ol>
@@ -148,22 +237,31 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
             </div>
           </section>
 
-          <section className="card stack" aria-labelledby="h-verze" style={{ gap: 16 }}>
-            <div className="section-head">
+          {isPack ? (
+            <section className="card stack" aria-labelledby="h-verze" style={{ gap: 16 }}>
               <h2 id="h-verze" className="h2">
-                2. Verze – {info.name}
+                2. Modpack z Modrinthu
               </h2>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, color: 'var(--text-2)' }}>
-                <input type="checkbox" className="check" checked={snapshots} onChange={(e) => setSnapshots(e.target.checked)} />
-                Zobrazit snapshoty a testovací verze
-              </label>
-            </div>
-            {loadError && <div className="banner error">Nepodařilo se načíst seznam verzí: {loadError}. Zkontroluj připojení k internetu.</div>}
-            <div className="grid-auto" style={{ ['--min' as string]: '240px', gap: 14 }}>
-              <Dropdown label="Verze Minecraftu" value={version} options={versionOptions} onChange={setVersion} loading={!versions && !loadError} searchable mono />
-              <Dropdown label="Build / loader" value={build} options={buildOptions} onChange={setBuild} loading={!!version && !builds && !loadError} />
-            </div>
-          </section>
+              <ModpackPicker pack={pack} onPick={setPack} versionId={packVersion} onVersion={setPackVersion} />
+            </section>
+          ) : (
+            <section className="card stack" aria-labelledby="h-verze" style={{ gap: 16 }}>
+              <div className="section-head">
+                <h2 id="h-verze" className="h2">
+                  2. Verze – {info.name}
+                </h2>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, color: 'var(--text-2)' }}>
+                  <input type="checkbox" className="check" checked={snapshots} onChange={(e) => setSnapshots(e.target.checked)} />
+                  Zobrazit snapshoty a testovací verze
+                </label>
+              </div>
+              {loadError && <div className="banner error">Nepodařilo se načíst seznam verzí: {loadError}. Zkontroluj připojení k internetu.</div>}
+              <div className="grid-auto" style={{ ['--min' as string]: '240px', gap: 14 }}>
+                <Dropdown label="Verze Minecraftu" value={version} options={versionOptions} onChange={setVersion} loading={!versions && !loadError} searchable mono />
+                <Dropdown label="Build / loader" value={build} options={buildOptions} onChange={setBuild} loading={!!version && !builds && !loadError} />
+              </div>
+            </section>
+          )}
 
           <section className="card stack" aria-labelledby="h-nast" style={{ gap: 18 }}>
             <h2 id="h-nast" className="h2">
@@ -187,16 +285,18 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
         <aside className="col-side card stack" aria-label="Shrnutí" style={{ gap: 18 }}>
           <h2 className="h2">Co se stáhne</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ width: 40, height: 40, borderRadius: 8, background: info.color, flex: 'none' }} />
+            {isPack && pack?.iconUrl ? (
+              <img src={pack.iconUrl} alt="" width={40} height={40} style={{ borderRadius: 8, flex: 'none', objectFit: 'cover' }} />
+            ) : (
+              <span style={{ width: 40, height: 40, borderRadius: 8, background: info.color, flex: 'none' }} />
+            )}
             <div className="stack" style={{ gap: 2 }}>
-              <span style={{ fontWeight: 600 }}>
-                {info.name} {version ?? '…'}
-              </span>
+              <span style={{ fontWeight: 600 }}>{isPack ? (pack?.title ?? 'Modpack') : `${info.name} ${version ?? '…'}`}</span>
               <span className="muted small">zdroj: {SOURCES[type] ?? '–'}</span>
             </div>
           </div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10, color: 'var(--text-2)' }}>
-            <li>Serverový soubor s kontrolou SHA</li>
+            <li>{isPack ? 'Loader a serverové mody modpacku s kontrolou SHA' : 'Serverový soubor s kontrolou SHA'}</li>
             <li>Správná Java (Temurin), jen když ještě chybí</li>
             <li>eula.txt a server.properties s portem {port}</li>
           </ul>
@@ -214,6 +314,7 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
             {busy ? <Spinner /> : null}
             Vytvořit a stáhnout
           </button>
+          {isPack && ramMb < 4096 && <div className="banner info">Modpacky obvykle potřebují aspoň 4–6 GB RAM.</div>}
           {system && ramMb > system.freeMemMb && (
             <div className="banner info">Teď je volných jen {gb(system.freeMemMb)} RAM. Server se spustí, ale Windows může zpomalit.</div>
           )}

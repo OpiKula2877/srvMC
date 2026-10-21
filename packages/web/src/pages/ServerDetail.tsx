@@ -6,13 +6,14 @@ import { Dropdown } from '../components/Dropdown.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { ConfirmDialog, useToast } from '../components/Overlays.tsx';
 import { AddressBox, ServerTile } from '../components/ServerBits.tsx';
-import { clock, gb, isActive } from '../format.ts';
+import { clock, gb, isActive, mcVersion, typeName } from '../format.ts';
 import { loadHistory, useLive } from '../live.ts';
 import { href, navigate } from '../router.ts';
 import { FilesTab } from './tabs/FilesTab.tsx';
 import { LogsTab } from './tabs/LogsTab.tsx';
 import { OptionsTab } from './tabs/OptionsTab.tsx';
 import { PlayersTab } from './tabs/PlayersTab.tsx';
+import { ModsTab } from './tabs/ModsTab.tsx';
 import { WorldsTab } from './tabs/WorldsTab.tsx';
 
 const TIMEZONES = (() => {
@@ -28,7 +29,7 @@ const TABS: { id: string; label: string; phase?: number }[] = [
   { id: 'zaznamy', label: 'Záznamy' },
   { id: 'soubory', label: 'Soubory' },
   { id: 'svety', label: 'Světy' },
-  { id: 'mody', label: 'Mody a pluginy', phase: 5 },
+  { id: 'mody', label: 'Mody a pluginy' },
   { id: 'planovac', label: 'Plánovač', phase: 6 },
   { id: 'sit', label: 'Síť a doména', phase: 7 },
 ];
@@ -343,8 +344,8 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
           </div>
           <div className="muted" style={{ fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <span>
-              {server.type} {server.version}
-              {server.build && server.build !== 'official' ? ` · build ${server.build}` : ''}
+              {server.modpack ? `${server.modpack.title} ${server.modpack.versionNumber} · ${server.modpack.loader} ${server.version}` : `${typeName(server)} ${mcVersion(server)}`}
+              {!server.modpack && server.build && server.build !== 'official' ? ` · build ${server.build}` : ''}
             </span>
             {server.javaMajor && <span>· Java {server.javaMajor}</span>}
             <span>· {gb(server.ramMaxMb)} RAM</span>
@@ -432,7 +433,8 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
       {tab === 'zaznamy' && <LogsTab server={server} />}
       {tab === 'soubory' && <FilesTab key={file ?? ''} server={server} openFile={file} />}
       {tab === 'svety' && <WorldsTab server={server} />}
-      {!['nastaveni', 'hraci', 'moznosti', 'zaznamy', 'soubory', 'svety'].includes(tab) && (
+      {tab === 'mody' && <ModsTab key={server.id} server={server} />}
+      {!['nastaveni', 'hraci', 'moznosti', 'zaznamy', 'soubory', 'svety', 'mody'].includes(tab) && (
         <div className="row">
           <Console server={server} />
           <Metrics server={server} />

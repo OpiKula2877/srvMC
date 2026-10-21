@@ -1,5 +1,5 @@
 import type { SystemInfo } from '@srvmc/shared';
-import { gb, statusLook } from '../format.ts';
+import { gb, mcVersion, statusLook, typeName } from '../format.ts';
 import { useLive } from '../live.ts';
 import { href, type Route } from '../router.ts';
 import { Icon } from './Icon.tsx';
@@ -29,7 +29,7 @@ export function Sidebar({ route, system }: { route: Route; system: SystemInfo | 
             <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
               <span className="name">{s.name}</span>
               <span className="muted small">
-                {s.type} · {s.version}
+                {typeName(s)} · {mcVersion(s)}
               </span>
             </span>
           </a>

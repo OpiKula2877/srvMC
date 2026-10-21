@@ -1,15 +1,24 @@
 import {
   CSRF_HEADER,
   type AddPlayerRequest,
+  type AuthMode,
+  type AuthState,
   type BackupInfo,
   type BuildInfo,
+  type ContentHit,
+  type ContentSource,
+  type ContentTarget,
   type CreateServerRequest,
   type DirListing,
   type FileContent,
   type GameVersion,
+  type InstalledContent,
+  type InstallResult,
   type LogFileInfo,
   type LogLine,
   type MetricPoint,
+  type ModpackHit,
+  type ModpackVersion,
   type PlayerListKind,
   type PlayersInfo,
   type PregenRequest,
@@ -109,6 +118,30 @@ export const api = {
   pregenInstall: (id: string) => request<{ files: string[]; needsRestart: boolean }>('POST', `/api/servers/${id}/pregen/install`),
   pregenStart: (id: string, body: PregenRequest) => request<ServerInfo>('POST', `/api/servers/${id}/pregen/start`, body),
   pregenAction: (id: string, action: 'pause' | 'continue' | 'cancel') => request<ServerInfo>('POST', `/api/servers/${id}/pregen/${action}`),
+
+  contentTargets: (id: string) => request<ContentTarget[]>('GET', `/api/servers/${id}/content/targets`),
+  searchContent: (id: string, p: { source: ContentSource; folder: string; q: string; offset: number; hideClient: boolean }) =>
+    request<ContentHit[]>('GET', `/api/servers/${id}/content/search?${new URLSearchParams({ source: p.source, folder: p.folder, q: p.q, offset: String(p.offset), hideClient: p.hideClient ? '1' : '0' })}`),
+  installed: (id: string) => request<InstalledContent[]>('GET', `/api/servers/${id}/content`),
+  contentUpdates: (id: string) => request<InstalledContent[]>('GET', `/api/servers/${id}/content/updates`),
+  installContent: (id: string, body: { source: ContentSource; id: string; folder: string }) => request<InstallResult>('POST', `/api/servers/${id}/content/install`, body),
+  updateContent: (id: string, only?: { folder: string; file: string }) => request<{ updated: string[] }>('POST', `/api/servers/${id}/content/update`, only ?? {}),
+  setContentEnabled: (id: string, folder: string, file: string, enabled: boolean) => request<void>('PUT', `/api/servers/${id}/content/${folder}/${encodeURIComponent(file)}/enabled`, { enabled }),
+  removeContent: (id: string, folder: string, file: string) => request<void>('DELETE', `/api/servers/${id}/content/${folder}/${encodeURIComponent(file)}`),
+  uploadJar: (id: string, folder: string, file: File, overwrite: boolean, onProgress?: (pct: number) => void) =>
+    rawUpload<{ file: string; name: string; version?: string }>(
+      'POST',
+      `/api/servers/${id}/content/upload?folder=${folder}&name=${encodeURIComponent(file.name)}${overwrite ? '&overwrite=1' : ''}`,
+      file,
+      'application/octet-stream',
+      onProgress,
+    ),
+
+  searchModpacks: (q: string, offset: number) => request<ModpackHit[]>('GET', `/api/modpacks/search?${new URLSearchParams({ q, offset: String(offset) })}`),
+  modpackVersions: (project: string) => request<ModpackVersion[]>('GET', `/api/modpacks/${encodeURIComponent(project)}/versions`),
+
+  auth: (id: string) => request<AuthState>('GET', `/api/servers/${id}/auth`),
+  setAuth: (id: string, mode: AuthMode) => request<AuthState>('PUT', `/api/servers/${id}/auth`, { mode }),
 };
 
 /** Sends a raw body with upload progress (fetch has no upload progress events). */

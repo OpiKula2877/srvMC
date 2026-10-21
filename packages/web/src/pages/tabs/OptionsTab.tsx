@@ -6,6 +6,8 @@ import {
   PROPERTY_DEFS,
   PROPERTY_GROUPS,
   sectionToAmp,
+  type AuthMode,
+  type AuthState,
   type PropertyDef,
   type ServerInfo,
 } from '@srvmc/shared';
@@ -71,6 +73,77 @@ function PropertyControl({ def, value, onChange }: { def: PropertyDef; value: st
     return <Stepper label={def.label} value={Number(value)} min={def.min} max={def.max} onChange={(n) => onChange(String(n))} />;
   }
   return <input className="input" aria-label={def.label} value={value} onChange={(e) => onChange(e.target.value)} />;
+}
+
+const AUTH_CHOICES: { mode: AuthMode; label: string; danger?: boolean }[] = [
+  { mode: 'online', label: 'Jen placené účty' },
+  { mode: 'hybrid', label: 'Placené i neplacené (s heslem)' },
+  { mode: 'offline', label: 'I neplacené, bez ochrany', danger: true },
+];
+
+function AuthCard({ server, onChanged }: { server: ServerInfo; onChanged: () => void }) {
+  const toast = useToast();
+  const [state, setState] = useState<AuthState | null>(null);
+  const [pending, setPending] = useState<AuthMode | null>(null);
+  const stopped = server.status === 'stopped' || server.status === 'crashed' || server.status === 'error';
+  const plugins = !['fabric', 'quilt'].includes(server.type === 'modpack' ? (server.modpack?.loader ?? '') : server.type);
+
+  useEffect(() => {
+    api
+      .auth(server.id)
+      .then(setState)
+      .catch((err: Error) => toast('error', 'Nepodařilo se zjistit přihlašování', err.message));
+  }, [server.id, toast]);
+
+  const choose = async (mode: AuthMode) => {
+    if (mode === state?.mode) return;
+    setPending(mode);
+    try {
+      setState(await api.setAuth(server.id, mode));
+      onChanged();
+      if (mode === 'hybrid') {
+        toast('ok', 'Placené i neplacené účty', plugins ? 'Hráč si při prvním připojení nastaví heslo. Kdo má placený účet, napíše jednou /premium a dál se přihlásí sám.' : 'Neplacení si při prvním připojení nastaví heslo, placení se přihlásí sami.');
+      } else {
+        toast('ok', mode === 'online' ? 'Jen placené účty' : 'Kdokoli bez ověření');
+      }
+    } catch (err) {
+      toast('error', 'Přihlašování se nepodařilo změnit', (err as Error).message);
+    } finally {
+      setPending(null);
+    }
+  };
+
+  return (
+    <section className="col-side card stack" aria-labelledby="h-ucty" style={{ gap: 12 }}>
+      <div className="section-head">
+        <h2 id="h-ucty" className="h2">
+          Kdo se může připojit
+        </h2>
+        {(state === null || pending) && <Spinner size={16} />}
+      </div>
+      {!stopped && <div className="banner info">Mění se u vypnutého serveru.</div>}
+      {AUTH_CHOICES.map((c) => {
+        const unsupported = c.mode === 'hybrid' && state !== null && !state.hybridSupported;
+        return (
+          <button
+            key={c.mode}
+            type="button"
+            className={`choice${c.danger ? ' danger' : ''}`}
+            aria-pressed={state?.mode === c.mode}
+            disabled={state === null || !!pending || !stopped || unsupported}
+            title={unsupported ? 'Jde na Paper, Purpur, Spigot, Fabric a Quilt' : undefined}
+            onClick={() => void choose(c.mode)}
+          >
+            <span className="title">
+              <span className="radio" />
+              {c.label}
+            </span>
+          </button>
+        );
+      })}
+      {state?.mode === 'offline' && <div className="banner error">Bez ověřování si někdo může vzít jméno operátora. Zapni bílou listinu a dávej OP opatrně.</div>}
+    </section>
+  );
 }
 
 export function OptionsTab({ server }: { server: ServerInfo }) {
@@ -156,7 +229,6 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
     () => Object.keys(values ?? {}).filter((k) => !PROPERTY_DEFS.some((d) => d.key === k) && (!q || k.includes(q))).sort(),
     [values, q],
   );
-  const online = value('online-mode') !== 'false';
   const changed = Object.keys(edits).length;
 
   if (!values) {
@@ -243,30 +315,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
           </div>
         </section>
 
-        <section className="col-side card stack" aria-labelledby="h-ucty" style={{ gap: 12 }}>
-          <h2 id="h-ucty" className="h2">
-            Kdo se může připojit
-          </h2>
-          <button type="button" className="choice" aria-pressed={online} onClick={() => set('online-mode', 'true')}>
-            <span className="title">
-              <span className="radio" />
-              Jen placené účty
-            </span>
-          </button>
-          <button type="button" className="choice" aria-pressed={false} disabled>
-            <span className="title">
-              <span className="radio" />
-              Placené i neplacené (s heslem)
-            </span>
-          </button>
-          <button type="button" className="choice danger" aria-pressed={!online} onClick={() => set('online-mode', 'false')}>
-            <span className="title">
-              <span className="radio" />
-              I neplacené, bez ochrany
-            </span>
-          </button>
-          {!online && <div className="banner error">Bez ověřování si někdo může vzít jméno operátora. Zapni bílou listinu a dávej OP opatrně.</div>}
-        </section>
+        <AuthCard server={server} onChanged={() => void api.properties(server.id).then((r) => setValues(r.values))} />
       </div>
 
       <section className="card stack" aria-labelledby="h-props" style={{ gap: 16 }}>

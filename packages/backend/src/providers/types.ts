@@ -1,4 +1,4 @@
-import type { BuildInfo, GameVersion, ServerType } from '@srvmc/shared';
+import type { BuildInfo, GameVersion, ModpackInfo, ServerType } from '@srvmc/shared';
 import type { DownloadSpec } from '../download.ts';
 import type { Paths } from '../paths.ts';
 
@@ -29,13 +29,20 @@ export interface InstallPlan {
   launchJar?: string;
   /** Installer-based servers: runs after the downloads and returns the launch arguments (after the JVM options). */
   install?: (ctx: InstallContext) => Promise<string[]>;
+  /** The Minecraft version to show when the requested "version" was something else (a modpack id). */
+  displayVersion?: string;
+  modpack?: ModpackInfo;
+}
+
+export interface PlanEnv {
+  paths: Paths;
 }
 
 export interface Provider {
   type: ServerType;
   listVersions(includeSnapshots: boolean): Promise<GameVersion[]>;
   listBuilds(version: string): Promise<BuildInfo[]>;
-  plan(version: string, build?: string): Promise<InstallPlan>;
+  plan(version: string, build?: string, env?: PlanEnv): Promise<InstallPlan>;
 }
 
 export class UserError extends Error {

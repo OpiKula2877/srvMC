@@ -5,7 +5,7 @@ import { Sparkline, StatusPill } from '../components/Controls.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { useToast } from '../components/Overlays.tsx';
 import { AddressBox, ServerTile } from '../components/ServerBits.tsx';
-import { gb, isActive } from '../format.ts';
+import { gb, isActive, mcVersion, typeName } from '../format.ts';
 import { useLive } from '../live.ts';
 import { href } from '../router.ts';
 
@@ -43,8 +43,8 @@ function ServerCard({ server }: { server: ServerInfo }) {
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <h2 style={{ fontSize: 17, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{server.name}</h2>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            <span className="chip">{server.type}</span>
-            <span className="chip">{server.version}</span>
+            <span className="chip">{typeName(server)}</span>
+            <span className="chip">{mcVersion(server)}</span>
             <span className="chip">{gb(server.ramMaxMb)} RAM</span>
           </div>
         </div>

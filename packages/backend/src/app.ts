@@ -12,10 +12,11 @@ import { ensureDirs, makePaths, type Paths } from './paths.ts';
 import { providerFor, UserError } from './providers/index.ts';
 import { BackupService } from './backups.ts';
 import { registerContentRoutes } from './routes/content.ts';
+import { registerModRoutes } from './routes/mods.ts';
 import { registerWorldRoutes } from './routes/worlds.ts';
 import { ServerStore } from './store.ts';
 
-export const VERSION = '0.4.1';
+export const VERSION = '0.5.0';
 
 export interface BackendOptions {
   /** Port to listen on. 0 picks a free one. Default 8420. */
@@ -200,6 +201,7 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   const backups = new BackupService(manager, paths);
   registerRoutes(app, manager, paths);
   registerContentRoutes(app, manager, paths);
+  registerModRoutes(app, manager, paths);
   registerWorldRoutes(app, manager, backups, paths);
 
   if (opts.webDir) {

@@ -1,0 +1,170 @@
+// Routes for mods, plugins, modpacks and the login mode (paid / paid + unpaid / anyone).
+import { randomBytes } from 'node:crypto';
+import { mkdir, rename, rm, stat } from 'node:fs/promises';
+import path from 'node:path';
+import type { Readable } from 'node:stream';
+import type { FastifyInstance } from 'fastify';
+import type { AuthMode, ContentHit, ContentSource } from '@srvmc/shared';
+import { getAuthState, setAuthMode } from '../auth.ts';
+import { checkUpdates, checkUploadedJar, contentTargets, installContent, listInstalled, modrinthLoaders, removeContent, setEnabled, targetFor, updateContent, type ContentContext } from '../content.ts';
+import { saveUpload, validName } from '../files.ts';
+import { readJarMeta } from '../jarmeta.ts';
+import type { ServerManager } from '../manager.ts';
+import { searchModrinth } from '../modrinth.ts';
+import type { Paths } from '../paths.ts';
+import { modpackVersions, searchModpacks } from '../providers/modpack.ts';
+import { UserError } from '../providers/index.ts';
+import { searchHangar, searchSpiget } from '../sources.ts';
+
+const SOURCES = ['modrinth', 'hangar', 'spigot'] as const;
+const MAX_JAR = 200 * 1024 * 1024;
+
+const offsetOf = (v?: string) => Math.max(0, Math.min(10_000, Number(v) || 0));
+
+export function registerModRoutes(app: FastifyInstance, manager: ServerManager, paths: Paths): void {
+  const inst = (id: string) => manager.get(id);
+  const ctxFor = (id: string): ContentContext => ({ paths, trashDir: path.join(paths.trash, id) });
+  const afterChange = (id: string) => manager.refreshPregen(inst(id));
+
+  app.get<{ Params: { id: string } }>('/api/servers/:id/content/targets', (req) => contentTargets(inst(req.params.id).cfg));
+
+  app.get<{ Params: { id: string }; Querystring: { source: ContentSource; folder: string; q?: string; offset?: string; hideClient?: string } }>(
+    '/api/servers/:id/content/search',
+    {
+      schema: {
+        querystring: {
+          type: 'object',
+          required: ['source', 'folder'],
+          properties: { source: { type: 'string', enum: SOURCES }, folder: { type: 'string', enum: ['plugins', 'mods'] }, q: { type: 'string', maxLength: 100 }, offset: { type: 'string' }, hideClient: { type: 'string' } },
+        },
+      },
+    },
+    async (req) => {
+      const i = inst(req.params.id);
+      const target = targetFor(i.cfg, req.query.folder);
+      const { source } = req.query;
+      if (!target.sources.includes(source)) throw new UserError('Tenhle zdroj se pro tento server nehodí.');
+      const query = req.query.q?.trim() ?? '';
+      const offset = offsetOf(req.query.offset);
+      let hits: ContentHit[];
+      if (source === 'modrinth') {
+        hits = await searchModrinth({ query, loaders: modrinthLoaders(i.cfg, target.kind), gameVersion: i.cfg.version, kind: target.kind, hideClientOnly: req.query.hideClient !== '0', offset });
+      } else if (source === 'hangar') {
+        hits = await searchHangar(query, i.cfg.version, offset);
+      } else {
+        hits = await searchSpiget(query, offset);
+      }
+      const installed = new Set((await listInstalled(i)).filter((x) => x.folder === target.folder && x.source === source && x.projectId).map((x) => x.projectId!.toLowerCase()));
+      return hits.map((h) => ({ ...h, installed: installed.has(h.id.toLowerCase()) }));
+    },
+  );
+
+  app.get<{ Params: { id: string } }>('/api/servers/:id/content', (req) => listInstalled(inst(req.params.id)));
+  app.get<{ Params: { id: string } }>('/api/servers/:id/content/updates', async (req) => {
+    const i = inst(req.params.id);
+    return checkUpdates(i, await listInstalled(i));
+  });
+
+  app.post<{ Params: { id: string }; Body: { source: ContentSource; id: string; folder: string } }>(
+    '/api/servers/:id/content/install',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['source', 'id', 'folder'],
+          additionalProperties: false,
+          properties: { source: { type: 'string', enum: SOURCES }, id: { type: 'string', minLength: 1, maxLength: 100, pattern: '^[A-Za-z0-9._/-]+$' }, folder: { type: 'string', enum: ['plugins', 'mods'] } },
+        },
+      },
+    },
+    async (req) => {
+      const { id } = req.params;
+      const result = await manager.runTask(id, 'content', 'Stahuji', () => installContent(inst(id), ctxFor(id), req.body.source, req.body.id, req.body.folder));
+      await afterChange(id);
+      return result;
+    },
+  );
+
+  app.post<{ Params: { id: string }; Body: { folder?: string; file?: string } }>(
+    '/api/servers/:id/content/update',
+    { schema: { body: { type: 'object', additionalProperties: false, properties: { folder: { type: 'string', enum: ['plugins', 'mods'] }, file: { type: 'string', maxLength: 255 } } } } },
+    async (req) => {
+      const { id } = req.params;
+      const only = req.body.folder && req.body.file ? { folder: req.body.folder, file: req.body.file } : undefined;
+      const updated = await manager.runTask(id, 'content', 'Aktualizuji', () => updateContent(inst(id), ctxFor(id), only));
+      await afterChange(id);
+      return { updated };
+    },
+  );
+
+  app.put<{ Params: { id: string; folder: string; file: string }; Body: { enabled: boolean } }>(
+    '/api/servers/:id/content/:folder/:file/enabled',
+    { schema: { body: { type: 'object', required: ['enabled'], properties: { enabled: { type: 'boolean' } } } } },
+    async (req, reply) => {
+      await setEnabled(inst(req.params.id), req.params.folder, req.params.file, req.body.enabled);
+      await afterChange(req.params.id);
+      reply.code(204);
+    },
+  );
+
+  app.delete<{ Params: { id: string; folder: string; file: string } }>('/api/servers/:id/content/:folder/:file', async (req, reply) => {
+    await removeContent(inst(req.params.id), ctxFor(req.params.id), req.params.folder, req.params.file);
+    await afterChange(req.params.id);
+    reply.code(204);
+  });
+
+  // A jar from the user's disk: kept only when it fits the server (plugin vs. mod, loader, not client-only).
+  app.post<{ Params: { id: string }; Querystring: { folder: string; name: string; overwrite?: string }; Body: Readable }>(
+    '/api/servers/:id/content/upload',
+    { schema: { querystring: { type: 'object', required: ['folder', 'name'], properties: { folder: { type: 'string', enum: ['plugins', 'mods'] }, name: { type: 'string', maxLength: 255 }, overwrite: { type: 'string' } } } } },
+    async (req) => {
+      const i = inst(req.params.id);
+      const target = targetFor(i.cfg, req.query.folder);
+      const { name } = req.query;
+      if (!validName(name) || !/\.jar$/i.test(name)) throw new UserError('Nahrát jde jen soubor .jar.');
+      if (Number(req.headers['content-length'] ?? 0) > MAX_JAR) throw new UserError('Jar je moc velký (max 200 MB).');
+      const final = path.join(i.dir, target.folder, name);
+      if (req.query.overwrite !== '1' && (await stat(final).catch(() => null))) throw new UserError(`Soubor ${name} už na serveru je.`);
+      if (i.running && (await stat(final).catch(() => null))) throw new UserError('Nejdřív server zastav – za běhu má Windows jary zamčené.');
+
+      const tmpName = `srvmc-upload-${randomBytes(6).toString('hex')}.tmp`;
+      await mkdir(path.join(i.dir, target.folder), { recursive: true });
+      await saveUpload(i.dir, target.folder, tmpName, req.body, MAX_JAR, false);
+      const tmp = path.join(i.dir, target.folder, tmpName);
+      try {
+        const meta = await readJarMeta(tmp).catch(() => {
+          throw new UserError('Soubor není platný jar.');
+        });
+        checkUploadedJar(i.cfg, target, meta);
+        await rename(tmp, final);
+        i.pushLog('system', `Nahráno: ${name}${i.running ? ' – projeví se po restartu.' : ''}`);
+        await afterChange(req.params.id);
+        return { file: name, name: meta.name ?? name, version: meta.version };
+      } finally {
+        await rm(tmp, { force: true });
+      }
+    },
+  );
+
+  // Modpacks for the new-server wizard.
+  app.get<{ Querystring: { q?: string; offset?: string } }>('/api/modpacks/search', { schema: { querystring: { type: 'object', properties: { q: { type: 'string', maxLength: 100 }, offset: { type: 'string' } } } } }, (req) =>
+    searchModpacks(req.query.q?.trim() ?? '', offsetOf(req.query.offset)),
+  );
+  app.get<{ Params: { project: string } }>('/api/modpacks/:project/versions', (req) => {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(req.params.project)) throw new UserError('Neplatný modpack.');
+    return modpackVersions(req.params.project);
+  });
+
+  // Login mode
+  app.get<{ Params: { id: string } }>('/api/servers/:id/auth', (req) => getAuthState(inst(req.params.id)));
+  app.put<{ Params: { id: string }; Body: { mode: AuthMode } }>(
+    '/api/servers/:id/auth',
+    { schema: { body: { type: 'object', required: ['mode'], additionalProperties: false, properties: { mode: { type: 'string', enum: ['online', 'hybrid', 'offline'] } } } } },
+    async (req) => {
+      const { id } = req.params;
+      const state = await manager.runTask(id, 'content', 'Nastavuji přihlašování', () => setAuthMode(inst(id), ctxFor(id), req.body.mode));
+      await afterChange(id);
+      return state;
+    },
+  );
+}

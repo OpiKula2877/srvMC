@@ -3,6 +3,7 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { PregenRequest, PregenStatus, ServerType } from '@srvmc/shared';
 import type { ServerInstance } from './instance.ts';
+import { effectiveType } from './content.ts';
 import { installProject } from './modrinth.ts';
 import type { Paths } from './paths.ts';
 import { UserError } from './providers/index.ts';
@@ -30,14 +31,14 @@ export function pregenPlatform(type: ServerType): Platform | undefined {
 }
 
 export async function isChunkyInstalled(inst: ServerInstance): Promise<boolean> {
-  const platform = pregenPlatform(inst.cfg.type);
+  const platform = pregenPlatform(effectiveType(inst.cfg));
   if (!platform) return false;
   const names = await readdir(path.join(inst.dir, platform.folder)).catch(() => [] as string[]);
   return names.some((n) => /^chunky.*\.jar$/i.test(n));
 }
 
 export async function installChunky(inst: ServerInstance, paths: Paths): Promise<string[]> {
-  const platform = pregenPlatform(inst.cfg.type);
+  const platform = pregenPlatform(effectiveType(inst.cfg));
   if (!platform) throw new UserError('Vanilla server neumí pluginy ani mody. Pre-generace potřebuje Paper nebo Fabric.');
   return installProject(paths, 'chunky', platform.loaders, inst.cfg.version, path.join(inst.dir, platform.folder));
 }
@@ -66,7 +67,7 @@ export function applyChunkyLine(status: PregenStatus, text: string): PregenStatu
 
 /** Chunky names worlds the way the platform does: Bukkit folder names, or dimension ids on mod loaders. */
 export async function chunkyWorld(inst: ServerInstance, dim: PregenRequest['dimension']): Promise<string> {
-  if (pregenPlatform(inst.cfg.type)?.folder === 'mods') return { overworld: 'minecraft:overworld', nether: 'minecraft:the_nether', end: 'minecraft:the_end' }[dim];
+  if (pregenPlatform(effectiveType(inst.cfg))?.folder === 'mods') return { overworld: 'minecraft:overworld', nether: 'minecraft:the_nether', end: 'minecraft:the_end' }[dim];
   const base = await activeWorldName(inst.dir);
   return { overworld: base, nether: `${base}_nether`, end: `${base}_the_end` }[dim];
 }
