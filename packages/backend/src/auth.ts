@@ -6,6 +6,7 @@ import { effectiveType, listInstalled, type ContentContext } from './content.ts'
 import type { ServerInstance } from './instance.ts';
 import { readServerProperties, updateServerProperties } from './properties.ts';
 import { UserError } from './providers/types.ts';
+import { lookupProfile, offlineUuid } from './uuid.ts';
 import { loginSupported } from './login/service.ts';
 import { t } from '@srvmc/shared';
 
@@ -110,6 +111,29 @@ export async function switchOffAuthPlugins(inst: ServerInstance): Promise<boolea
   return on.length > 0 || wasLogin;
 }
 
+/**
+ * The server matches whitelist, OPs and bans by UUID, and an offline-mode server gives every player
+ * the name-based offline UUID. So the lists follow the mode: offline UUIDs without Mojang's check,
+ * the paid accounts' UUIDs with it (names without a paid account keep theirs).
+ */
+export async function convertPlayerLists(dir: string, online: boolean): Promise<void> {
+  for (const file of ['whitelist.json', 'ops.json', 'banned-players.json']) {
+    const p = path.join(dir, file);
+    const list = await readFile(p, 'utf8').then((t) => JSON.parse(t) as { uuid?: string; name?: string }[], () => null);
+    if (!Array.isArray(list) || list.length === 0) continue;
+    let changed = false;
+    for (const e of list) {
+      if (typeof e.name !== 'string') continue;
+      const uuid = online ? (await lookupProfile(e.name).catch(() => null))?.uuid : offlineUuid(e.name);
+      if (uuid && uuid !== e.uuid) {
+        e.uuid = uuid;
+        changed = true;
+      }
+    }
+    if (changed) await writeFile(p, JSON.stringify(list, null, 2), 'utf8');
+  }
+}
+
 export async function setAuthMode(inst: ServerInstance, _ctx: ContentContext, mode: AuthMode): Promise<AuthState> {
   if (inst.running) throw new UserError(t('Stop the server first – the login mode changes only while it is stopped.'));
   if (inst.cfg.behindProxy) throw new UserError(t('The server is behind a proxy – the proxy checks player accounts.'));
@@ -121,6 +145,7 @@ export async function setAuthMode(inst: ServerInstance, _ctx: ContentContext, mo
   // Unpaid clients cannot sign chat messages, so a server that lets them in must not demand signatures.
   const online = mode === 'online' ? 'true' : 'false';
   await updateServerProperties(inst.dir, { 'online-mode': online, 'enforce-secure-profile': online });
+  await convertPlayerLists(inst.dir, mode === 'online');
   inst.pushLog('system', t({ online: 'Login: paid accounts only.', hybrid: 'Login: paid and unpaid accounts with a password.', offline: 'Login: anyone, unchecked.' }[mode]));
   return getAuthState(inst);
 }
