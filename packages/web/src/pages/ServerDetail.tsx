@@ -379,6 +379,13 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
     void loadHistory(id).catch(() => undefined);
   }, [id]);
 
+  // On a narrow screen the tab row scrolls; keep the open tab in sight.
+  const tabsRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const row = tabsRef.current;
+    const active = row?.querySelector<HTMLElement>('.tab.active');
+    if (row && active) row.scrollTo({ left: active.offsetLeft - (row.clientWidth - active.offsetWidth) / 2 });
+  }, [tab, id, !!server]);
   if (!server) {
     return (
       <main className="main">
@@ -526,7 +533,7 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
         (s === 'crashed' || s === 'error') && server.lastError && <div className="banner error">{server.lastError}</div>
       )}
 
-      <nav className="tabs" aria-label="Sekce serveru">
+      <nav className="tabs" aria-label="Sekce serveru" ref={tabsRef}>
         {tabs.map((t) =>
           t.phase ? (
             <button key={t.id} type="button" className="tab" disabled title={`Přijde ve fázi ${t.phase}`}>

@@ -20,3 +20,9 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 );
+
+// Lets a browser install the panel as an app. Browsers allow that only on https or localhost;
+// the desktop window does not need it.
+if ('serviceWorker' in navigator && window.isSecureContext && !navigator.userAgent.includes('Electron')) {
+  void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+}

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { SystemInfo } from '@srvmc/shared';
 import { api } from '../api.ts';
 import { can, ROLE_LABEL, useAuth } from '../auth.ts';
@@ -5,6 +6,7 @@ import { gb, mcVersion, statusLook, typeName } from '../format.ts';
 import { useLive } from '../live.ts';
 import { href, type Route } from '../router.ts';
 import { Icon } from './Icon.tsx';
+import { ConfirmDialog } from './Overlays.tsx';
 
 export function Sidebar({ route, system }: { route: Route; system: SystemInfo | null }) {
   const servers = useLive((s) => s.servers);
@@ -12,13 +14,54 @@ export function Sidebar({ route, system }: { route: Route; system: SystemInfo | 
   const list = Object.values(servers).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const activeId = route.page === 'server' ? route.id : null;
   const auth = useAuth();
+  // On a phone the list folds into a menu; it closes whenever a page is picked.
+  const [open, setOpen] = useState(false);
+  const where = JSON.stringify(route);
+  useEffect(() => setOpen(false), [where]);
+  const owner = can(auth, 'owner');
+  const [canRestart, setCanRestart] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+
+  useEffect(() => {
+    if (!owner) return;
+    api
+      .canRestart()
+      .then((r) => setCanRestart(r.available))
+      .catch(() => setCanRestart(false));
+  }, [owner]);
+
+  const restart = async () => {
+    setRestarting(true);
+    try {
+      await api.restartApp();
+    } catch {
+      setRestarting(false);
+      setConfirmRestart(false);
+      return;
+    }
+    // The panel comes back once the app is up again.
+    const wait = async () => {
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 2000));
+        if (await fetch('/api/auth/me').then((r) => r.ok, () => false)) return location.reload();
+      }
+    };
+    setTimeout(() => void wait(), 3000);
+  };
 
   return (
-    <nav className="sidebar" aria-label="Servery">
-      <a className="brand" href={href({ page: 'overview' })}>
-        <img className="brand-mark" src="/brand.png" width={32} height={32} alt="" />
-        <span className="brand-name">srvMC</span>
-      </a>
+    <nav className={`sidebar${open ? ' open' : ''}`} aria-label="Servery">
+      <div className="side-top">
+        <a className="brand" href={href({ page: 'overview' })}>
+          <img className="brand-mark" src="/brand.png" width={32} height={32} alt="" />
+          <span className="brand-name">srvMC</span>
+        </a>
+        <button type="button" className="btn icon menu-btn" aria-label={open ? 'Zavřít menu' : 'Otevřít menu'} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          <Icon name={open ? 'close' : 'menu'} size={20} />
+        </button>
+      </div>
+      <div className="side-body">
       {can(auth, 'admin') && (
         <a className="btn primary" href={href({ page: 'new' })}>
           <Icon name="plus" strokeWidth={2.2} />
@@ -42,11 +85,17 @@ export function Sidebar({ route, system }: { route: Route; system: SystemInfo | 
       </div>
       {auth?.user && (
         <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {can(auth, 'owner') && (
+          {owner && (
             <a className={`side-link${route.page === 'users' ? ' active' : ''}`} href={href({ page: 'users' })}>
               <Icon name="users" size={16} />
               <span className="name">Uživatelé</span>
             </a>
+          )}
+          {owner && canRestart && (
+            <button type="button" className="side-link" onClick={() => setConfirmRestart(true)}>
+              <Icon name="restart" size={16} />
+              <span className="name">Restartovat aplikaci</span>
+            </button>
           )}
           {auth.user.id !== 'local' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px' }}>
@@ -60,6 +109,16 @@ export function Sidebar({ route, system }: { route: Route; system: SystemInfo | 
             </div>
           )}
         </div>
+      )}
+      {confirmRestart && (
+        <ConfirmDialog
+          title="Restartovat srvMC?"
+          text="Běžící servery se bezpečně zastaví a po restartu se samy znovu spustí."
+          confirmLabel={restarting ? 'Restartuji…' : 'Restartovat'}
+          busy={restarting}
+          onCancel={() => setConfirmRestart(false)}
+          onConfirm={() => void restart()}
+        />
       )}
       <div className="side-card" style={auth?.user ? { marginTop: 8 } : undefined}>
         <div className="muted small" style={{ fontWeight: 600 }}>
@@ -84,6 +143,7 @@ export function Sidebar({ route, system }: { route: Route; system: SystemInfo | 
           <span className="muted">Načítám…</span>
         )}
         {!connected && <span style={{ color: 'var(--amber-text)' }}>Připojuji se k jádru…</span>}
+      </div>
       </div>
     </nav>
   );

@@ -42,6 +42,7 @@ export function TimeChart({ label, points, bucket, from, to, max, color, format,
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
+    setWidth(Math.max(240, el.clientWidth));
     const ro = new ResizeObserver(([e]) => setWidth(Math.max(240, Math.round(e!.contentRect.width))));
     ro.observe(el);
     return () => ro.disconnect();
@@ -94,7 +95,7 @@ export function TimeChart({ label, points, bucket, from, to, max, color, format,
   const tipLeft = hp ? Math.min(Math.max(x(hp.t), 70), width - 70) : 0;
 
   return (
-    <div ref={wrap} style={{ position: 'relative' }}>
+    <div ref={wrap} style={{ position: 'relative', width: '100%', minWidth: 0 }}>
       <svg
         width={width}
         height={height}

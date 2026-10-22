@@ -50,22 +50,15 @@ await writeFile('apps/desktop/assets/icon.ico', ico([16, 24, 32, 48, 64, 128, 25
 await writeFile('packages/web/public/favicon.png', pngs[64]);
 await writeFile('packages/web/public/brand.png', pngs[128]);
 
-// 16×16 dirt tile darkened like the background of Minecraft's server list (used by the MOTD preview).
-const DIRT = [
-  [134, 96, 67],
-  [121, 85, 58],
-  [89, 61, 41],
-  [155, 118, 83],
-  [104, 74, 52],
-];
-let seed = 7;
-const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
-const dirt = Buffer.alloc(16 * 16 * 3);
-for (let i = 0; i < 256; i++) {
-  const [r, g, b] = DIRT[Math.floor(rand() * DIRT.length)];
-  dirt[i * 3] = Math.round(r * 0.27);
-  dirt[i * 3 + 1] = Math.round(g * 0.27);
-  dirt[i * 3 + 2] = Math.round(b * 0.27);
-}
-await writeFile('packages/web/public/mc-dirt.png', await sharp(dirt, { raw: { width: 16, height: 16, channels: 3 } }).png().toBuffer());
+// Installed web app (phone home screen): plain and "maskable" icons, the latter with room around the art.
+await writeFile('packages/web/public/app-192.png', await tile(192));
+await writeFile('packages/web/public/app-512.png', pngs[512]);
+const maskable = await sharp({ create: { width: 512, height: 512, channels: 4, background: BACKGROUND } })
+  .composite([{ input: await sharp(SOURCE).trim().resize(330, 330, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer(), gravity: 'center' }])
+  .png({ compressionLevel: 9 })
+  .toBuffer();
+await writeFile('packages/web/public/app-maskable.png', maskable);
+await writeFile('packages/web/public/apple-touch-icon.png', await sharp(maskable).resize(180, 180).png().toBuffer());
+
+// The server list preview tiles packages/web/public/mc-dirt.png (the game's 16×16 dirt), which is kept as it is.
 console.log('Ikony hotové: apps/desktop/assets, packages/web/public');

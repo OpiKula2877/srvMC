@@ -195,6 +195,8 @@ export const api = {
   createUser: (body: { name: string; password: string; role: PanelRole; servers?: 'all' | string[] }) => request<PanelUser>('POST', '/api/users', body),
   updateUser: (id: string, body: { name?: string; password?: string; role?: PanelRole; servers?: 'all' | string[] }) => request<PanelUser>('PATCH', `/api/users/${id}`, body),
   deleteUser: (id: string) => request<void>('DELETE', `/api/users/${id}`),
+  canRestart: () => request<{ available: boolean }>('GET', '/api/panel/restart'),
+  restartApp: () => request<void>('POST', '/api/panel/restart'),
   setLan: (enabled: boolean) => request<AuthInfo & { restartNeeded: boolean }>('PUT', '/api/panel/lan', { enabled }),
 
   setDiscord: (id: string, body: { webhook?: string; events: DiscordEvent[] }) => request<void>('PUT', `/api/servers/${id}/discord`, body),

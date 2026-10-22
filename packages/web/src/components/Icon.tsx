@@ -18,6 +18,7 @@ const PATHS = {
   chevron: <path d="M6 9l6 6 6-6" />,
   check: <path d="M5 12l5 5L20 7" />,
   close: <path d="M6 6l12 12M18 6L6 18" />,
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   search: (
     <>
       <circle cx="11" cy="11" r="7" />

@@ -1,4 +1,4 @@
-import { statfs } from 'node:fs/promises';
+import { readFile, rm, statfs, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import fastifyStatic from '@fastify/static';
@@ -59,6 +59,8 @@ export interface BackendOptions {
   localToken?: string;
   /** Where the browser saves downloads (files the user fetches by hand are picked up there). */
   downloadsDir?: string;
+  /** Restarts the whole app (the desktop app relaunches itself). Without it the panel cannot offer a restart. */
+  onRestart?: () => void;
 }
 
 export interface Backend {
@@ -286,6 +288,15 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   registerNetworkRoutes(app, network);
   registerExtraRoutes(app, { discord, stats, addons, proxy });
   registerUserRoutes(app, users, () => port, (req) => req.principal);
+  app.get('/api/panel/restart', () => ({ available: !!opts.onRestart }));
+  app.post('/api/panel/restart', async (_req, reply) => {
+    if (!opts.onRestart) throw new UserError('Restart umí jen desktopová aplikace.');
+    const running = manager.all().filter((i) => i.running).map((i) => i.cfg.id);
+    await writeFile(resumeFile, JSON.stringify(running), 'utf8');
+    reply.code(204).send();
+    // Answer first; the app then stops the servers cleanly and starts again.
+    setTimeout(() => opts.onRestart!(), 300);
+  });
 
   if (opts.webDir) {
     await app.register(fastifyStatic, {
@@ -309,7 +320,11 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   const address = app.server.address();
   if (address && typeof address === 'object') port = address.port;
 
-  if (opts.autoStartServers) void manager.autoStart();
+  // Servers that ran when the app restarted itself start again, besides those set to start with the app.
+  const resumeFile = path.join(paths.root, 'resume.json');
+  const resume = new Set<string>(JSON.parse(await readFile(resumeFile, 'utf8').catch(() => '[]')) as string[]);
+  await rm(resumeFile, { force: true });
+  if (opts.autoStartServers) void manager.autoStart(resume);
   backups.start();
   supervisor.start();
   scheduler.start();

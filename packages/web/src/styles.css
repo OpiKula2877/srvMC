@@ -1,5 +1,8 @@
 /* srvMC panel – design tokens and components (matches the canvas design). */
 
+/* The game's own pixel font, for the server list preview. */
+@font-face { font-family: 'Minecraft'; src: url('/minecraft.otf') format('opentype'); font-display: swap; }
+
 :root {
   --bg: #0f1215;
   --bg-deep: #0a0c0e;
@@ -74,20 +77,31 @@ button:disabled { cursor: not-allowed; }
 /* Layout */
 .app { min-height: 100%; display: flex; flex-wrap: wrap; }
 .sidebar { flex: 1 1 230px; max-width: 100%; padding: 20px 14px; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 18px; }
+.side-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.side-body { display: flex; flex-direction: column; gap: 18px; flex: 1; }
+.menu-btn { display: none; }
 @media (min-width: 900px) { .sidebar { max-width: 260px; min-height: 100vh; position: sticky; top: 0; align-self: flex-start; } }
+/* Phones and small tablets: a slim top bar; the server list opens from the menu button. */
+@media (max-width: 899px) {
+  .sidebar { flex-basis: 100%; position: sticky; top: 0; z-index: 60; padding: max(10px, env(safe-area-inset-top)) 14px 10px; gap: 0; border-right: none; border-bottom: 1px solid var(--line); }
+  .menu-btn { display: inline-flex; }
+  .side-body { display: none; }
+  .sidebar.open .side-body { display: flex; padding-top: 14px; max-height: calc(100dvh - 64px); overflow-y: auto; }
+}
 .main { flex: 999 1 560px; min-width: 0; padding: 28px 36px 48px; display: flex; flex-direction: column; gap: 22px; }
 @media (max-width: 640px) { .main { padding: 20px 16px 40px; } }
 .row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
 .col-main { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
 .col-side { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 .stack { display: flex; flex-direction: column; gap: 14px; }
-.grid-auto { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(var(--min, 220px), 1fr)); }
+.grid-auto { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(var(--min, 220px), 100%), 1fr)); }
 
 /* Brand */
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px; color: var(--text); text-decoration: none; }
 .brand-mark { width: 32px; height: 32px; flex: none; display: block; }
 .brand-name { font-family: var(--display); font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
 .side-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; padding: 0 8px 4px; }
+button.side-link { width: 100%; background: none; border: none; font: inherit; text-align: left; cursor: pointer; }
 .side-link { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 8px; border-radius: 8px; color: var(--text); text-decoration: none; transition: background .15s; }
 .side-link:hover { background: #1f252c; color: var(--text); }
 .side-link.active { background: #1f252c; }
@@ -256,7 +270,7 @@ button:disabled { cursor: not-allowed; }
 .seg-btn .count { min-width: 22px; padding: 1px 7px; border-radius: 999px; font-size: 12px; background: var(--line); }
 .seg-btn[aria-selected='true'] .count { background: #25482f; }
 
-.table-wrap { overflow-x: auto; }
+.table-wrap { position: relative; overflow-x: auto; max-width: 100%; min-width: 0; }
 .table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 14px; }
 .table th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; padding: 8px 10px; }
 .table td { padding: 10px; border-top: 1px solid var(--line); vertical-align: middle; }
@@ -297,7 +311,7 @@ button:disabled { cursor: not-allowed; }
 .savebar .grow { flex: 1; min-width: 200px; color: #c7ddf7; }
 
 /* Server list entry as Minecraft draws it: darkened dirt background, pixel font with drop shadows. */
-.mc-entry { padding: 10px 12px; background: #1c1712 url('/mc-dirt.png') repeat; background-size: 48px 48px; image-rendering: pixelated; display: flex; gap: 12px; align-items: flex-start; font-family: var(--pixel); font-size: 24px; line-height: 1; letter-spacing: 0.02em; }
+.mc-entry { padding: 10px 12px; background: #1c1712 url('/mc-dirt.png') repeat; background-size: 48px 48px; image-rendering: pixelated; display: flex; gap: 12px; align-items: flex-start; font-family: 'Minecraft', var(--pixel); font-size: 16px; line-height: 1.25; -webkit-font-smoothing: none; font-smooth: never; }
 .mc-entry .icon { width: 64px; height: 64px; flex: none; image-rendering: pixelated; display: grid; place-items: center; background: #3b3b3b; color: #a0a0a0; font-size: 44px; text-shadow: 3px 3px 0 #282828; }
 .mc-entry .icon img { display: block; image-rendering: pixelated; }
 .mc-entry .lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-top: 2px; }

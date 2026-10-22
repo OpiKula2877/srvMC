@@ -56,9 +56,9 @@ export class ServerManager extends EventEmitter {
   }
 
   /** Starts servers marked for autostart. Failures are logged on the server, not thrown. */
-  async autoStart(): Promise<void> {
+  async autoStart(also: Set<string> = new Set()): Promise<void> {
     for (const inst of this.instances.values()) {
-      if (inst.cfg.autoStart && inst.cfg.installed) {
+      if ((inst.cfg.autoStart || also.has(inst.cfg.id)) && inst.cfg.installed) {
         await this.start(inst.cfg.id).catch((err: Error) => inst.pushLog('error', `Autostart selhal: ${err.message}`));
       }
     }

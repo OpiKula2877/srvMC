@@ -187,7 +187,7 @@ export function GraphsTab({ server }: { server: ServerInfo }) {
             <section key={c.title} className="card stack" style={{ gap: 12 }} aria-label={c.title}>
               <div className="section-head" style={{ alignItems: 'flex-start' }}>
                 <h2 className="h2">{c.title}</h2>
-                <div style={{ display: 'flex', gap: 18 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
                   {c.stats.map(([l, v]) => (
                     <Stat key={l} label={l!} value={v!} />
                   ))}

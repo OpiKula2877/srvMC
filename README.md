@@ -30,6 +30,8 @@ Instalátor není podepsaný. Když se Windows SmartScreen zeptá, klikni na **D
 - Crossplay Java ↔ Bedrock (Geyser), mapa BlueMap, Velocity proxy
 - Discord oznámení, statistiky hráčů
 - Víc uživatelů panelu s rolemi
+- Panel i z telefonu (přizpůsobený malé obrazovce), jde si ho přidat na plochu jako aplikaci
+- Restart celé aplikace z panelu (běžící servery se po restartu samy spustí)
 
 ## Pro vývojáře
 
