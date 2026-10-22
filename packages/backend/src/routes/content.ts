@@ -36,11 +36,12 @@ import { addPlayer, kickPlayer, playersInfo, removePlayer, setWhitelistEnabled }
 import { checkDiskRoom } from '../disk.ts';
 import { readServerProperties, updateServerProperties } from '../properties.ts';
 import { UserError } from '../providers/index.ts';
+import { t } from '@srvmc/shared';
 
 const LISTS = new Set<PlayerListKind>(['whitelist', 'ops', 'bans', 'ips']);
 
 function listKind(value: string): PlayerListKind {
-  if (!LISTS.has(value as PlayerListKind)) throw new UserError('Neznámý seznam.');
+  if (!LISTS.has(value as PlayerListKind)) throw new UserError(t('Unknown list.'));
   return value as PlayerListKind;
 }
 
@@ -51,25 +52,25 @@ function attachment(reply: FastifyReply, name: string, size?: number): void {
 }
 
 function notWhileRunning(inst: ServerInstance, what: string): void {
-  if (inst.running) throw new UserError(`Nejdřív server zastav – ${what} za běhu může poškodit svět.`);
+  if (inst.running) throw new UserError(t('Stop the server first – {what} while it runs could damage the world.', { what }));
 }
 
 /** Validates edited server.properties values against what the panel knows about each key. */
 export function checkPropertyValues(values: Record<string, unknown>, edition: Edition = 'java'): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, raw] of Object.entries(values)) {
-    if (!PROPERTY_KEY_RE.test(key)) throw new UserError(`Neplatný klíč: ${key}`);
-    if (MANAGED_PROPERTY_KEYS.has(key)) throw new UserError(`${key} se mění v záložce Nastavení.`);
-    if (typeof raw !== 'string' || raw.length > 1000) throw new UserError(`Neplatná hodnota pro ${key}.`);
+    if (!PROPERTY_KEY_RE.test(key)) throw new UserError(t('Invalid key: {key}', { key }));
+    if (MANAGED_PROPERTY_KEYS.has(key)) throw new UserError(t('{key} is changed in the Settings tab.', { key }));
+    if (typeof raw !== 'string' || raw.length > 1000) throw new UserError(t('Invalid value for {key}.', { key }));
     const def = propertyDef(key, edition);
-    if (def?.type === 'bool' && raw !== 'true' && raw !== 'false') throw new UserError(`${def.label}: zapnuto nebo vypnuto.`);
+    if (def?.type === 'bool' && raw !== 'true' && raw !== 'false') throw new UserError(t('{label}: on or off.', { label: t(def.label) }));
     if (def?.type === 'int') {
       const n = Number(raw);
       if (!Number.isInteger(n) || (def.min !== undefined && n < def.min) || (def.max !== undefined && n > def.max)) {
-        throw new UserError(`${def.label}: celé číslo ${def.min ?? ''}–${def.max ?? ''}.`);
+        throw new UserError(t('{label}: a whole number {min}–{max}.', { label: t(def.label), min: def.min ?? '', max: def.max ?? '' }));
       }
     }
-    if (def?.type === 'enum' && !def.options?.some((o) => o.value === raw)) throw new UserError(`${def.label}: neplatná volba.`);
+    if (def?.type === 'enum' && !def.options?.some((o) => o.value === raw)) throw new UserError(t('{label}: invalid choice.', { label: t(def.label) }));
     out[key] = raw;
   }
   return out;
@@ -131,7 +132,7 @@ export function registerContentRoutes(app: FastifyInstance, manager: ServerManag
     { schema: { body: { type: 'object', required: ['values'], properties: { values: { type: 'object', maxProperties: 200 } } } } },
     async (req) => {
       const i = inst(req.params.id);
-      if (!i.cfg.installed) throw new UserError('Server ještě není nainstalovaný.');
+      if (!i.cfg.installed) throw new UserError(t('The server is not installed yet.'));
       await updateServerProperties(i.dir, checkPropertyValues(req.body.values, editionOf(i.cfg.type)));
       const { values, exists } = await readServerProperties(i.dir);
       return { values: Object.fromEntries(values), exists };
@@ -142,12 +143,12 @@ export function registerContentRoutes(app: FastifyInstance, manager: ServerManag
   app.get<{ Params: { id: string } }>('/api/servers/:id/icon', async (req, reply) => {
     const file = path.join(inst(req.params.id).dir, 'server-icon.png');
     const buf = await readFile(file).catch(() => null);
-    if (!buf) return reply.code(404).send({ error: 'Server nemá ikonu.' });
+    if (!buf) return reply.code(404).send({ error: t('The server has no icon.') });
     reply.header('content-type', 'image/png').header('cache-control', 'no-store');
     return buf;
   });
   app.put<{ Params: { id: string }; Body: Buffer }>('/api/servers/:id/icon', async (req, reply) => {
-    if (!Buffer.isBuffer(req.body)) throw new UserError('Pošli obrázek PNG.');
+    if (!Buffer.isBuffer(req.body)) throw new UserError(t('Send a PNG image.'));
     checkServerIcon(req.body);
     await writeFile(path.join(inst(req.params.id).dir, 'server-icon.png'), req.body);
     reply.code(204);
@@ -201,7 +202,7 @@ export function registerContentRoutes(app: FastifyInstance, manager: ServerManag
     },
     async (req, reply) => {
       const declared = Number(req.headers['content-length'] ?? 0);
-      if (declared > MAX_UPLOAD) throw new UserError('Soubor je moc velký (max 1 GB).');
+      if (declared > MAX_UPLOAD) throw new UserError(t('The file is too big (max 1 GB).'));
       const i = inst(req.params.id);
       checkDiskRoom(i.cfg, i.diskUsageMb, declared);
       await saveUpload(i.dir, req.query.path ?? '', req.query.name, req.body, MAX_UPLOAD, req.query.overwrite === '1');
@@ -219,7 +220,7 @@ export function registerContentRoutes(app: FastifyInstance, manager: ServerManag
     { schema: { body: { type: 'object', required: ['from', 'to'], properties: { from: { type: 'string', maxLength: 1024 }, to: { type: 'string', maxLength: 1024 } } } } },
     async (req, reply) => {
       const i = inst(req.params.id);
-      notWhileRunning(i, 'přejmenování');
+      notWhileRunning(i, t('renaming'));
       await renamePath(i.dir, req.body.from, req.body.to);
       reply.code(204);
     },
@@ -229,7 +230,7 @@ export function registerContentRoutes(app: FastifyInstance, manager: ServerManag
     { schema: { body: { type: 'object', required: ['paths'], properties: { paths: { type: 'array', minItems: 1, maxItems: 500, items: { type: 'string', minLength: 1, maxLength: 1024 } } } } } },
     async (req) => {
       const i = inst(req.params.id);
-      notWhileRunning(i, 'mazání');
+      notWhileRunning(i, t('deleting'));
       const trash = await trashPaths(i.dir, req.body.paths, path.join(paths.trash, i.cfg.id));
       return { trash };
     },

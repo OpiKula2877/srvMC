@@ -29,20 +29,20 @@ export interface ServerTypeInfo {
 }
 
 export const SERVER_TYPES: ServerTypeInfo[] = [
-  { id: 'vanilla', name: 'Vanilla', tag: 'Čistý Minecraft', color: '#7FB069', defaultPort: 25565, available: true },
-  { id: 'paper', name: 'Paper', tag: 'Pluginy · rychlý', color: '#E8EAED', defaultPort: 25565, available: true },
-  { id: 'fabric', name: 'Fabric', tag: 'Mody · lehký', color: '#DBD0B4', defaultPort: 25565, available: true },
-  { id: 'purpur', name: 'Purpur', tag: 'Pluginy · víc nastavení', color: '#B89BD9', defaultPort: 25565, available: true },
-  { id: 'spigot', name: 'Spigot / Bukkit', tag: 'Pluginy · kompilace', color: '#F2B33D', defaultPort: 25565, available: true },
-  { id: 'quilt', name: 'Quilt', tag: 'Mody · Fabric kompatibilní', color: '#C57BD6', defaultPort: 25565, available: true },
-  { id: 'forge', name: 'Forge', tag: 'Mody · klasika', color: '#8C9BAB', defaultPort: 25565, available: true },
-  { id: 'neoforge', name: 'NeoForge', tag: 'Mody · nový Forge', color: '#E08A4F', defaultPort: 25565, available: true },
-  { id: 'arclight', name: 'Arclight', tag: 'Mody + pluginy', color: '#6FC3C9', defaultPort: 25565, available: true },
-  { id: 'modpack', name: 'Modpack', tag: 'Modrinth', color: '#5BD27A', defaultPort: 25565, available: true },
-  { id: 'bedrock', name: 'Bedrock', tag: 'Mobil · konzole · Win10', color: '#6AA9FF', defaultPort: 19132, available: true },
-  { id: 'bedrock-preview', name: 'Bedrock Preview', tag: 'Testovací Bedrock', color: '#9CC6FF', defaultPort: 19132, available: true },
-  { id: 'velocity', name: 'Velocity', tag: 'Proxy · síť serverů', color: '#4FB5A5', defaultPort: 25577, available: true },
-  { id: 'hytale', name: 'Hytale', tag: 'Experimentální', color: '#F07A6A', defaultPort: 5520, available: true },
+  { id: 'vanilla', name: 'Vanilla', tag: 'Plain Minecraft', color: '#7FB069', defaultPort: 25565, available: true },
+  { id: 'paper', name: 'Paper', tag: 'Plugins · fast', color: '#E8EAED', defaultPort: 25565, available: true },
+  { id: 'fabric', name: 'Fabric', tag: 'Mods · light', color: '#DBD0B4', defaultPort: 25565, available: true },
+  { id: 'purpur', name: 'Purpur', tag: 'Plugins · more settings', color: '#B89BD9', defaultPort: 25565, available: true },
+  { id: 'spigot', name: 'Spigot / Bukkit', tag: 'Plugins · compiled', color: '#F2B33D', defaultPort: 25565, available: true },
+  { id: 'quilt', name: 'Quilt', tag: 'Mods · Fabric compatible', color: '#C57BD6', defaultPort: 25565, available: true },
+  { id: 'forge', name: 'Forge', tag: 'Mods · classic', color: '#8C9BAB', defaultPort: 25565, available: true },
+  { id: 'neoforge', name: 'NeoForge', tag: 'Mods · new Forge', color: '#E08A4F', defaultPort: 25565, available: true },
+  { id: 'arclight', name: 'Arclight', tag: 'Mods + plugins', color: '#6FC3C9', defaultPort: 25565, available: true },
+  { id: 'modpack', name: 'Modpack', tag: 'Modrinth · CurseForge · Technic', color: '#5BD27A', defaultPort: 25565, available: true },
+  { id: 'bedrock', name: 'Bedrock', tag: 'Mobile · console · Win10', color: '#6AA9FF', defaultPort: 19132, available: true },
+  { id: 'bedrock-preview', name: 'Bedrock Preview', tag: 'Test Bedrock', color: '#9CC6FF', defaultPort: 19132, available: true },
+  { id: 'velocity', name: 'Velocity', tag: 'Proxy · server network', color: '#4FB5A5', defaultPort: 25577, available: true },
+  { id: 'hytale', name: 'Hytale', tag: 'Experimental', color: '#F07A6A', defaultPort: 5520, available: true },
 ];
 
 /** Which game a server type belongs to: decides files, commands, ports and what the panel offers. */
@@ -703,3 +703,4 @@ export interface AuthState {
 
 export * from './properties.ts';
 export * from './motd.ts';
+export * from './i18n.ts';

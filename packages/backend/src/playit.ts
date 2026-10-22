@@ -11,6 +11,7 @@ import { downloadToCache } from './download.ts';
 import { USER_AGENT } from './http.ts';
 import type { Paths } from './paths.ts';
 import { UserError } from './providers/types.ts';
+import { t } from '@srvmc/shared';
 
 const API = 'https://api.playit.gg';
 
@@ -152,7 +153,7 @@ export class PlayitAgent extends EventEmitter {
   }
 
   async start(secret: string): Promise<void> {
-    if (process.platform !== 'win32') throw new UserError('playit.gg zatím umím spustit jen na Windows.');
+    if (process.platform !== 'win32') throw new UserError(t('playit.gg can only run on Windows for now.'));
     this.secret = secret;
     this.wanted = true;
     if (this.proc) return;
@@ -161,7 +162,7 @@ export class PlayitAgent extends EventEmitter {
     try {
       exe = await downloadToCache(this.paths, { url: AGENT.url, fileName: AGENT.fileName, sha256: AGENT.sha256, size: AGENT.size });
     } catch (err) {
-      this.set('error', `Program playit se nepodařilo stáhnout: ${(err as Error).message}`);
+      this.set('error', t('Could not download the playit program: {message}', { message: (err as Error).message }));
       this.scheduleRestart();
       return;
     }
@@ -174,16 +175,16 @@ export class PlayitAgent extends EventEmitter {
       if (!line) return;
       this.log.push(line);
       if (this.log.length > 200) this.log.splice(0, this.log.length - 200);
-      if (/invalid secret|InvalidAgentKey|AgentClaimRejected/i.test(line)) this.set('error', 'playit.gg tajný klíč odmítl. Propoj účet znovu.');
+      if (/invalid secret|InvalidAgentKey|AgentClaimRejected/i.test(line)) this.set('error', t('playit.gg refused the secret key. Connect the account again.'));
       else if (this.status === 'starting' && /tunnel|connected|agent registered|running/i.test(line)) this.set('running');
     };
     readline.createInterface({ input: proc.stdout! }).on('line', onLine);
     readline.createInterface({ input: proc.stderr! }).on('line', onLine);
-    proc.on('error', (err) => this.set('error', `Program playit nejde spustit: ${err.message}`));
+    proc.on('error', (err) => this.set('error', t('The playit program cannot start: {message}', { message: err.message })));
     proc.on('exit', (code) => {
       this.proc = undefined;
       if (!this.wanted) return this.set('off');
-      if (this.status !== 'error') this.set('error', `Program playit skončil (kód ${code}).`);
+      if (this.status !== 'error') this.set('error', t('The playit program ended (code {code}).', { code: String(code) }));
       this.scheduleRestart();
     });
     // The agent logs little once it runs; alive after a while counts as running.
@@ -196,7 +197,7 @@ export class PlayitAgent extends EventEmitter {
   }
 
   private scheduleRestart(): void {
-    if (!this.wanted || /odmítl/.test(this.error ?? '')) return;
+    if (!this.wanted || this.error === t('playit.gg refused the secret key. Connect the account again.')) return;
     clearTimeout(this.restartTimer);
     this.restartTimer = setTimeout(() => void this.start(this.secret), this.backoff);
     this.backoff = Math.min(this.backoff * 2, 5 * 60_000);

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { USER_AGENT } from './http.ts';
+import { t } from '@srvmc/shared';
 
 export function dashUuid(hex: string): string {
   const h = hex.replace(/-/g, '').toLowerCase();
@@ -26,7 +27,7 @@ export async function lookupProfile(name: string): Promise<Profile | null> {
     signal: AbortSignal.timeout(15_000),
   });
   if (res.status === 404 || res.status === 204) return null;
-  if (!res.ok) throw new Error(`Mojang API odpověděla ${res.status}. Zkus to za chvíli.`);
+  if (!res.ok) throw new Error(t('The Mojang API answered {status}. Try again in a moment.', { status: res.status }));
   const data = (await res.json()) as { id: string; name: string };
   return { uuid: dashUuid(data.id), name: data.name };
 }

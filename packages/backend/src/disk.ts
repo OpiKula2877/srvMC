@@ -3,6 +3,7 @@ import { lstat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { ServerConfig } from '@srvmc/shared';
 import { UserError } from './providers/types.ts';
+import { t } from '@srvmc/shared';
 
 const MB = 1024 * 1024;
 
@@ -36,8 +37,8 @@ export function checkDiskRoom(cfg: Pick<ServerConfig, 'diskLimitMb'>, usageMb: n
   if (after > limit) {
     throw new UserError(
       incomingBytes
-        ? `Překročil bys limit disku serveru (${gb(after)} z ${gb(limit)}). Uvolni místo nebo limit zvyš v Nastavení.`
-        : `Server překročil limit disku (${gb(usageMb)} z ${gb(limit)}). Uvolni místo nebo limit zvyš v Nastavení.`,
+        ? t('This would cross the server disk limit ({size} of {limit}). Free some space or raise the limit in Settings.', { size: gb(after), limit: gb(limit) })
+        : t('The server crossed its disk limit ({size} of {limit}). Free some space or raise the limit in Settings.', { size: gb(usageMb), limit: gb(limit) }),
     );
   }
 }

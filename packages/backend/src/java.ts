@@ -5,6 +5,7 @@ import extractZip from 'extract-zip';
 import { downloadToCache } from './download.ts';
 import { fetchJson } from './http.ts';
 import type { Paths } from './paths.ts';
+import { t } from '@srvmc/shared';
 
 export function adoptiumOs(platform: NodeJS.Platform = process.platform): 'windows' | 'mac' | 'linux' {
   if (platform === 'win32') return 'windows';
@@ -97,7 +98,7 @@ async function installJava(paths: Paths, major: number, kind: JavaKind, onProgre
     asset = assets[0];
     if (asset) break;
   }
-  if (!asset) throw new Error(`Java ${major} není pro tento systém k dispozici.`);
+  if (!asset) throw new Error(t('Java {major} is not available for this system.', { major }));
 
   const pkg = asset.binary.package;
   const label = kind === 'jdk' ? `Java ${major} JDK` : `Javu ${major}`;
@@ -119,6 +120,6 @@ async function installJava(paths: Paths, major: number, kind: JavaKind, onProgre
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
-  if (!(await exists(bin))) throw new Error(`Java ${major} se nepodařilo rozbalit.`);
+  if (!(await exists(bin))) throw new Error(t('Could not unpack Java {major}.', { major }));
   return bin;
 }

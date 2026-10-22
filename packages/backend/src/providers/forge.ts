@@ -7,6 +7,7 @@ import { forgeLaunchArgs } from '../installer.ts';
 import { mavenChecksum } from '../maven.ts';
 import { javaMajorFor } from '../mojang.ts';
 import { compareVersions, UserError, type InstallContext, type Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 const FORGE_MAVEN = 'https://maven.minecraftforge.net/net/minecraftforge/forge';
 const NEO_MAVEN = 'https://maven.neoforged.net/releases/net/neoforged/neoforge';
@@ -15,12 +16,12 @@ const sha1Of = (url: string) => mavenChecksum(url, 'sha1');
 
 function installerStep(prefix: 'forge' | 'neoforge') {
   return async (ctx: InstallContext): Promise<string[]> => {
-    ctx.progress('Spouštím instalátor (stahuje knihovny, chvíli to trvá)', null);
+    ctx.progress(t('Starting the installer (it downloads libraries, this takes a while)'), null);
     let lines = 0;
     await ctx.run(['-jar', 'installer.jar', '--installServer'], {
       onLine: () => {
         lines++;
-        if (lines % 25 === 0) ctx.progress(`Instalátor pracuje · ${lines} kroků`, null);
+        if (lines % 25 === 0) ctx.progress(t('The installer is working · {n} steps', { n: lines }), null);
       },
     });
     await rm(path.join(ctx.dir, 'installer.jar'), { force: true });
@@ -47,7 +48,7 @@ export async function forgeBuilds(mc: string): Promise<BuildInfo[]> {
     .filter((v) => v.startsWith(`${mc}-`))
     .map((v) => ({ full: v, forge: v.slice(mc.length + 1) }))
     .sort((a, b) => compareVersions(b.forge, a.forge));
-  const label = (forge: string) => `Forge ${forge}${forge === recommended ? ' (doporučeno)' : forge === latest ? ' (nejnovější)' : ''}`;
+  const label = (forge: string) => `Forge ${forge}${forge === recommended ? ` (${t('recommended')})` : forge === latest ? ` (${t('latest')})` : ''}`;
   const first = builds.filter((b) => b.forge === recommended || (!recommended && b.forge === latest));
   const rest = builds.filter((b) => !first.includes(b));
   return [...first, ...rest].map((b) => ({ id: b.full, label: label(b.forge), channel: b.forge === recommended || (!recommended && b.forge === latest) ? 'stable' : 'beta' }));
@@ -70,7 +71,7 @@ export const forge: Provider = {
   async plan(mc, build) {
     const builds = await forgeBuilds(mc);
     const chosen = build ? builds.find((b) => b.id === build) : (builds.find((b) => b.channel === 'stable') ?? builds[0]);
-    if (!chosen) throw new UserError(`Forge pro ${mc} neexistuje.`);
+    if (!chosen) throw new UserError(t('{name} does not exist.', { name: `Forge ${mc}` }));
     const url = `${FORGE_MAVEN}/${chosen.id}/forge-${chosen.id}-installer.jar`;
     return {
       files: [{ url, sha1: await sha1Of(url), fileName: `forge-${chosen.id}-installer.jar`, target: 'installer.jar' }],
@@ -127,7 +128,7 @@ export const neoforge: Provider = {
   async plan(mc, build) {
     const builds = await neoBuilds(mc);
     const chosen = build ? builds.find((b) => b.id === build) : (builds.find((b) => b.channel === 'stable') ?? builds[0]);
-    if (!chosen) throw new UserError(`NeoForge pro ${mc} neexistuje.`);
+    if (!chosen) throw new UserError(t('{name} does not exist.', { name: `NeoForge ${mc}` }));
     const url = `${NEO_MAVEN}/${chosen.id}/neoforge-${chosen.id}-installer.jar`;
     return {
       files: [{ url, sha1: await sha1Of(url), fileName: `neoforge-${chosen.id}-installer.jar`, target: 'installer.jar' }],

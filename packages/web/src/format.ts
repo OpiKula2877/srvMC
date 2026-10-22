@@ -1,9 +1,10 @@
 import type { ServerInfo, ServerStatus } from '@srvmc/shared';
+import { locale, t } from '@srvmc/shared';
 
-const nf1 = new Intl.NumberFormat('cs-CZ', { maximumFractionDigits: 1 });
+const nf1 = () => new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 });
 
 export function gb(mb: number): string {
-  return `${nf1.format(mb / 1024)} GB`;
+  return `${nf1().format(mb / 1024)} GB`;
 }
 
 export function duration(ms: number): string {
@@ -17,13 +18,13 @@ export function duration(ms: number): string {
 
 export function bytes(n: number): string {
   if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${nf1.format(n / 1024)} kB`;
-  if (n < 1024 * 1024 * 1024) return `${nf1.format(n / 1024 / 1024)} MB`;
-  return `${nf1.format(n / 1024 / 1024 / 1024)} GB`;
+  if (n < 1024 * 1024) return `${nf1().format(n / 1024)} kB`;
+  if (n < 1024 * 1024 * 1024) return `${nf1().format(n / 1024 / 1024)} MB`;
+  return `${nf1().format(n / 1024 / 1024 / 1024)} GB`;
 }
 
-export function dateTime(t: number): string {
-  return new Date(t).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+export function dateTime(at: number): string {
+  return new Date(at).toLocaleString(locale(), { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 /** A stable color per name, for player head placeholders. */
@@ -34,19 +35,19 @@ export function nameColor(name: string): string {
   return palette[h % palette.length]!;
 }
 
-export function ago(t: number, now = Date.now()): string {
-  const s = Math.max(0, Math.round((now - t) / 1000));
-  if (s < 60) return 'teď';
+export function ago(at: number, now = Date.now()): string {
+  const s = Math.max(0, Math.round((now - at) / 1000));
+  if (s < 60) return t('now');
   const m = Math.round(s / 60);
-  if (m < 60) return `před ${m} min`;
+  if (m < 60) return t('{n} min ago', { n: m });
   const h = Math.round(m / 60);
-  if (h < 24) return `před ${h} h`;
+  if (h < 24) return t('{n} h ago', { n: h });
   const d = Math.round(h / 24);
-  return d === 1 ? 'včera' : `před ${d} dny`;
+  return d === 1 ? t('yesterday') : t('{n} days ago', { n: d });
 }
 
-export function clock(t: number): string {
-  return new Date(t).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+export function clock(at: number): string {
+  return new Date(at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 export interface StatusLook {
@@ -57,22 +58,22 @@ export interface StatusLook {
 }
 
 const LOOK: Record<ServerStatus, StatusLook> = {
-  running: { label: 'Běží', dot: 'var(--green)', bg: 'var(--green-soft)', fg: 'var(--green-text)' },
-  starting: { label: 'Spouští se', dot: 'var(--amber)', bg: 'var(--amber-soft)', fg: 'var(--amber-text)' },
-  stopping: { label: 'Zastavuje se', dot: 'var(--amber)', bg: 'var(--amber-soft)', fg: 'var(--amber-text)' },
-  installing: { label: 'Instaluje se', dot: 'var(--blue)', bg: 'var(--blue-soft)', fg: 'var(--blue-text)' },
-  stopped: { label: 'Vypnuto', dot: 'var(--gray-dot)', bg: 'var(--raised)', fg: '#b5bcc4' },
-  crashed: { label: 'Spadl', dot: 'var(--red)', bg: 'var(--red-soft)', fg: 'var(--red-text)' },
-  error: { label: 'Chyba', dot: 'var(--red)', bg: 'var(--red-soft)', fg: 'var(--red-text)' },
+  running: { label: 'Running', dot: 'var(--green)', bg: 'var(--green-soft)', fg: 'var(--green-text)' },
+  starting: { label: 'Starting', dot: 'var(--amber)', bg: 'var(--amber-soft)', fg: 'var(--amber-text)' },
+  stopping: { label: 'Stopping', dot: 'var(--amber)', bg: 'var(--amber-soft)', fg: 'var(--amber-text)' },
+  installing: { label: 'Installing', dot: 'var(--blue)', bg: 'var(--blue-soft)', fg: 'var(--blue-text)' },
+  stopped: { label: 'Stopped', dot: 'var(--gray-dot)', bg: 'var(--raised)', fg: '#b5bcc4' },
+  crashed: { label: 'Crashed', dot: 'var(--red)', bg: 'var(--red-soft)', fg: 'var(--red-text)' },
+  error: { label: 'Error', dot: 'var(--red)', bg: 'var(--red-soft)', fg: 'var(--red-text)' },
 };
 
-const SLEEPING: StatusLook = { label: 'Spí', dot: 'var(--blue)', bg: 'var(--blue-soft)', fg: 'var(--blue-text)' };
+const SLEEPING: StatusLook = { label: 'Asleep', dot: 'var(--blue)', bg: 'var(--blue-soft)', fg: 'var(--blue-text)' };
 
 export function statusLook(s: ServerInfo, now = Date.now()): StatusLook {
-  if (s.sleeping && (s.status === 'stopped' || s.status === 'crashed')) return SLEEPING;
-  const look = LOOK[s.status];
-  if (s.status === 'running' && s.startedAt) return { ...look, label: `Běží ${duration(now - s.startedAt)}` };
-  if (s.status === 'installing' && s.install?.pct != null) return { ...look, label: `Instaluje se ${s.install.pct} %` };
+  if (s.sleeping && (s.status === 'stopped' || s.status === 'crashed')) return { ...SLEEPING, label: t(SLEEPING.label) };
+  const look = { ...LOOK[s.status], label: t(LOOK[s.status].label) };
+  if (s.status === 'running' && s.startedAt) return { ...look, label: t('Running {time}', { time: duration(now - s.startedAt) }) };
+  if (s.status === 'installing' && s.install?.pct != null) return { ...look, label: t('Installing {pct} %', { pct: s.install.pct }) };
   return look;
 }
 

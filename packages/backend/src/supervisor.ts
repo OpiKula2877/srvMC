@@ -11,6 +11,7 @@ import type { ServerManager } from './manager.ts';
 import { readServerProperties } from './properties.ts';
 import { tpsProbeFor } from './tps.ts';
 import { WakeListener } from './wake.ts';
+import { t } from '@srvmc/shared';
 
 const MINUTE = 60_000;
 /** Crash restarts allowed within the window before the watchdog gives up. */
@@ -101,14 +102,14 @@ export class Supervisor {
     await this.history.flush(id);
     if (!crashed) return void this.syncWake(inst);
 
-    const info = await analyzeCrash({ dir: inst.dir, since, log: inst.log, port: inst.cfg.port, code: inst.lastError?.match(/kód (\S+)\)/)?.[1] ?? null });
+    const info = await analyzeCrash({ dir: inst.dir, since, log: inst.log, port: inst.cfg.port, code: inst.lastError?.match(/(?:kód|code) (\S+)\)/)?.[1] ?? null });
     inst.lastCrash = info;
-    inst.pushLog('error', `Příčina: ${info.summary}${info.suspects.length ? ` · Podezřelé: ${info.suspects.join(', ')}` : ''}`);
+    inst.pushLog('error', `${t('Cause: {summary}', { summary: info.summary })}${info.suspects.length ? ` · ${t('Suspects: {list}', { list: info.suspects.join(', ') })}` : ''}`);
     inst.emit('status');
 
     if (inst.cfg.crashRestart === false) return void this.syncWake(inst);
     if (info.permanent) {
-      inst.pushLog('warn', 'Restart by nepomohl, server nechávám vypnutý.');
+      inst.pushLog('warn', t('A restart would not help, the server stays stopped.'));
       return void this.syncWake(inst);
     }
     const now = Date.now();
@@ -116,7 +117,7 @@ export class Supervisor {
     recent.push(now);
     this.crashes.set(id, recent);
     if (recent.length > CRASH_LIMIT) {
-      inst.pushLog('error', `Server spadl ${recent.length}× za 10 minut. Automatický restart vypínám, dokud ho nespustíš ručně.`);
+      inst.pushLog('error', t('The server crashed {n}× in 10 minutes. Automatic restarts are off until you start it by hand.', { n: recent.length }));
       return void this.syncWake(inst);
     }
     inst.pushLog('system', `Restartuji za ${RESTART_DELAY / 1000} s (pokus ${recent.length} z ${CRASH_LIMIT}).`);
@@ -126,7 +127,7 @@ export class Supervisor {
         this.restartTimers.delete(id);
         if (inst.running || inst.status !== 'crashed') return;
         void this.manager.start(id).catch((err: Error) => {
-          inst.pushLog('error', `Restart po pádu selhal: ${err.message}`);
+          inst.pushLog('error', t('The restart after the crash failed: {message}', { message: err.message }));
           void this.syncWake(inst);
         });
       }, RESTART_DELAY),
@@ -159,7 +160,7 @@ export class Supervisor {
     state.missed++;
     if (state.missed >= FROZEN_AFTER) {
       state.missed = 0;
-      inst.pushLog('error', `Server ${FROZEN_AFTER} minut neodpovídá. Ukončuji ho jako zamrzlý.`);
+      inst.pushLog('error', t('The server has not answered for {n} minutes. Stopping it as frozen.', { n: FROZEN_AFTER }));
       inst.kill(true);
     }
   }
@@ -180,7 +181,7 @@ export class Supervisor {
       this.emptySince.set(id, since);
       if (now - since >= after * MINUTE) {
         this.emptySince.delete(id);
-        inst.pushLog('system', `Nikdo nehraje ${after} min, uspávám server.${inst.cfg.wakeOnJoin ? ' Probudí se, až se někdo připojí.' : ''}`);
+        inst.pushLog('system', `${t('Nobody has played for {n} min, putting the server to sleep.', { n: after })}${inst.cfg.wakeOnJoin ? ` ${t('It wakes up when someone joins.')}` : ''}`);
         inst.emit('sleep');
         void this.manager.stop(id).catch(() => undefined);
       }
@@ -222,20 +223,20 @@ export class Supervisor {
       const onJoin = (name: string | null) => {
         this.listeners.delete(id);
         inst.sleeping = false;
-        inst.pushLog('system', `${name ?? 'Hráč'} se chce připojit – probouzím server.`);
+        inst.pushLog('system', t('{name} wants to join – waking the server up.', { name: name ?? t('A player') }));
         void this.manager.start(id).catch((err: Error) => {
-          inst.pushLog('error', `Probuzení selhalo: ${err.message}`);
+          inst.pushLog('error', t('Waking up failed: {message}', { message: err.message }));
           void this.syncWake(inst);
         });
       };
-      listener = new WakeListener({ port: inst.cfg.port, kickMessage: 'Server se probouzí. Připoj se znovu za chvilku.', status: () => this.wakeStatus(inst), onJoin });
+      listener = new WakeListener({ port: inst.cfg.port, kickMessage: t('The server is waking up. Join again in a moment.'), status: () => this.wakeStatus(inst), onJoin });
       try {
         await listener.open();
         this.listeners.set(id, listener);
         this.wakeFailed.delete(id);
       } catch (err) {
         listener = undefined;
-        if (!this.wakeFailed.has(id)) inst.pushLog('warn', `Probouzení nejde zapnout – port ${inst.cfg.port} je obsazený (${(err as Error).message}).`);
+        if (!this.wakeFailed.has(id)) inst.pushLog('warn', t('Wake-up cannot be turned on – port {port} is taken ({message}).', { port: inst.cfg.port, message: (err as Error).message }));
         this.wakeFailed.add(id);
       }
     }
@@ -251,7 +252,7 @@ export class Supervisor {
     const first = (values.get('motd') ?? inst.cfg.name).split('\n')[0]!;
     const icon = await readFile(path.join(inst.dir, 'server-icon.png')).catch(() => null);
     return {
-      motd: `${first}\n§6Spí · připoj se a probudí se`,
+      motd: `${first}\n§6${t('Asleep · join to wake it up')}`,
       maxPlayers: Number(values.get('max-players')) || 20,
       favicon: icon && icon.length < 64 * 1024 ? `data:image/png;base64,${icon.toString('base64')}` : undefined,
     };
@@ -297,11 +298,11 @@ export class Supervisor {
     }
     if (!this.overLimit.has(id)) {
       this.overLimit.add(id);
-      inst.pushLog('warn', `Složka serveru má ${gb(mb)}, limit je ${gb(limit)}.`);
+      inst.pushLog('warn', t('The server folder has {size}, the limit is {limit}.', { size: gb(mb), limit: gb(limit) }));
     }
     // A little headroom so a world that just crossed the line is not cut off mid-game.
     if (inst.running && inst.status === 'running' && mb > limit * 1.1) {
-      inst.pushLog('error', `Server přerostl limit disku o víc než 10 % (${gb(mb)} z ${gb(limit)}), zastavuji ho.`);
+      inst.pushLog('error', t('The server grew more than 10 % over the disk limit ({size} of {limit}), stopping it.', { size: gb(mb), limit: gb(limit) }));
       void this.manager.stop(id).catch(() => undefined);
     }
   }

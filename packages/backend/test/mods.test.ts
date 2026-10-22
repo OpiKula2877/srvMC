@@ -102,11 +102,11 @@ describe('uploaded jars', () => {
 
   it('accepts what fits and explains what does not', () => {
     expect(() => checkUploadedJar(cfg('paper'), plugins, { kind: 'plugin', loaders: ['bukkit', 'paper'] })).not.toThrow();
-    expect(() => checkUploadedJar(cfg('paper'), plugins, { kind: 'mod', loaders: ['fabric', 'quilt'] })).toThrow(/sem patří pluginy/);
-    expect(() => checkUploadedJar(cfg('fabric'), mods, { kind: 'plugin', loaders: ['bukkit'] })).toThrow(/sem patří mody/);
+    expect(() => checkUploadedJar(cfg('paper'), plugins, { kind: 'mod', loaders: ['fabric', 'quilt'] })).toThrow(/plugins go here/);
+    expect(() => checkUploadedJar(cfg('fabric'), mods, { kind: 'plugin', loaders: ['bukkit'] })).toThrow(/mods go here/);
     expect(() => checkUploadedJar(cfg('fabric'), mods, { kind: 'mod', loaders: ['neoforge'] })).toThrow(/NeoForge.*Fabric/);
-    expect(() => checkUploadedJar(cfg('fabric'), mods, { kind: 'mod', loaders: ['fabric'], name: 'Sodium', clientOnly: true })).toThrow(/jen pro klienta/);
-    expect(() => checkUploadedJar(cfg('fabric'), mods, { kind: 'unknown', loaders: [] })).toThrow(/nevypadá/);
+    expect(() => checkUploadedJar(cfg('fabric'), mods, { kind: 'mod', loaders: ['fabric'], name: 'Sodium', clientOnly: true })).toThrow(/client-only/);
+    expect(() => checkUploadedJar(cfg('fabric'), mods, { kind: 'unknown', loaders: [] })).toThrow(/does not look like/);
   });
 });
 
@@ -115,7 +115,7 @@ describe('modpacks', () => {
     expect(packLoader({ minecraft: '1.21.1', 'fabric-loader': '0.16.9' })).toEqual({ type: 'fabric', build: '0.16.9', mc: '1.21.1' });
     expect(packLoader({ minecraft: '1.20.1', forge: '47.3.0' })).toEqual({ type: 'forge', build: '1.20.1-47.3.0', mc: '1.20.1' });
     expect(packLoader({ minecraft: '1.21.1', neoforge: '21.1.77' }).type).toBe('neoforge');
-    expect(() => packLoader({ 'fabric-loader': '0.16.9' })).toThrow(/verzi Minecraftu/);
+    expect(() => packLoader({ 'fabric-loader': '0.16.9' })).toThrow(/Minecraft version/);
   });
 
   it('keeps pack paths inside the server and blocks scripts', () => {
@@ -184,7 +184,7 @@ describe('managing installed jars', () => {
     expect(await readdir(path.join(dir, 'plugins'))).toEqual(['Test.jar.disabled']);
     await setEnabled(inst, 'plugins', 'Test.jar.disabled', true);
     expect(await readdir(path.join(dir, 'plugins'))).toEqual(['Test.jar']);
-    await expect(setEnabled(inst, 'plugins', '../server.properties', false)).rejects.toThrow(/Neplatný/);
+    await expect(setEnabled(inst, 'plugins', '../server.properties', false)).rejects.toThrow(/Invalid/);
     await expect(setEnabled(inst, 'mods', 'Test.jar', false)).rejects.toThrow();
 
     const trash = path.join(root, 'trash');

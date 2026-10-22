@@ -3,7 +3,7 @@
   "version": "1.0.1",
   "private": true,
   "type": "module",
-  "description": "Lokální správce Minecraft serverů (Aternos styl)",
+  "description": "Local Minecraft server manager (Aternos style)",
   "workspaces": [
     "packages/*",
     "apps/*"

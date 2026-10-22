@@ -3,7 +3,9 @@ dist/
 *.log
 .vite/
 coverage/
-# lokální testovací data serverů
+# local test server data
 .srvmc-dev/
-# sestavený instalátor
+# built installer
 apps/desktop/release/
+# demo build of the panel for the screenshots
+packages/web/dist-demo/

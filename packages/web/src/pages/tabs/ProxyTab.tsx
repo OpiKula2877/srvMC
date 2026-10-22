@@ -5,6 +5,7 @@ import { Spinner } from '../../components/Icon.tsx';
 import { useToast } from '../../components/Overlays.tsx';
 import { typeName } from '../../format.ts';
 import { useLive } from '../../live.ts';
+import { t } from '@srvmc/shared';
 
 export function ProxyTab({ server }: { server: ServerInfo }) {
   const toast = useToast();
@@ -22,7 +23,7 @@ export function ProxyTab({ server }: { server: ServerInfo }) {
           setState(s);
           setOrder((server.proxy?.servers ?? []).map((x) => x.id).filter((id) => s.backends.some((b) => b.id === id)));
         })
-        .catch((err: Error) => toast('error', 'Síť serverů se nepodařilo načíst', err.message)),
+        .catch((err: Error) => toast('error', t('Could not load the server network'), err.message)),
     [server.id, server.proxy, toast],
   );
 
@@ -42,9 +43,9 @@ export function ProxyTab({ server }: { server: ServerInfo }) {
         order.map((id) => ({ id, alias: state.backends.find((b) => b.id === id)?.alias })),
       );
       setState(next);
-      toast('ok', 'Síť serverů uložena', 'Servery za proxy se projeví po jejich restartu.');
+      toast('ok', t('Server network saved'), t('Servers behind the proxy pick it up after they restart.'));
     } catch (err) {
-      toast('error', 'Uložení selhalo', (err as Error).message);
+      toast('error', t('Saving failed'), (err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -61,19 +62,19 @@ export function ProxyTab({ server }: { server: ServerInfo }) {
 
   return (
     <div className="stack" style={{ gap: 16 }}>
-      {state.pendingStart && <div className="banner info">Velocity si při prvním startu vytvoří velocity.toml. Servery se do něj zapíšou hned potom.</div>}
+      {state.pendingStart && <div className="banner info">{t('Velocity creates velocity.toml on its first start. The servers are written into it right after.')}</div>}
       <section className="card stack" style={{ gap: 12 }} aria-labelledby="h-proxy">
         <div className="section-head">
           <h2 id="h-proxy" className="h2">
-            Servery za proxy
+            {t('Servers behind the proxy')}
           </h2>
           <button type="button" className="btn primary" disabled={!dirty || busy} onClick={() => void save()}>
             {busy ? <Spinner size={14} /> : null}
-            Uložit
+            {t('Save')}
           </button>
         </div>
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {state.backends.length === 0 && <li className="muted">Nejdřív vytvoř server Paper nebo Fabric.</li>}
+          {state.backends.length === 0 && <li className="muted">{t('Create a Paper or Fabric server first.')}</li>}
           {state.backends.map((b) => {
             const pos = order.indexOf(b.id);
             const on = pos >= 0;
@@ -83,30 +84,30 @@ export function ProxyTab({ server }: { server: ServerInfo }) {
                 <input
                   type="checkbox"
                   className="toggle"
-                  aria-label={`${on ? 'Odpojit' : 'Připojit'} ${b.name}`}
+                  aria-label={on ? t('Disconnect {name}', { name: b.name }) : t('Connect {name}', { name: b.name })}
                   checked={on}
                   disabled={!b.supported || !!b.elsewhere || running}
-                  title={running ? 'Nejdřív server zastav' : undefined}
+                  title={running ? t('Stop the server first') : undefined}
                   onChange={(e) => setOrder(e.target.checked ? [...order, b.id] : order.filter((x) => x !== b.id))}
                 />
                 <span style={{ flex: '1 1 200px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ fontWeight: 500 }}>
                     {b.name}
-                    {pos === 0 && <span className="pill" style={{ marginLeft: 8, background: 'var(--green-soft)', color: 'var(--green-text)' }}>sem hráči přijdou</span>}
+                    {pos === 0 && <span className="pill" style={{ marginLeft: 8, background: 'var(--green-soft)', color: 'var(--green-text)' }}>{t('players arrive here')}</span>}
                   </span>
                   <span className="muted small">
-                    {typeName(all[b.id] ?? ({ type: b.type } as ServerInfo))} · port {b.port}
+                    {typeName(all[b.id] ?? ({ type: b.type } as ServerInfo))} · {t('port {port}', { port: b.port })}
                     {b.alias ? ` · /server ${b.alias}` : ''}
                     {b.reason ? ` · ${b.reason}` : ''}
-                    {b.elsewhere ? ` · je za proxy ${b.elsewhere}` : ''}
+                    {b.elsewhere ? ` · ${t('behind the proxy {name}', { name: b.elsewhere })}` : ''}
                   </span>
                 </span>
                 {on && order.length > 1 && (
                   <span style={{ display: 'flex', gap: 4 }}>
-                    <button type="button" className="btn sm" aria-label={`Posunout ${b.name} výš`} disabled={pos === 0} onClick={() => move(b.id, -1)}>
+                    <button type="button" className="btn sm" aria-label={t('Move {name} up', { name: b.name })} disabled={pos === 0} onClick={() => move(b.id, -1)}>
                       ↑
                     </button>
-                    <button type="button" className="btn sm" aria-label={`Posunout ${b.name} níž`} disabled={pos === order.length - 1} onClick={() => move(b.id, 1)}>
+                    <button type="button" className="btn sm" aria-label={t('Move {name} down', { name: b.name })} disabled={pos === order.length - 1} onClick={() => move(b.id, 1)}>
                       ↓
                     </button>
                   </span>

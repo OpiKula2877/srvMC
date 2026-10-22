@@ -179,7 +179,7 @@ describe('Manual downloads', () => {
     const wait = manual.waitAll('srv', [{ title: 'A', fileName: 'a.jar', url: 'x', size: 5, md5: 'deadbeef' }], async () => undefined, (items) => seen.push(items.length));
     await new Promise((r) => setTimeout(r, 10));
     manual.cancel('srv');
-    await expect(wait).rejects.toThrow(/zrušeno/);
+    await expect(wait).rejects.toThrow(/cancelled/);
     expect(seen.at(-1)).toBe(1);
   });
 });

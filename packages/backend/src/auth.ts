@@ -6,6 +6,7 @@ import { contentTargets, effectiveType, installContent, listInstalled, type Cont
 import type { ServerInstance } from './instance.ts';
 import { readServerProperties, updateServerProperties } from './properties.ts';
 import { UserError } from './providers/types.ts';
+import { t } from '@srvmc/shared';
 
 interface AuthStack {
   folder: 'plugins' | 'mods';
@@ -114,11 +115,11 @@ export async function switchOffAuthPlugins(inst: ServerInstance): Promise<boolea
 }
 
 export async function setAuthMode(inst: ServerInstance, ctx: ContentContext, mode: AuthMode): Promise<AuthState> {
-  if (inst.running) throw new UserError('Nejdřív server zastav – přihlašování se mění jen u vypnutého serveru.');
-  if (inst.cfg.behindProxy) throw new UserError('Server je za proxy – účty hráčů ověřuje proxy.');
+  if (inst.running) throw new UserError(t('Stop the server first – the login mode changes only while it is stopped.'));
+  if (inst.cfg.behindProxy) throw new UserError(t('The server is behind a proxy – the proxy checks player accounts.'));
   const stack = authStack(inst.cfg);
   if (mode === 'hybrid' && !stack) {
-    throw new UserError(contentTargets(inst.cfg).length ? 'Pro tenhle typ serveru zatím neumím přihlašování heslem. Jde to na Paper, Purpur, Spigot, Fabric a Quilt.' : 'Vanilla server neumí pluginy, takže ani přihlašování heslem.');
+    throw new UserError(contentTargets(inst.cfg).length ? t('Password login is not available for this server type yet. It works on Paper, Purpur, Spigot, Fabric and Quilt.') : t('A Vanilla server has no plugins, so no password login either.'));
   }
 
   const jars = await authJars(inst);
@@ -136,6 +137,6 @@ export async function setAuthMode(inst: ServerInstance, ctx: ContentContext, mod
   // Unpaid clients cannot sign chat messages, so a server that lets them in must not demand signatures.
   const online = mode === 'online' ? 'true' : 'false';
   await updateServerProperties(inst.dir, { 'online-mode': online, 'enforce-secure-profile': online });
-  inst.pushLog('system', { online: 'Přihlašování: jen placené účty.', hybrid: 'Přihlašování: placené i neplacené účty s heslem.', offline: 'Přihlašování: kdokoli, bez ověření.' }[mode]);
+  inst.pushLog('system', t({ online: 'Login: paid accounts only.', hybrid: 'Login: paid and unpaid accounts with a password.', offline: 'Login: anyone, unchecked.' }[mode]));
   return getAuthState(inst);
 }

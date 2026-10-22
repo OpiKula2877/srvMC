@@ -50,6 +50,7 @@ import {
   type UpdateServerRequest,
   type WorldInfo,
 } from '@srvmc/shared';
+import { t, type Lang } from '@srvmc/shared';
 
 export interface PropertiesResponse {
   values: Record<string, string>;
@@ -72,7 +73,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   if (res.status === 204) return undefined as T;
   if (res.status === 401 && !url.startsWith('/api/auth/')) window.dispatchEvent(new Event('srvmc-unauthorized'));
   const data = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new ApiError(data.error ?? `Chyba ${res.status}`, res.status);
+  if (!res.ok) throw new ApiError(data.error ?? t('Error {status}', { status: res.status }), res.status);
   return data as T;
 }
 
@@ -195,6 +196,7 @@ export const api = {
   createUser: (body: { name: string; password: string; role: PanelRole; servers?: 'all' | string[] }) => request<PanelUser>('POST', '/api/users', body),
   updateUser: (id: string, body: { name?: string; password?: string; role?: PanelRole; servers?: 'all' | string[] }) => request<PanelUser>('PATCH', `/api/users/${id}`, body),
   deleteUser: (id: string) => request<void>('DELETE', `/api/users/${id}`),
+  setLanguage: (lang: Lang) => request<{ lang: Lang }>('PUT', '/api/panel/language', { lang }),
   canRestart: () => request<{ available: boolean }>('GET', '/api/panel/restart'),
   restartApp: () => request<void>('POST', '/api/panel/restart'),
   setLan: (enabled: boolean) => request<AuthInfo & { restartNeeded: boolean }>('PUT', '/api/panel/lan', { enabled }),
@@ -230,7 +232,7 @@ function rawUpload<T = void>(method: string, url: string, body: Blob, type: stri
           return resolve(undefined as T);
         }
       }
-      let msg = `Chyba ${xhr.status}`;
+      let msg = t('Error {status}', { status: xhr.status });
       try {
         msg = (JSON.parse(xhr.responseText) as { error?: string }).error ?? msg;
       } catch {
@@ -238,7 +240,7 @@ function rawUpload<T = void>(method: string, url: string, body: Blob, type: stri
       }
       reject(new ApiError(msg, xhr.status));
     };
-    xhr.onerror = () => reject(new ApiError('Spojení s jádrem selhalo.', 0));
+    xhr.onerror = () => reject(new ApiError(t('The connection to the core failed.'), 0));
     xhr.send(body);
   });
 }

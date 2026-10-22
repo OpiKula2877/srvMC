@@ -19,6 +19,7 @@ import { providerFor, UserError } from './providers/index.ts';
 import { bedrockPortProps } from './providers/bedrock.ts';
 import { hytaleVersion } from './providers/hytale.ts';
 import type { ServerStore } from './store.ts';
+import { t } from '@srvmc/shared';
 
 export class NotFoundError extends Error {
   readonly statusCode = 404;
@@ -49,9 +50,9 @@ export class ServerManager extends EventEmitter {
   async init(): Promise<void> {
     for (const cfg of await this.store.load()) {
       const inst = this.add(cfg);
-      if (!cfg.installed) inst.setStatus('error', 'Instalace nebyla dokončena. Server smaž a vytvoř znovu.');
+      if (!cfg.installed) inst.setStatus('error', t('The installation did not finish. Delete the server and create it again.'));
       const orphan = await reapOrphan(inst.dir, this.paths.runtimes);
-      if (orphan) inst.pushLog('warn', `Server běžel dál bez srvMC (PID ${orphan}) – ukončil jsem ho, aby uvolnil port a svět.`);
+      if (orphan) inst.pushLog('warn', t('The server kept running without srvMC (PID {pid}) – it was stopped to free the port and the world.', { pid: orphan }));
     }
   }
 
@@ -130,8 +131,8 @@ export class ServerManager extends EventEmitter {
    */
   async runTask<T>(id: string, kind: TaskKind, text: string, job: (report: (pct: number | null, text?: string) => void) => Promise<T>): Promise<T> {
     const inst = this.get(id);
-    if (inst.task) throw new UserError('Na serveru už běží jiná úloha. Počkej, až doběhne.');
-    if (inst.installing) throw new UserError('Počkej, až doběhne instalace.');
+    if (inst.task) throw new UserError(t('Another task is running on the server. Wait for it to finish.'));
+    if (inst.installing) throw new UserError(t('Wait for the installation to finish.'));
     let current = text;
     inst.setTask({ kind, pct: null, text });
     try {
@@ -172,21 +173,21 @@ export class ServerManager extends EventEmitter {
 
   private validateRam(ramMaxMb: number): void {
     const totalMb = Math.floor(os.totalmem() / MB);
-    if (!Number.isInteger(ramMaxMb) || ramMaxMb < 512) throw new UserError('Server potřebuje aspoň 512 MB RAM.');
-    if (ramMaxMb > totalMb - 512) throw new UserError(`Počítač má jen ${Math.floor(totalMb / 1024)} GB RAM. Nech něco i pro Windows.`);
+    if (!Number.isInteger(ramMaxMb) || ramMaxMb < 512) throw new UserError(t('The server needs at least 512 MB of RAM.'));
+    if (ramMaxMb > totalMb - 512) throw new UserError(t('The computer has only {gb} GB of RAM. Leave some for Windows.', { gb: Math.floor(totalMb / 1024) }));
   }
 
   private validatePort(port: number, exceptId?: string): void {
-    if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new UserError('Port musí být číslo 1024–65535.');
+    if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new UserError(t('The port must be a number 1024–65535.'));
     const other = this.portTaken(port, exceptId);
-    if (other) throw new UserError(`Port ${port} už používá server „${other.cfg.name}“.`);
+    if (other) throw new UserError(t('Port {port} is already used by the server "{name}".', { port, name: other.cfg.name }));
   }
 
   async create(req: CreateServerRequest): Promise<ServerInfo> {
     const name = req.name.trim();
-    if (name.length < 1 || name.length > 48) throw new UserError('Název musí mít 1–48 znaků.');
-    if (!providerFor(req.type)) throw new UserError('Tento typ serveru zatím není podporovaný.');
-    if (!req.eulaAccepted) throw new UserError('Bez souhlasu s Minecraft EULA server nepoběží.');
+    if (name.length < 1 || name.length > 48) throw new UserError(t('The name must have 1–48 characters.'));
+    if (!providerFor(req.type)) throw new UserError(t('This server type is not supported yet.'));
+    if (!req.eulaAccepted) throw new UserError(t('The server will not run without accepting the Minecraft EULA.'));
     this.validatePort(req.port);
     this.validateRam(req.ramMaxMb);
 
@@ -219,7 +220,7 @@ export class ServerManager extends EventEmitter {
     const cfg = inst.cfg;
     const provider = providerFor(cfg.type)!;
     try {
-      inst.setInstall({ step: 'plan', pct: null, text: 'Zjišťuji, co je potřeba stáhnout' });
+      inst.setInstall({ step: 'plan', pct: null, text: t('Finding out what to download') });
       const plan = await provider.plan(cfg.version, cfg.build, {
         paths: this.paths,
         serverId: cfg.id,
@@ -262,19 +263,19 @@ export class ServerManager extends EventEmitter {
               cwd: opts?.cwd ?? inst.dir,
               timeoutMs: opts?.timeoutMs,
               onLine: (line) => {
-                inst.pushLog(levelOf(line), `[instalátor] ${line}`);
+                inst.pushLog(levelOf(line), `[${t('installer')}] ${line}`);
                 opts?.onLine?.(line);
               },
             }),
         });
       }
-      if (launchArgs.length === 0) throw new UserError('Instalace neurčila, jak server spustit.');
+      if (launchArgs.length === 0) throw new UserError(t('The installation did not say how to start the server.'));
 
       const edition = editionOf(cfg.type);
-      inst.setInstall({ step: 'config', pct: null, text: 'Připravuji nastavení serveru' });
+      inst.setInstall({ step: 'config', pct: null, text: t('Preparing the server settings') });
       // Velocity has no EULA and no server.properties; it keeps everything in velocity.toml.
       if (edition === 'java' && cfg.type !== 'velocity') {
-        await writeFile(path.join(inst.dir, 'eula.txt'), `# Souhlas s https://aka.ms/MinecraftEULA udělen v srvMC ${new Date().toISOString()}\neula=true\n`);
+        await writeFile(path.join(inst.dir, 'eula.txt'), `# https://aka.ms/MinecraftEULA accepted in srvMC ${new Date().toISOString()}\neula=true\n`);
         await this.writeProperties(inst, { 'server-port': String(cfg.port), 'query.port': String(cfg.port), motd: cfg.name });
       } else if (edition === 'bedrock') {
         // Mojang ships an empty, enabled allow list; like Java's white list it starts off.
@@ -293,7 +294,7 @@ export class ServerManager extends EventEmitter {
       await this.persist();
       inst.installing = false;
       inst.install = undefined;
-      inst.pushLog('system', 'Instalace hotová.');
+      inst.pushLog('system', t('Installation done.'));
       inst.setStatus('stopped', '');
       if (startAfter) await this.start(cfg.id);
     } catch (err) {
@@ -314,15 +315,15 @@ export class ServerManager extends EventEmitter {
     const cfg = inst.cfg;
     if (inst.running) return this.info(inst);
     const launch = cfg.launchArgs ?? (cfg.launchJar ? ['-jar', cfg.launchJar] : null);
-    if (!cfg.installed || !launch) throw new UserError('Server ještě není nainstalovaný.');
-    if (inst.task && inst.task.kind !== 'backup') throw new UserError('Počkej, až doběhne obnova nebo import světa.');
+    if (!cfg.installed || !launch) throw new UserError(t('The server is not installed yet.'));
+    if (inst.task && inst.task.kind !== 'backup') throw new UserError(t('Wait for the restore or world import to finish.'));
     if (inst.launching) return this.info(inst);
 
     inst.launching = true;
     try {
       for (const guard of this.startGuards) await guard(inst);
       const free = portProtocol(cfg.type) === 'UDP' ? await isUdpPortFree(cfg.port) : await isPortFree(cfg.port);
-      if (!free) throw new UserError(`Port ${cfg.port} je obsazený jiným programem.`);
+      if (!free) throw new UserError(t('Port {port} is taken by another program.', { port: cfg.port }));
       if (cfg.runtime === 'native') {
         inst.start(path.join(inst.dir, launch[0]!), launch.slice(1));
       } else {
@@ -399,7 +400,7 @@ export class ServerManager extends EventEmitter {
     const cfg = inst.cfg;
     if (patch.name !== undefined) {
       const name = patch.name.trim();
-      if (name.length < 1 || name.length > 48) throw new UserError('Název musí mít 1–48 znaků.');
+      if (name.length < 1 || name.length > 48) throw new UserError(t('The name must have 1–48 characters.'));
       cfg.name = name;
     }
     if (patch.port !== undefined && patch.port !== cfg.port) {
@@ -430,13 +431,13 @@ export class ServerManager extends EventEmitter {
       cfg.extraJvmArgs = patch.extraJvmArgs;
     }
     if (patch.timezone !== undefined) {
-      if (patch.timezone && !TIMEZONE_RE.test(patch.timezone)) throw new UserError('Neplatné časové pásmo.');
+      if (patch.timezone && !TIMEZONE_RE.test(patch.timezone)) throw new UserError(t('Invalid time zone.'));
       cfg.timezone = patch.timezone || undefined;
     }
     if (patch.autoStart !== undefined) cfg.autoStart = patch.autoStart;
     if (patch.backupSchedule !== undefined) cfg.backupSchedule = patch.backupSchedule;
     if (patch.backupTime !== undefined) {
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(patch.backupTime)) throw new UserError('Čas zálohy zadej jako HH:MM.');
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(patch.backupTime)) throw new UserError(t('Enter the backup time as HH:MM.'));
       cfg.backupTime = patch.backupTime;
     }
     if (patch.backupKeep !== undefined) cfg.backupKeep = Math.min(100, Math.max(1, Math.round(patch.backupKeep)));
@@ -452,9 +453,9 @@ export class ServerManager extends EventEmitter {
 
   async delete(id: string): Promise<void> {
     const inst = this.get(id);
-    if (inst.running) throw new UserError('Nejdřív server zastav.');
-    if (inst.installing) throw new UserError('Počkej, až doběhne instalace.');
-    if (inst.task) throw new UserError('Počkej, až doběhne úloha na serveru.');
+    if (inst.running) throw new UserError(t('Stop the server first.'));
+    if (inst.installing) throw new UserError(t('Wait for the installation to finish.'));
+    if (inst.task) throw new UserError(t('Wait for the task on the server to finish.'));
     this.instances.delete(id);
     await this.persist();
     await rm(inst.dir, { recursive: true, force: true, maxRetries: 3 });

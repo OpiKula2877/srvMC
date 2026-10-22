@@ -6,6 +6,7 @@ import path from 'node:path';
 import { readJarEntries } from '../jarmeta.ts';
 import { paperFamily } from './paper.ts';
 import type { Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 const base = paperFamily('velocity', 'velocity');
 
@@ -84,7 +85,7 @@ export const velocity: Provider = {
         const template = (await readJarEntries(jar, new Set(['default-velocity.toml']))).get('default-velocity.toml');
         await forwardingSecret(ctx.dir);
         if (template) await writeFile(path.join(ctx.dir, 'velocity.toml'), velocityConfig(template, ctx.port, ctx.name, []), 'utf8');
-        else ctx.log('Velocity v sobě nemá výchozí velocity.toml; vytvoří si ho při prvním startu.');
+        else ctx.log(t('Velocity has no default velocity.toml inside; it creates one on the first start.'));
         return ['-jar', p.launchJar!];
       },
     };

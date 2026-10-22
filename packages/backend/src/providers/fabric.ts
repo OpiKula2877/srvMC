@@ -1,6 +1,7 @@
 import { cached, fetchJson } from '../http.ts';
 import { getVersionMeta, javaMajorFor } from '../mojang.ts';
 import { UserError, type PlannedFile, type Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 const META = 'https://meta.fabricmc.net/v2';
 
@@ -44,13 +45,13 @@ export const fabric: Provider = {
 
   async plan(version, build) {
     const loaders = await loadersFor(version);
-    if (loaders.length === 0) throw new UserError(`Fabric pro verzi ${version} neexistuje.`);
+    if (loaders.length === 0) throw new UserError(t('{name} does not exist.', { name: `Fabric ${version}` }));
     const loader = build ?? (loaders.find((l) => l.loader.stable) ?? loaders[0]!).loader.version;
-    if (!loaders.some((l) => l.loader.version === loader)) throw new UserError(`Fabric Loader ${loader} pro ${version} neexistuje.`);
+    if (!loaders.some((l) => l.loader.version === loader)) throw new UserError(t('{name} does not exist.', { name: `Fabric Loader ${loader} (${version})` }));
 
     const installers = await cached('fabric-installers', 10 * 60_000, () => fetchJson<FabricInstaller[]>(`${META}/versions/installer`));
     const installer = (installers.find((i) => i.stable) ?? installers[0])?.version;
-    if (!installer) throw new UserError('Fabric installer není dostupný.');
+    if (!installer) throw new UserError(t('The Fabric installer is not available.'));
 
     const files: PlannedFile[] = [
       {

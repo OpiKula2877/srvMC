@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { app, BrowserWindow, dialog, Menu, nativeImage, safeStorage, session, shell, Tray } from 'electron';
 import { startBackend, type Backend } from '@srvmc/backend';
+import { t } from '@srvmc/shared';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // SRVMC_PORT lets a second copy (e.g. a packaged build under test) run next to a development one.
@@ -64,7 +65,7 @@ function createWindow(): void {
     win?.hide();
     if (!hintShown && tray && process.platform === 'win32') {
       hintShown = true;
-      tray.displayBalloon({ title: 'srvMC běží dál', content: 'Servery jedou na pozadí. Ukončíš ho v oznamovací oblasti.', iconType: 'info' });
+      tray.displayBalloon({ title: t('srvMC keeps running'), content: t('The servers run in the background. Quit it from the notification area.'), iconType: 'info' });
     }
   });
   win.on('closed', () => {
@@ -73,16 +74,22 @@ function createWindow(): void {
   void win.loadURL(backend.url);
 }
 
-function createTray(): void {
-  tray = new Tray(trayIcon());
-  tray.setToolTip('srvMC – správce Minecraft serverů');
+/** Tray texts follow the app's language, so they are set again when it changes. */
+function trayTexts(): void {
+  if (!tray) return;
+  tray.setToolTip(t('srvMC – Minecraft server manager'));
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Otevřít srvMC', click: showWindow },
+      { label: t('Open srvMC'), click: showWindow },
       { type: 'separator' },
-      { label: 'Ukončit (zastaví servery)', click: () => app.quit() },
+      { label: t('Quit (stops the servers)'), click: () => app.quit() },
     ]),
   );
+}
+
+function createTray(): void {
+  tray = new Tray(trayIcon());
+  trayTexts();
   tray.on('click', showWindow);
   tray.on('double-click', showWindow);
 }
@@ -102,12 +109,12 @@ async function boot(): Promise<void> {
     app.relaunch();
     app.quit();
   };
-  const options = { webDir: path.join(here, 'web'), autoStartServers: true, secretBox, localToken, downloadsDir: app.getPath('downloads'), onRestart: restart };
+  const options = { webDir: path.join(here, 'web'), autoStartServers: true, secretBox, localToken, downloadsDir: app.getPath('downloads'), onRestart: restart, onLanguage: trayTexts };
   try {
     backend = await startBackend({ ...options, port: PREFERRED_PORT });
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'EADDRINUSE') {
-      dialog.showErrorBox('srvMC se nespustil', (err as Error).message);
+      dialog.showErrorBox(t('srvMC did not start'), (err as Error).message);
       app.exit(1);
       return;
     }

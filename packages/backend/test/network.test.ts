@@ -94,7 +94,7 @@ describe('DuckDNS input', () => {
     expect(() => normalizeDuckDomain('bad_name')).toThrow();
     expect(() => normalizeDuckDomain('-x')).toThrow();
     expect(checkDuckToken(' 0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0 ')).toBe('0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0');
-    expect(() => checkDuckToken('123')).toThrow(/tvar/);
+    expect(() => checkDuckToken('123')).toThrow(/looks like/);
   });
 });
 
@@ -184,10 +184,10 @@ describe('own domain', () => {
     const records = recordsFor(d('ip'), { port: 25601, publicIp: '203.0.113.42' });
     const good = await checkDomain(d('ip'), records, lookup);
     expect(good.ok).toBe(true);
-    expect(good.message).toMatch(/vede na tvůj server/);
+    expect(good.message).toMatch(/points to your server/);
     const wrongIp = await checkDomain(d('ip'), recordsFor(d('ip'), { port: 25601, publicIp: '198.51.100.9' }), lookup);
     expect(wrongIp.ok).toBe(false);
     expect(wrongIp.records[0]).toMatchObject({ ok: false, found: '203.0.113.42' });
-    expect(wrongIp.message).toMatch(/Zatím nesedí: A survival/);
+    expect(wrongIp.message).toMatch(/Not matching yet: A survival/);
   });
 });

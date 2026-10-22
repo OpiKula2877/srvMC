@@ -14,6 +14,7 @@ import { getProjects, identifyHashes, installModrinth, latestForHashes } from '.
 import type { Paths } from './paths.ts';
 import { UserError } from './providers/types.ts';
 import { installHangar, installSpiget } from './sources.ts';
+import { t } from '@srvmc/shared';
 
 /** The type whose content rules apply: a modpack server behaves like its loader. */
 export function effectiveType(cfg: Pick<ServerConfig, 'type' | 'modpack'>): ServerType {
@@ -65,9 +66,9 @@ export function modrinthLoaders(cfg: Pick<ServerConfig, 'type' | 'modpack' | 'bu
 }
 
 export function targetFor(cfg: Pick<ServerConfig, 'type' | 'modpack' | 'build'>, folder: string): ContentTarget {
-  const t = contentTargets(cfg).find((x) => x.folder === folder);
-  if (!t) throw new UserError(cfg.type === 'vanilla' ? 'Vanilla server neumí mody ani pluginy.' : 'Tenhle server takovou složku nepoužívá.');
-  return t;
+  const target = contentTargets(cfg).find((x) => x.folder === folder);
+  if (!target) throw new UserError(cfg.type === 'vanilla' ? t('A Vanilla server cannot run mods or plugins.') : t('This server does not use such a folder.'));
+  return target;
 }
 
 // ---- registry of what srvMC installed (source, project, version) ----
@@ -182,11 +183,11 @@ export async function checkUpdates(inst: ServerInstance, items: InstalledContent
 }
 
 function requireStopped(inst: ServerInstance, what: string): void {
-  if (inst.running) throw new UserError(`Nejdřív server zastav – za běhu má Windows ${what} zamčené.`);
+  if (inst.running) throw new UserError(t('Stop the server first – Windows keeps the {what} locked while it runs.', { what }));
 }
 
 function checkFile(file: string): void {
-  if (!validName(file) || !isJar(file)) throw new UserError('Neplatný soubor.');
+  if (!validName(file) || !isJar(file)) throw new UserError(t('Invalid file.'));
 }
 
 /** Moves a jar to the srvMC trash and forgets it in the registry. */
@@ -208,12 +209,12 @@ export interface ContentContext {
 /** Installs a project from a source, with dependencies; replaces an older file of the same project. */
 export async function installContent(inst: ServerInstance, ctx: ContentContext, source: ContentSource, id: string, folder: string): Promise<InstallResult> {
   const target = targetFor(inst.cfg, folder);
-  if (!target.sources.includes(source)) throw new UserError('Tenhle zdroj se pro tento server nehodí.');
+  if (!target.sources.includes(source)) throw new UserError(t('This source does not fit this server.'));
   const dir = path.join(inst.dir, target.folder);
   const reg = await loadRegistry(inst.dir);
   const present = new Set<string>();
   for (const [key, e] of Object.entries(reg)) if (key.startsWith(`${target.folder}/`)) present.add(e.source === 'modrinth' ? e.projectId : `${e.source}:${e.projectId.toLowerCase()}`);
-  if (present.has(source === 'modrinth' ? id : `${source}:${id.toLowerCase()}`)) throw new UserError('Tohle už je nainstalované.');
+  if (present.has(source === 'modrinth' ? id : `${source}:${id.toLowerCase()}`)) throw new UserError(t('This is already installed.'));
 
   const onInstalled = async (f: { file: string; projectId: string; versionId?: string; versionNumber: string; title: string; iconUrl?: string }) => {
     // An older file of the same project (a different version) would load twice.
@@ -232,7 +233,7 @@ export async function installContent(inst: ServerInstance, ctx: ContentContext, 
   if (source === 'modrinth') {
     result = await installModrinth(id, { paths: ctx.paths, dir, loaders: modrinthLoaders(inst.cfg, target.kind), gameVersion: inst.cfg.version, present, onInstalled });
   } else if (source === 'curseforge') {
-    if (!/^\d+$/.test(id) || !ctx.manual) throw new UserError('Neplatný projekt CurseForge.');
+    if (!/^\d+$/.test(id) || !ctx.manual) throw new UserError(t('Invalid CurseForge project.'));
     result = await installCurseForge(Number(id), {
       paths: ctx.paths,
       dir,
@@ -256,14 +257,14 @@ export async function installContent(inst: ServerInstance, ctx: ContentContext, 
     result = await installSpiget(id, { paths: ctx.paths, dir, gameVersion: inst.cfg.version, present, onInstalled });
   }
   await saveRegistry(inst.dir, reg);
-  if (result.installed.length) inst.pushLog('system', `Nainstalováno: ${result.installed.join(', ')}${inst.running ? ' – projeví se po restartu.' : ''}`);
-  if (result.manual?.length) inst.pushLog('system', `Čeká na ruční stažení z CurseForge: ${result.manual.map((m) => m.title).join(', ')}`);
+  if (result.installed.length) inst.pushLog('system', `${t('Installed: {list}', { list: result.installed.join(', ') })}${inst.running ? ` – ${t('takes effect after a restart.')}` : ''}`);
+  if (result.manual?.length) inst.pushLog('system', t('Waiting for a manual download from CurseForge: {list}', { list: result.manual.map((m) => m.title).join(', ') }));
   return result;
 }
 
 /** Updates one file (or all with an update) to the newest Modrinth version. Old jars go to the trash. */
 export async function updateContent(inst: ServerInstance, ctx: ContentContext, only?: { folder: string; file: string }): Promise<string[]> {
-  requireStopped(inst, 'jary');
+  requireStopped(inst, t('jars'));
   const items = await checkUpdates(inst, await listInstalled(inst));
   const todo = items.filter((i) => i.update && (!only || (i.folder === only.folder && i.file === only.file)));
   const done: string[] = [];
@@ -288,12 +289,12 @@ export async function updateContent(inst: ServerInstance, ctx: ContentContext, o
     if (wasDisabled && result.installed[0]) await rename(path.join(inst.dir, item.folder, result.installed[0]), path.join(inst.dir, item.folder, `${result.installed[0]}.disabled`));
     done.push(`${item.name} → ${item.update!.versionNumber}`);
   }
-  if (done.length) inst.pushLog('system', `Aktualizováno: ${done.join(', ')}`);
+  if (done.length) inst.pushLog('system', t('Updated: {list}', { list: done.join(', ') }));
   return done;
 }
 
 export async function setEnabled(inst: ServerInstance, folder: string, file: string, enabled: boolean): Promise<void> {
-  requireStopped(inst, 'jary');
+  requireStopped(inst, t('jars'));
   targetFor(inst.cfg, folder);
   checkFile(file);
   const base = file.replace(/\.disabled$/, '');
@@ -303,7 +304,7 @@ export async function setEnabled(inst: ServerInstance, folder: string, file: str
 }
 
 export async function removeContent(inst: ServerInstance, ctx: ContentContext, folder: string, file: string): Promise<void> {
-  requireStopped(inst, 'jary');
+  requireStopped(inst, t('jars'));
   targetFor(inst.cfg, folder);
   checkFile(file);
   const reg = await loadRegistry(inst.dir);
@@ -315,13 +316,13 @@ const LOADER_NAMES: Record<string, string> = { bukkit: 'Bukkit/Paper', paper: 'P
 
 /** Checks a manually uploaded jar against the server before it is kept. Throws with a readable reason. */
 export function checkUploadedJar(cfg: Pick<ServerConfig, 'type' | 'modpack' | 'build'>, target: ContentTarget, meta: JarMeta): void {
-  if (meta.kind === 'unknown') throw new UserError('Tenhle jar nevypadá jako plugin ani mod (chybí plugin.yml / fabric.mod.json / mods.toml).');
-  if (meta.clientOnly) throw new UserError(`${meta.name ?? 'Tenhle mod'} je jen pro klienta – server ho nepotřebuje.`);
+  if (meta.kind === 'unknown') throw new UserError(t('This jar does not look like a plugin or a mod (no plugin.yml / fabric.mod.json / mods.toml).'));
+  if (meta.clientOnly) throw new UserError(t('{name} is client-only – the server does not need it.', { name: meta.name ?? t('This mod') }));
   if (meta.kind !== target.kind) {
-    throw new UserError(target.kind === 'plugin' ? `Tohle je mod pro ${LOADER_NAMES[meta.loaders[0]!]}, sem patří pluginy.` : 'Tohle je plugin, sem patří mody.');
+    throw new UserError(target.kind === 'plugin' ? t('This is a mod for {loader}, plugins go here.', { loader: LOADER_NAMES[meta.loaders[0]!] ?? '' }) : t('This is a plugin, mods go here.'));
   }
   if (target.kind === 'mod') {
     const want = modrinthLoaders(cfg, 'mod');
-    if (!meta.loaders.some((l) => want.includes(l))) throw new UserError(`Tenhle mod je pro ${LOADER_NAMES[meta.loaders[0]!]}, server běží na ${LOADER_NAMES[want[0]!] ?? want[0]}.`);
+    if (!meta.loaders.some((l) => want.includes(l))) throw new UserError(t('This mod is for {loader}, the server runs {server}.', { loader: LOADER_NAMES[meta.loaders[0]!] ?? '', server: LOADER_NAMES[want[0]!] ?? want[0] ?? '' }));
   }
 }

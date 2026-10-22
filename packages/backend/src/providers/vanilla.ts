@@ -1,5 +1,6 @@
 import { getManifest, getVersionMeta, guessJavaMajor, normalizeJavaMajor } from '../mojang.ts';
 import { UserError, type Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 export const vanilla: Provider = {
   type: 'vanilla',
@@ -12,14 +13,14 @@ export const vanilla: Provider = {
   },
 
   async listBuilds() {
-    return [{ id: 'official', label: 'Oficiální od Mojangu', channel: 'stable' }];
+    return [{ id: 'official', label: t('Official from Mojang'), channel: 'stable' }];
   },
 
   async plan(version) {
     const meta = await getVersionMeta(version);
-    if (!meta) throw new UserError(`Verze ${version} neexistuje.`);
+    if (!meta) throw new UserError(t('Version {version} does not exist.', { version }));
     const server = meta.downloads.server;
-    if (!server) throw new UserError(`Verze ${version} nemá serverový soubor.`);
+    if (!server) throw new UserError(t('Version {version} has no server file.', { version }));
     return {
       files: [{ url: server.url, sha1: server.sha1, size: server.size, fileName: 'server.jar', target: 'server.jar' }],
       javaMajor: normalizeJavaMajor(meta.javaVersion?.majorVersion ?? guessJavaMajor(version)),

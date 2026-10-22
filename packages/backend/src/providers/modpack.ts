@@ -15,6 +15,7 @@ import { forge, neoforge } from './forge.ts';
 import { curseForgePacks, technicPacks } from './packsources.ts';
 import { quilt } from './quilt.ts';
 import { UserError, type InstallContext, type Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 const API = 'https://api.modrinth.com/v2';
 
@@ -30,12 +31,12 @@ export interface MrpackIndex {
 /** Which loader a pack needs, and the build id our providers use for it. */
 export function packLoader(deps: Record<string, string>): { type: ServerType; build: string; mc: string } {
   const mc = deps.minecraft;
-  if (!mc) throw new UserError('Modpack neuvádí verzi Minecraftu.');
+  if (!mc) throw new UserError(t('The modpack does not state a Minecraft version.'));
   if (deps['fabric-loader']) return { type: 'fabric', build: deps['fabric-loader'], mc };
   if (deps['quilt-loader']) return { type: 'quilt', build: deps['quilt-loader'], mc };
   if (deps.neoforge) return { type: 'neoforge', build: deps.neoforge, mc };
   if (deps.forge) return { type: 'forge', build: `${mc}-${deps.forge}`, mc };
-  throw new UserError('Modpack používá loader, který srvMC zatím neumí.');
+  throw new UserError(t('The modpack uses a loader srvMC does not support yet.'));
 }
 
 /** Pack file paths must stay inside the server folder and avoid anything that could run code at start. */
@@ -133,16 +134,16 @@ export const modpack: Provider = {
     if (projectId.startsWith('technic:')) return technicPacks.plan(projectId.slice(8), env!);
     if (!versionId) throw new UserError('Vyber verzi modpacku.');
     const [project, version] = await Promise.all([getProject(projectId), fetchJson<MrVersion>(`${API}/version/${encodeURIComponent(versionId)}`)]);
-    if (version.project_id !== project.id) throw new UserError('Verze nepatří k tomuto modpacku.');
+    if (version.project_id !== project.id) throw new UserError(t('The version does not belong to this modpack.'));
     const pack = version.files.find((f) => f.filename.endsWith('.mrpack')) ?? primaryFile(version);
-    if (!pack) throw new UserError('Modpack nemá soubor .mrpack.');
+    if (!pack) throw new UserError(t('The modpack has no .mrpack file.'));
     const spec = { url: pack.url, fileName: pack.filename.replace(/[^\w.+-]/g, '_'), sha1: pack.hashes.sha1, size: pack.size };
 
     // The index decides the loader, so the pack is fetched (into the cache) already while planning.
     if (!env) throw new Error('Modpack plan needs the data paths.');
     const mrpack = await downloadToCache(env.paths, spec);
     const index = JSON.parse((await readJarEntries(mrpack, new Set(['modrinth.index.json']))).get('modrinth.index.json') ?? 'null') as MrpackIndex | null;
-    if (!index || index.game !== 'minecraft') throw new UserError('Soubor modpacku je poškozený (chybí modrinth.index.json).');
+    if (!index || index.game !== 'minecraft') throw new UserError(t('The modpack file is damaged (modrinth.index.json is missing).'));
 
     const loader = packLoader(index.dependencies);
     const base = await LOADER_PROVIDERS[loader.type]!.plan(loader.mc, loader.build);
@@ -171,7 +172,7 @@ export const modpack: Provider = {
           const rel = safePackPath(f.path);
           const url = f.downloads.find((u) => u.startsWith('https://'));
           if (!rel || !url) {
-            ctx.log(`Přeskakuji podezřelý soubor modpacku: ${f.path}`);
+            ctx.log(t('Skipping a suspicious modpack file: {path}', { path: f.path }));
             continue;
           }
           ctx.progress(`Stahuji obsah modpacku · ${i} z ${files.length}`, Math.round((i / files.length) * 100));
@@ -180,9 +181,9 @@ export const modpack: Provider = {
           await mkdir(path.dirname(out), { recursive: true });
           await copyFile(cached, out);
         }
-        ctx.progress('Kopíruji nastavení modpacku', null);
+        ctx.progress(t('Copying the modpack settings'), null);
         const overrides = await extractOverrides(mrpack, ctx.dir);
-        ctx.log(`Modpack ${project.title} ${version.version_number}: ${files.length} souborů, ${overrides} z overrides (${index.files.length - files.length} jen pro klienta přeskočeno).`);
+        ctx.log(t('Modpack {name} {version}: {files} files, {overrides} from overrides ({skipped} client-only skipped).', { name: project.title, version: version.version_number, files: files.length, overrides, skipped: index.files.length - files.length }));
         return launch;
       },
     };

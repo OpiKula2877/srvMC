@@ -18,6 +18,7 @@ import { Dropdown } from "../../components/Dropdown.tsx";
 import { Icon, Spinner } from "../../components/Icon.tsx";
 import { useToast } from "../../components/Overlays.tsx";
 import { href } from "../../router.ts";
+import { t } from '@srvmc/shared';
 
 const DARK_CODES = new Set(["0", "1", "4", "5", "8"]);
 
@@ -43,7 +44,7 @@ async function toServerIcon(file: File): Promise<Blob> {
   return new Promise((resolve, reject) =>
     canvas.toBlob(
       (b) =>
-        b ? resolve(b) : reject(new Error("Obrázek se nepodařilo převést.")),
+        b ? resolve(b) : reject(new Error(t('Could not convert the image.'))),
       "image/png",
     ),
   );
@@ -96,7 +97,7 @@ function PropertyControl({
       <input
         type="checkbox"
         className="toggle"
-        aria-label={def.label}
+        aria-label={t(def.label)}
         checked={value === "true"}
         onChange={(e) => onChange(String(e.target.checked))}
       />
@@ -106,7 +107,7 @@ function PropertyControl({
     return (
       <Dropdown
         value={value}
-        options={def.options ?? []}
+        options={(def.options ?? []).map((o) => ({ ...o, label: t(o.label) }))}
         onChange={onChange}
         searchable={false}
       />
@@ -115,7 +116,7 @@ function PropertyControl({
   if (def.type === "int") {
     return (
       <Stepper
-        label={def.label}
+        label={t(def.label)}
         value={Number(value)}
         min={def.min}
         max={def.max}
@@ -126,7 +127,7 @@ function PropertyControl({
   return (
     <input
       className="input"
-      aria-label={def.label}
+      aria-label={t(def.label)}
       value={value}
       onChange={(e) => onChange(e.target.value)}
     />
@@ -134,9 +135,9 @@ function PropertyControl({
 }
 
 const AUTH_CHOICES: { mode: AuthMode; label: string; danger?: boolean }[] = [
-  { mode: "online", label: "Jen placené účty" },
-  { mode: "hybrid", label: "Placené i neplacené (s heslem)" },
-  { mode: "offline", label: "I neplacené, bez ochrany", danger: true },
+  { mode: "online", label: t('Paid accounts only') },
+  { mode: "hybrid", label: t('Paid and unpaid (with a password)') },
+  { mode: "offline", label: t('Unpaid too, unprotected'), danger: true },
 ];
 
 function AuthCard({
@@ -162,7 +163,7 @@ function AuthCard({
       .auth(server.id)
       .then(setState)
       .catch((err: Error) =>
-        toast("error", "Nepodařilo se zjistit přihlašování", err.message),
+        toast("error", t('Could not read the login mode'), err.message),
       );
   }, [server.id, toast]);
 
@@ -175,21 +176,21 @@ function AuthCard({
       if (mode === "hybrid") {
         toast(
           "ok",
-          "Placené i neplacené účty",
+          t('Paid and unpaid accounts'),
           plugins
-            ? "Hráč si při prvním připojení nastaví heslo. Kdo má placený účet, napíše jednou /premium a dál se přihlásí sám."
-            : "Neplacení si při prvním připojení nastaví heslo, placení se přihlásí sami.",
+            ? t('Players set a password on their first join. Those with a paid account type /premium once and are signed in by themselves from then on.')
+            : t('Unpaid players set a password on their first join, paid ones are signed in by themselves.'),
         );
       } else {
         toast(
           "ok",
-          mode === "online" ? "Jen placené účty" : "Kdokoli bez ověření",
+          mode === "online" ? t('Paid accounts only') : t('Anyone, unchecked'),
         );
       }
     } catch (err) {
       toast(
         "error",
-        "Přihlašování se nepodařilo změnit",
+        t('Could not change the login mode'),
         (err as Error).message,
       );
     } finally {
@@ -205,18 +206,18 @@ function AuthCard({
     >
       <div className="section-head">
         <h2 id="h-ucty" className="h2">
-          Kdo se může připojit
+          {t('Who can join')}
         </h2>
         {(state === null || pending) && <Spinner size={16} />}
       </div>
       {server.behindProxy ? (
         <div className="banner info">
-          Hráči se připojují přes proxy a ta ověřuje jejich účty.
+          {t('Players join through the proxy, and it checks their accounts.')}
         </div>
       ) : (
         <>
           {!stopped && (
-            <div className="banner info">Mění se u vypnutého serveru.</div>
+            <div className="banner info">{t('Changes while the server is stopped.')}</div>
           )}
           {AUTH_CHOICES.map((c) => {
             const unsupported =
@@ -232,7 +233,7 @@ function AuthCard({
                 }
                 title={
                   unsupported
-                    ? "Jde na Paper, Purpur, Spigot, Fabric a Quilt"
+                    ? t('Works on Paper, Purpur, Spigot, Fabric and Quilt')
                     : undefined
                 }
                 onClick={() => void choose(c.mode)}
@@ -246,8 +247,7 @@ function AuthCard({
           })}
           {state?.mode === "offline" && (
             <div className="banner error">
-              Bez ověřování si někdo může vzít jméno operátora. Zapni bílou
-              listinu a dávej OP opatrně.
+              {t('Without account checks someone can take an operator\'s name. Turn on the whitelist and give OP carefully.')}
             </div>
           )}
         </>
@@ -279,7 +279,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
       .properties(server.id)
       .then((r) => setValues(r.values))
       .catch((err: Error) =>
-        toast("error", "Nastavení se nepodařilo načíst", err.message),
+        toast("error", t('Could not load the settings'), err.message),
       );
   }, [server.id, toast]);
 
@@ -330,11 +330,11 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
       setIconVersion(Date.now());
       toast(
         "ok",
-        "Ikona nahrána",
-        running ? "Hráči ji uvidí po restartu serveru." : undefined,
+        t('Icon uploaded'),
+        running ? t('Players see it after the server restarts.') : undefined,
       );
     } catch (err) {
-      toast("error", "Ikonu se nepodařilo nahrát", (err as Error).message);
+      toast("error", t('Could not upload the icon'), (err as Error).message);
     }
   };
 
@@ -346,16 +346,16 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
       setEdits({});
       if (restart) {
         await api.action(server.id, "restart");
-        toast("ok", "Uloženo, server se restartuje");
+        toast("ok", t('Saved, the server is restarting'));
       } else {
         toast(
           "ok",
-          "Uloženo",
-          running ? "Změny se projeví po restartu serveru." : undefined,
+          t('Saved'),
+          running ? t('Changes take effect after the server restarts.') : undefined,
         );
       }
     } catch (err) {
-      toast("error", "Uložení selhalo", (err as Error).message);
+      toast("error", t('Saving failed'), (err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -364,7 +364,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
   const q = filter.trim().toLowerCase();
   const visible = (d: PropertyDef) =>
     !d.managed &&
-    (!q || d.label.toLowerCase().includes(q) || d.key.includes(q));
+    (!q || t(d.label).toLowerCase().includes(q) || d.key.includes(q));
   const unknownKeys = useMemo(
     () =>
       Object.keys(values ?? {})
@@ -378,7 +378,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
     return (
       <div className="empty">
         <span style={{ fontWeight: 600 }}>
-          Hytale má nastavení v souboru config.json
+          {t('Hytale keeps its settings in config.json')}
         </span>
         <a
           className="btn"
@@ -389,7 +389,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
             file: "config.json",
           })}
         >
-          Otevřít config.json
+          {t('Open config.json')}
         </a>
       </div>
     );
@@ -401,7 +401,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
         className="card"
         style={{ display: "flex", gap: 10, alignItems: "center" }}
       >
-        <Spinner /> Načítám nastavení…
+        <Spinner /> {t('Loading settings…')}
       </div>
     );
   }
@@ -416,10 +416,10 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
             style={{ gap: 16 }}
           >
             <h2 id="h-motd" className="h2">
-              Jak server vypadá v seznamu
+              {t('How the server looks in the list')}
             </h2>
 
-            <div className="mc-entry" aria-label="Náhled v seznamu serverů">
+            <div className="mc-entry" aria-label={t('Preview in the server list')}>
               <div className="icon">
                 {hasIcon ? (
                   <img
@@ -446,7 +446,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
             >
               {([0, 1] as const).map((i) => (
                 <label key={i} className="field">
-                  <span className="label">Řádek {i + 1}</span>
+                  <span className="label">{t('Line {n}', { n: i + 1 })}</span>
                   <input
                     ref={lineRefs[i]}
                     className="input mono"
@@ -460,14 +460,14 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
             </div>
             <div className="palette">
               <span className="muted" style={{ fontSize: 13, marginRight: 4 }}>
-                Vložit do řádku {target + 1}:
+                {t('Insert into line {n}:', { n: target + 1 })}
               </span>
               {Object.entries(MC_COLORS).map(([code, color]) => (
                 <button
                   key={code}
                   type="button"
                   title={`&${code}`}
-                  aria-label={`Barva &${code}`}
+                  aria-label={t('Color &{code}', { code })}
                   style={{
                     background: color,
                     color: DARK_CODES.has(code) ? "#fff" : "#000",
@@ -480,7 +480,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
               <button
                 type="button"
                 title="&l"
-                aria-label="Tučně &l"
+                aria-label={t('Bold &l')}
                 style={{ background: "var(--surface-2)" }}
                 onClick={() => insertCode("l")}
               >
@@ -489,7 +489,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
               <button
                 type="button"
                 title="&o"
-                aria-label="Kurzíva &o"
+                aria-label={t('Italic &o')}
                 style={{ background: "var(--surface-2)", fontStyle: "italic" }}
                 onClick={() => insertCode("o")}
               >
@@ -498,7 +498,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
               <button
                 type="button"
                 title="&r"
-                aria-label="Zrušit formát &r"
+                aria-label={t('Reset format &r')}
                 style={{ background: "var(--surface-2)" }}
                 onClick={() => insertCode("r")}
               >
@@ -519,7 +519,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
                 onClick={() => fileRef.current?.click()}
               >
                 <Icon name="folder" size={17} />
-                Nahrát ikonu (oříznu na 64×64)
+                {t('Upload icon (cropped to 64×64)')}
               </button>
               {hasIcon && (
                 <button
@@ -532,13 +532,13 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
                       .catch((err: Error) =>
                         toast(
                           "error",
-                          "Ikonu se nepodařilo smazat",
+                          t('Could not delete the icon'),
                           err.message,
                         ),
                       )
                   }
                 >
-                  Odebrat ikonu
+                  {t('Remove icon')}
                 </button>
               )}
             </div>
@@ -565,10 +565,10 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <label className="searchbox">
               <Icon name="search" size={16} />
-              <span className="sr-only">Hledat vlastnost</span>
+              <span className="sr-only">{t('Search properties')}</span>
               <input
                 value={filter}
-                placeholder="Hledat vlastnost…"
+                placeholder={t('Search properties…')}
                 onChange={(e) => setFilter(e.target.value)}
               />
             </label>
@@ -582,7 +582,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
                 file: "server.properties",
               })}
             >
-              Upravit jako soubor
+              {t('Edit as a file')}
             </a>
           </div>
         </div>
@@ -610,13 +610,13 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
                     margin: "8px 0 2px",
                   }}
                 >
-                  {g.label}
+                  {t(g.label)}
                 </h3>
                 {defs.map((d) => (
                   <div key={d.key} className="prop-row">
                     <div className="meta">
                       <span style={{ fontWeight: 500 }}>
-                        {d.label}
+                        {t(d.label)}
                         {edits[d.key] !== undefined && (
                           <span className="changed-dot"> •</span>
                         )}
@@ -647,7 +647,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
                   margin: "8px 0 2px",
                 }}
               >
-                Ostatní
+                {t('Other')}
               </h3>
               {unknownKeys.map((k) => (
                 <div key={k} className="prop-row">
@@ -678,15 +678,10 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
       </section>
 
       {changed > 0 && (
-        <div className="savebar" role="region" aria-label="Neuložené změny">
+        <div className="savebar" role="region" aria-label={t('Unsaved changes')}>
           <span className="grow">
-            {changed}{" "}
-            {changed === 1
-              ? "neuložená změna"
-              : changed < 5
-                ? "neuložené změny"
-                : "neuložených změn"}
-            {running ? ". Projeví se po restartu." : "."}
+            {changed === 1 ? t("1 unsaved change") : t("{n} unsaved changes", { n: changed })}
+            {running ? ` ${t("Takes effect after a restart.")}` : ""}
           </span>
           <button
             type="button"
@@ -694,7 +689,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
             disabled={busy}
             onClick={() => setEdits({})}
           >
-            Zahodit
+            {t('Discard')}
           </button>
           <button
             type="button"
@@ -702,7 +697,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
             disabled={busy}
             onClick={() => void save(false)}
           >
-            Uložit
+            {t('Save')}
           </button>
           {running && (
             <button
@@ -711,7 +706,7 @@ export function OptionsTab({ server }: { server: ServerInfo }) {
               disabled={busy}
               onClick={() => void save(true)}
             >
-              Uložit a restartovat
+              {t('Save and restart')}
             </button>
           )}
         </div>

@@ -5,6 +5,7 @@ import { MenuButton, Progress, Toggle } from '../../components/Controls.tsx';
 import { Icon, Spinner } from '../../components/Icon.tsx';
 import { ConfirmDialog, PromptDialog, useToast } from '../../components/Overlays.tsx';
 import { bytes, dateTime } from '../../format.ts';
+import { t } from '@srvmc/shared';
 
 const TEXT_EXT = /\.(properties|ya?ml|json5?|txt|toml|cfg|conf|ini|log|md|csv|mcmeta|sk|js|xml|bat|sh|cmd|lang|secret|snbt)$/i;
 
@@ -54,9 +55,9 @@ function Editor({ server, editing, onChange, onClose, onSaved }: { server: Serve
     try {
       await api.saveFile(server.id, editing.path, editing.content);
       onSaved(editing.content);
-      toast('ok', 'Soubor uložen', editing.path);
+      toast('ok', t('File saved'), editing.path);
     } catch (err) {
-      toast('error', 'Uložení selhalo', (err as Error).message);
+      toast('error', t('Saving failed'), (err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -76,21 +77,21 @@ function Editor({ server, editing, onChange, onClose, onSaved }: { server: Serve
   };
 
   return (
-    <section className="stack" aria-label={`Úprava ${editing.path}`} style={{ gap: 12 }}>
+    <section className="stack" aria-label={t('Editing {path}', { path: editing.path })} style={{ gap: 12 }}>
       <div className="section-head">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <span className="mono" style={{ fontWeight: 600, wordBreak: 'break-all' }}>
             {editing.path}
           </span>
-          {dirty && <span className="pill" style={{ background: 'var(--amber-soft)', color: 'var(--amber-text)' }}>neuloženo</span>}
+          {dirty && <span className="pill" style={{ background: 'var(--amber-soft)', color: 'var(--amber-text)' }}>{t('unsaved')}</span>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" className="btn ghost" onClick={() => (dirty ? setConfirmClose(true) : onClose())}>
-            Zavřít
+            {t('Close')}
           </button>
           <button type="button" className="btn primary" disabled={!dirty || busy} onClick={() => void save()}>
             {busy ? <Spinner size={16} /> : null}
-            Uložit
+            {t('Save')}
             <span className="mono small" style={{ opacity: 0.7 }}>
               Ctrl+S
             </span>
@@ -102,7 +103,7 @@ function Editor({ server, editing, onChange, onClose, onSaved }: { server: Serve
           {Array.from({ length: lineCount }, (_, i) => i + 1).join('\n')}
         </div>
         <textarea
-          aria-label={`Obsah souboru ${editing.path}`}
+          aria-label={t('Content of {path}', { path: editing.path })}
           spellCheck={false}
           value={editing.content}
           onChange={(e) => onChange(e.target.value)}
@@ -112,9 +113,9 @@ function Editor({ server, editing, onChange, onClose, onSaved }: { server: Serve
           }}
         />
       </div>
-      {server.status === 'running' && <div className="banner info">Server běží. Změny v konfiguraci se většinou projeví až po restartu.</div>}
+      {server.status === 'running' && <div className="banner info">{t('The server is running. Config changes usually take effect after a restart.')}</div>}
       {confirmClose && (
-        <ConfirmDialog title="Zavřít bez uložení?" text="Změny v souboru se ztratí." confirmLabel="Zavřít" danger onConfirm={onClose} onCancel={() => setConfirmClose(false)} />
+        <ConfirmDialog title={t('Close without saving?')} text={t('The changes to the file are lost.')} confirmLabel={t('Close')} danger onConfirm={onClose} onCancel={() => setConfirmClose(false)} />
       )}
     </section>
   );
@@ -145,7 +146,7 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
           setSelected(new Set());
         })
         .catch((err: Error) => {
-          toast('error', 'Složku se nepodařilo otevřít', err.message);
+          toast('error', t('Could not open the folder'), err.message);
           if (path) setDir('');
         }),
     [server.id, toast],
@@ -161,7 +162,7 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
         const f = await api.fileContent(server.id, path);
         setEditing({ path: f.path, content: f.content, original: f.content });
       } catch (err) {
-        toast('error', 'Soubor nejde otevřít', (err as Error).message);
+        toast('error', t('The file cannot be opened'), (err as Error).message);
       }
     },
     [server.id, toast],
@@ -221,9 +222,9 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
   const allSelected = entries.length > 0 && entries.every((e) => selected.has(e.name));
 
   return (
-    <section className="stack" aria-label="Soubory serveru" style={{ gap: 14 }}>
+    <section className="stack" aria-label={t('Server files')} style={{ gap: 14 }}>
       <div className="section-head">
-        <nav className="crumbs" aria-label="Cesta">
+        <nav className="crumbs" aria-label={t('Path')}>
           <button type="button" onClick={() => setDir('')}>
             server
           </button>
@@ -240,25 +241,25 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
           {selected.size > 0 && (
             <button type="button" className="btn sm danger" style={{ minHeight: 40 }} disabled={running} onClick={() => setDeleting([...selected].map((n) => join(dir, n)))}>
               <Icon name="trash" size={15} />
-              Smazat vybrané ({selected.size})
+              {t('Delete selected ({n})', { n: selected.size })}
             </button>
           )}
           <button type="button" className="btn sm" style={{ minHeight: 40 }} disabled={!dir} onClick={() => setDir(parentOf(dir))}>
             <Icon name="back" size={15} />
-            Nahoru
+            {t('Up')}
           </button>
           <button type="button" className="btn sm" style={{ minHeight: 40 }} onClick={() => setMkdirOpen(true)}>
             <Icon name="plus" size={15} />
-            Nová složka
+            {t('New folder')}
           </button>
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => e.target.files && void uploadFiles(e.target.files)} />
           <button type="button" className="btn sm primary" style={{ minHeight: 40 }} onClick={() => fileInput.current?.click()}>
-            Nahrát soubory
+            {t('Upload files')}
           </button>
         </div>
       </div>
 
-      {running && <div className="banner info">Server běží – mazání a přejmenování je zamčené, aby se nepoškodil svět. Upravovat a nahrávat můžeš.</div>}
+      {running && <div className="banner info">{t('The server is running – deleting and renaming are locked so the world does not break. You can edit and upload.')}</div>}
 
       <div
         className={`card dropzone${dragOver ? ' over' : ''}`}
@@ -278,18 +279,18 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
                   <input
                     type="checkbox"
                     className="check"
-                    aria-label="Vybrat vše"
+                    aria-label={t('Select all')}
                     checked={allSelected}
                     onChange={(e) => setSelected(e.target.checked ? new Set(entries.map((x) => x.name)) : new Set())}
                   />
                 </th>
-                <th scope="col">Název</th>
+                <th scope="col">{t('Name')}</th>
                 <th scope="col" className="num">
-                  Velikost
+                  {t('Size')}
                 </th>
-                <th scope="col">Změněno</th>
+                <th scope="col">{t('Modified')}</th>
                 <th scope="col" className="num">
-                  <span className="sr-only">Akce</span>
+                  <span className="sr-only">{t('Actions')}</span>
                 </th>
               </tr>
             </thead>
@@ -304,7 +305,7 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
               {listing && entries.length === 0 && (
                 <tr>
                   <td colSpan={5} className="muted" style={{ padding: '24px 12px' }}>
-                    Prázdná složka. Přetáhni sem soubory nebo použij Nahrát.
+                    {t('Empty folder. Drop files here or use Upload.')}
                   </td>
                 </tr>
               )}
@@ -317,7 +318,7 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
                       <input
                         type="checkbox"
                         className="check"
-                        aria-label={`Vybrat ${e.name}`}
+                        aria-label={t('Select {name}', { name: e.name })}
                         checked={selected.has(e.name)}
                         onChange={(ev) =>
                           setSelected((s) => {
@@ -348,22 +349,22 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
                     <td className="num">
                       <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                         {e.type === 'file' && (
-                          <a className="btn icon sm" href={api.fileDownloadUrl(server.id, path)} aria-label={`Stáhnout ${e.name}`} download>
+                          <a className="btn icon sm" href={api.fileDownloadUrl(server.id, path)} aria-label={t('Download {name}', { name: e.name })} download>
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                               <path d="M12 3v12M7 10l5 5 5-5M4 21h16" />
                             </svg>
                           </a>
                         )}
                         <MenuButton
-                          label={`Akce s ${e.name}`}
+                          label={t('Actions for {name}', { name: e.name })}
                           items={[
-                            ...(e.type === 'file' && (TEXT_EXT.test(e.name) || e.size < 64 * 1024) ? [{ label: 'Upravit', onClick: () => void openText(path) }] : []),
-                            ...(isZip ? [{ label: 'Rozbalit sem', onClick: () => void act('Rozbalení selhalo', () => api.unzip(server.id, path), 'Rozbaleno') }] : []),
+                            ...(e.type === 'file' && (TEXT_EXT.test(e.name) || e.size < 64 * 1024) ? [{ label: t('Edit'), onClick: () => void openText(path) }] : []),
+                            ...(isZip ? [{ label: t('Unzip here'), onClick: () => void act(t('Unzipping failed'), () => api.unzip(server.id, path), t('Unzipped')) }] : []),
                             ...(running
                               ? []
                               : [
-                                  { label: 'Přejmenovat', onClick: () => setRenaming(e) },
-                                  { label: 'Smazat', color: 'var(--red-text)', onClick: () => setDeleting([path]) },
+                                  { label: t('Rename'), onClick: () => setRenaming(e) },
+                                  { label: t('Delete'), color: 'var(--red-text)', onClick: () => setDeleting([path]) },
                                 ]),
                           ]}
                         />
@@ -378,7 +379,7 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
       </div>
 
       <div style={{ maxWidth: 360 }}>
-        <Toggle label="Při nahrávání přepsat existující soubory" checked={overwrite} onChange={setOverwrite} />
+        <Toggle label={t('Overwrite existing files when uploading')} checked={overwrite} onChange={setOverwrite} />
       </div>
 
       {uploads.length > 0 && (
@@ -391,7 +392,7 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
                 </span>
                 {u.error ? (
                   <button type="button" className="btn ghost sm" onClick={() => setUploads((x) => x.filter((y) => y.id !== u.id))}>
-                    Zavřít
+                    {t('Close')}
                   </button>
                 ) : (
                   <span>{u.pct} %</span>
@@ -405,42 +406,42 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
 
       {mkdirOpen && (
         <PromptDialog
-          title="Nová složka"
-          label="Název složky"
+          title={t('New folder')}
+          label={t('Folder name')}
           initial=""
-          confirmLabel="Vytvořit"
+          confirmLabel={t('Create')}
           onCancel={() => setMkdirOpen(false)}
           onConfirm={(name) => {
             setMkdirOpen(false);
-            void act('Složku se nepodařilo vytvořit', () => api.mkdir(server.id, join(dir, name)));
+            void act(t('Could not create the folder'), () => api.mkdir(server.id, join(dir, name)));
           }}
         />
       )}
       {renaming && (
         <PromptDialog
-          title={`Přejmenovat ${renaming.name}`}
-          label="Nový název"
+          title={t('Rename {name}', { name: renaming.name })}
+          label={t('New name')}
           initial={renaming.name}
-          confirmLabel="Přejmenovat"
+          confirmLabel={t('Rename')}
           onCancel={() => setRenaming(null)}
           onConfirm={(name) => {
             const from = join(dir, renaming.name);
             setRenaming(null);
-            if (name !== renaming.name) void act('Přejmenování selhalo', () => api.rename(server.id, from, join(dir, name)));
+            if (name !== renaming.name) void act(t('Renaming failed'), () => api.rename(server.id, from, join(dir, name)));
           }}
         />
       )}
       {deleting && (
         <ConfirmDialog
-          title={deleting.length === 1 ? `Smazat ${deleting[0]!.split('/').pop()}?` : `Smazat ${deleting.length} položek?`}
-          text="Přesune se do koše srvMC (složka trash v datech srvMC). Odtud to jde ručně vrátit."
-          confirmLabel="Přesunout do koše"
+          title={deleting.length === 1 ? t('Delete {name}?', { name: deleting[0]!.split('/').pop() ?? '' }) : t('Delete {n} items?', { n: deleting.length })}
+          text={t("It moves to srvMC's trash (the trash folder in srvMC's data). You can bring it back from there by hand.")}
+          confirmLabel={t('Move to trash')}
           danger
           onCancel={() => setDeleting(null)}
           onConfirm={() => {
             const paths = deleting;
             setDeleting(null);
-            void act('Mazání selhalo', () => api.deleteFiles(server.id, paths), 'Přesunuto do koše');
+            void act(t('Deleting failed'), () => api.deleteFiles(server.id, paths), t('Moved to trash'));
           }}
         />
       )}

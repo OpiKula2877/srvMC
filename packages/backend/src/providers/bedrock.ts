@@ -7,6 +7,7 @@ import { bedrockUdpRange, type ServerType } from '@srvmc/shared';
 import { downloadToCache } from '../download.ts';
 import { cached, fetchJson, USER_AGENT } from '../http.ts';
 import { UserError, type Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 const LINKS = 'https://net-secondary.web.minecraft-services.net/api/v1.0/download/links';
 
@@ -29,7 +30,7 @@ export function pickLink(links: { downloadType: string; downloadUrl: string }[],
 export async function latestBedrock(preview: boolean): Promise<BedrockLink> {
   const res = await cached('bedrock-links', 10 * 60_000, () => fetchJson<{ result: { links: { downloadType: string; downloadUrl: string }[] } }>(LINKS));
   const link = pickLink(res.result.links, preview);
-  if (!link) throw new UserError(process.platform === 'win32' || process.platform === 'linux' ? 'Mojang teď nenabízí odkaz na Bedrock server.' : 'Bedrock server existuje jen pro Windows a Linux.');
+  if (!link) throw new UserError(process.platform === 'win32' || process.platform === 'linux' ? t('Mojang does not offer a Bedrock server link right now.') : t('The Bedrock server exists only for Windows and Linux.'));
   return link;
 }
 
@@ -93,7 +94,7 @@ function bedrockProvider(type: ServerType, preview: boolean): Provider {
 
     async plan(version) {
       const link = await latestBedrock(preview);
-      if (version !== link.version) throw new UserError(`Mojang nabízí ke stažení jen nejnovější verzi (${link.version}).`);
+      if (version !== link.version) throw new UserError(t('Mojang offers only the newest version ({version}).', { version: link.version }));
       const head = await headInfo(link.url);
       return {
         files: [],
@@ -108,7 +109,7 @@ function bedrockProvider(type: ServerType, preview: boolean): Provider {
           );
           ctx.progress('Rozbaluji Bedrock server', null);
           await extractBedrock(zip, ctx.dir);
-          if (!head.md5) ctx.log('Mojang k souboru neposlal kontrolní součet, stažení nešlo ověřit.');
+          if (!head.md5) ctx.log(t('Mojang sent no checksum for the file, the download could not be verified.'));
           return [bedrockExe()];
         },
       };

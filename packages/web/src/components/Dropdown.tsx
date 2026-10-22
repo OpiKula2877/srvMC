@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Icon } from './Icon.tsx';
+import { t } from '@srvmc/shared';
 
 export interface Option {
   value: string;
@@ -22,7 +23,7 @@ interface Props {
 }
 
 /** Custom select: keyboard navigation, type-to-search, closes on outside click or Escape. */
-export function Dropdown({ label, value, options, onChange, placeholder = 'Vyber…', searchable, mono, disabled, loading }: Props) {
+export function Dropdown({ label, value, options, onChange, placeholder, searchable, mono, disabled, loading }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(-1);
@@ -99,7 +100,7 @@ export function Dropdown({ label, value, options, onChange, placeholder = 'Vyber
         style={mono ? { fontFamily: 'var(--mono)', fontSize: 13 } : undefined}
       >
         {current?.swatch && <span className="swatch" style={{ width: 10, height: 10, borderRadius: 3, background: current.swatch }} />}
-        <span className={`value${current ? '' : ' placeholder'}`}>{loading ? 'Načítám…' : (current?.label ?? placeholder)}</span>
+        <span className={`value${current ? '' : ' placeholder'}`}>{loading ? t('Loading…') : (current?.label ?? placeholder ?? t('Choose…'))}</span>
         <span className="dd-chev">
           <Icon name="chevron" size={16} strokeWidth={2.2} />
         </span>
@@ -109,11 +110,11 @@ export function Dropdown({ label, value, options, onChange, placeholder = 'Vyber
           {canSearch && (
             <label className="dd-search">
               <Icon name="search" size={15} />
-              <span className="sr-only">Hledat</span>
+              <span className="sr-only">{t('Search')}</span>
               <input
                 autoFocus
                 value={query}
-                placeholder="Hledat…"
+                placeholder={t('Search…')}
                 onChange={(e) => {
                   setQuery(e.target.value);
                   setActive(0);
@@ -143,7 +144,7 @@ export function Dropdown({ label, value, options, onChange, placeholder = 'Vyber
                 )}
               </button>
             ))}
-            {filtered.length === 0 && <div className="dd-empty">Nic nenalezeno</div>}
+            {filtered.length === 0 && <div className="dd-empty">{t('Nothing found')}</div>}
           </div>
         </div>
       )}

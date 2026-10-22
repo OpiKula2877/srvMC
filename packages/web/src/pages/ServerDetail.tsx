@@ -23,42 +23,43 @@ import { ModsTab } from './tabs/ModsTab.tsx';
 import { NetworkTab } from './tabs/NetworkTab.tsx';
 import { ScheduleTab } from './tabs/ScheduleTab.tsx';
 import { WorldsTab } from './tabs/WorldsTab.tsx';
+import { locale, t } from '@srvmc/shared';
 
 const TIMEZONES = (() => {
   const zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : ['Europe/Prague', 'Europe/Bratislava', 'UTC'];
-  return [{ value: '', label: 'Podle počítače' }, ...zones.map((z) => ({ value: z, label: z.replace(/_/g, ' ') }))];
+  return [{ value: '', label: t('Same as the computer') }, ...zones.map((z) => ({ value: z, label: z.replace(/_/g, ' ') }))];
 })();
 
 const SLEEP_OPTIONS = [
-  { value: '0', label: 'Nikdy' },
-  { value: '5', label: 'Po 5 minutách' },
-  { value: '10', label: 'Po 10 minutách' },
-  { value: '15', label: 'Po 15 minutách' },
-  { value: '30', label: 'Po 30 minutách' },
-  { value: '60', label: 'Po hodině' },
-  { value: '120', label: 'Po 2 hodinách' },
+  { value: '0', label: t('Never') },
+  { value: '5', label: t('After 5 minutes') },
+  { value: '10', label: t('After 10 minutes') },
+  { value: '15', label: t('After 15 minutes') },
+  { value: '30', label: t('After 30 minutes') },
+  { value: '60', label: t('After an hour') },
+  { value: '120', label: t('After 2 hours') },
 ];
 
 // Each tab needs a capability; some only make sense for a kind of server.
-const TABS: { id: string; label: string; cap: Cap; phase?: number; only?: (s: ServerInfo) => boolean }[] = [
-  { id: 'konzole', label: 'Konzole', cap: 'view' },
-  { id: 'nastaveni', label: 'Nastavení', cap: 'manage' },
-  { id: 'proxy', label: 'Servery za proxy', cap: 'manage', only: (s) => s.type === 'velocity' },
-  { id: 'hraci', label: 'Hráči', cap: 'console', only: (s) => s.type !== 'velocity' },
-  { id: 'moznosti', label: 'Možnosti', cap: 'manage', only: (s) => s.type !== 'velocity' },
-  { id: 'zaznamy', label: 'Záznamy', cap: 'console' },
-  { id: 'soubory', label: 'Soubory', cap: 'manage' },
-  { id: 'svety', label: 'Světy', cap: 'manage', only: (s) => s.type !== 'velocity' },
-  { id: 'mody', label: 'Mody a pluginy', cap: 'manage' },
-  { id: 'grafy', label: 'Grafy', cap: 'view' },
-  { id: 'statistiky', label: 'Statistiky', cap: 'console', only: (s) => s.type !== 'hytale' },
-  { id: 'planovac', label: 'Plánovač', cap: 'manage' },
-  { id: 'sit', label: 'Síť a doména', cap: 'manage' },
+const TABS: { id: string; label: string; cap: Cap; only?: (s: ServerInfo) => boolean }[] = [
+  { id: 'konzole', label: t('Console'), cap: 'view' },
+  { id: 'nastaveni', label: t('Settings'), cap: 'manage' },
+  { id: 'proxy', label: t('Servers behind the proxy'), cap: 'manage', only: (s) => s.type === 'velocity' },
+  { id: 'hraci', label: t('Players'), cap: 'console', only: (s) => s.type !== 'velocity' },
+  { id: 'moznosti', label: t('Options'), cap: 'manage', only: (s) => s.type !== 'velocity' },
+  { id: 'zaznamy', label: t('Logs'), cap: 'console' },
+  { id: 'soubory', label: t('Files'), cap: 'manage' },
+  { id: 'svety', label: t('Worlds'), cap: 'manage', only: (s) => s.type !== 'velocity' },
+  { id: 'mody', label: t('Mods and plugins'), cap: 'manage' },
+  { id: 'grafy', label: t('Graphs'), cap: 'view' },
+  { id: 'statistiky', label: t('Statistics'), cap: 'console', only: (s) => s.type !== 'hytale' },
+  { id: 'planovac', label: t('Scheduler'), cap: 'manage' },
+  { id: 'sit', label: t('Network and domain'), cap: 'manage' },
 ];
 
 const QUICK: Record<Edition, string[]> = {
-  java: ['list', 'save-all', 'time set day', 'weather clear', 'say Restart za 5 minut'],
-  bedrock: ['list', 'time set day', 'weather clear', 'say Restart za 5 minut', 'allowlist list'],
+  java: ['list', 'save-all', 'time set day', 'weather clear', t('say Restart in 5 minutes')],
+  bedrock: ['list', 'time set day', 'weather clear', t('say Restart in 5 minutes'), 'allowlist list'],
   hytale: ['auth status', 'auth login device', 'auth persistence Encrypted', 'help'],
 };
 
@@ -94,7 +95,7 @@ function Console({ server }: { server: ServerInfo }) {
     try {
       await api.command(server.id, c);
     } catch (err) {
-      toast('error', 'Příkaz se nepodařilo odeslat', (err as Error).message);
+      toast('error', t('Could not send the command'), (err as Error).message);
     }
   };
 
@@ -114,29 +115,29 @@ function Console({ server }: { server: ServerInfo }) {
   };
 
   return (
-    <section className="console" aria-label="Konzole" style={{ flex: '999 1 560px', minWidth: 0 }}>
+    <section className="console" aria-label={t('Console')} style={{ flex: '999 1 560px', minWidth: 0 }}>
       <div className="console-bar">
-        <span style={{ fontWeight: 600 }}>Konzole</span>
+        <span style={{ fontWeight: 600 }}>{t('Console')}</span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           <button type="button" className="btn sm" aria-pressed={errorsOnly} onClick={() => setErrorsOnly((v) => !v)} style={errorsOnly ? { borderColor: 'var(--amber)', color: 'var(--amber-text)' } : undefined}>
-            Jen varování a chyby
+            {t('Warnings and errors only')}
           </button>
           <button type="button" className="btn sm" onClick={download} disabled={lines.length === 0}>
-            Stáhnout log
+            {t('Download log')}
           </button>
         </div>
       </div>
       <div
         className="console-log"
         role="log"
-        aria-label="Výstup serveru"
+        aria-label={t('Server output')}
         ref={logRef}
         onScroll={(e) => {
           const el = e.currentTarget;
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
         }}
       >
-        {shown.length === 0 && <div className="muted">Zatím žádný výstup. Spusť server a uvidíš tu, co dělá.</div>}
+        {shown.length === 0 && <div className="muted">{t('No output yet. Start the server to see what it is doing.')}</div>}
         {shown.map((l, i) => (
           <div key={`${l.t}-${i}`} className={`line lv-${l.level}`}>
             <span className="time">{clock(l.t)}</span>
@@ -156,11 +157,11 @@ function Console({ server }: { server: ServerInfo }) {
           <span className="mono" style={{ color: 'var(--green)' }}>
             &gt;
           </span>
-          <span className="sr-only">Příkaz</span>
+          <span className="sr-only">{t('Command')}</span>
           <input
             value={cmd}
             disabled={!running}
-            placeholder={running ? 'Napiš příkaz bez lomítka, např. time set day' : 'Server neběží'}
+            placeholder={running ? t('Type a command without the slash, e.g. time set day') : t('The server is not running')}
             onChange={(e) => setCmd(e.target.value)}
             onKeyDown={(e) => {
               if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
@@ -172,7 +173,7 @@ function Console({ server }: { server: ServerInfo }) {
           />
         </label>
         <button type="submit" className="btn primary" disabled={!running || !cmd.trim()}>
-          Odeslat
+          {t('Send')}
         </button>
       </form>
     </section>
@@ -184,8 +185,8 @@ function Metrics({ server }: { server: ServerInfo }) {
   const recent = points.slice(-90);
   const last = isActive(server) ? recent.at(-1) : undefined;
   return (
-    <aside className="col-side" aria-label="Zátěž">
-      <h2 className="h2">Zátěž</h2>
+    <aside className="col-side" aria-label={t('Load')}>
+      <h2 className="h2">{t('Load')}</h2>
       <div className="card tight stack" style={{ gap: 8 }}>
         <div className="kv" style={{ alignItems: 'baseline' }}>
           <span className="muted" style={{ fontSize: 13 }}>
@@ -195,7 +196,7 @@ function Metrics({ server }: { server: ServerInfo }) {
             <span style={{ fontFamily: 'var(--display)', fontSize: 20, fontWeight: 600 }}>{last ? `${last.cpu.toFixed(0)} %` : '–'}</span>
           </span>
         </div>
-        <Sparkline values={recent.map((p) => p.cpu)} max={100} color="var(--blue)" height={60} label="Využití procesoru" />
+        <Sparkline values={recent.map((p) => p.cpu)} max={100} color="var(--blue)" height={60} label={t('CPU use')} />
       </div>
       <div className="card tight stack" style={{ gap: 8 }}>
         <div className="kv" style={{ alignItems: 'baseline' }}>
@@ -204,23 +205,23 @@ function Metrics({ server }: { server: ServerInfo }) {
           </span>
           <span>
             <span style={{ fontFamily: 'var(--display)', fontSize: 20, fontWeight: 600 }}>{last ? gb(last.memMb) : '–'}</span>{' '}
-            <span className="muted small">z {gb(server.ramMaxMb)}</span>
+            <span className="muted small">{t('of {ram}', { ram: gb(server.ramMaxMb) })}</span>
           </span>
         </div>
-        <Sparkline values={recent.map((p) => p.memMb)} max={server.ramMaxMb * 1.15} color="var(--green)" height={60} label="Využití paměti" />
+        <Sparkline values={recent.map((p) => p.memMb)} max={server.ramMaxMb * 1.15} color="var(--green)" height={60} label={t('Memory use')} />
       </div>
       {last?.tps !== undefined && (
         <div className="card tight kv" style={{ alignItems: 'baseline' }}>
           <span className="muted" style={{ fontSize: 13 }}>
             TPS
           </span>
-          <span style={{ fontFamily: 'var(--display)', fontSize: 20, fontWeight: 600, color: last.tps < 15 ? 'var(--amber-text)' : undefined }}>{last.tps.toFixed(1).replace('.', ',')}</span>
+          <span style={{ fontFamily: 'var(--display)', fontSize: 20, fontWeight: 600, color: last.tps < 15 ? 'var(--amber-text)' : undefined }}>{last.tps.toLocaleString(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
         </div>
       )}
       <div className="card tight stack" style={{ gap: 10 }}>
-        <span style={{ fontWeight: 600 }}>Online hráči ({server.players.length})</span>
+        <span style={{ fontWeight: 600 }}>{t('Players online ({n})', { n: server.players.length })}</span>
         {server.players.length === 0 ? (
-          <span className="muted small">Nikdo nehraje.</span>
+          <span className="muted small">{t('Nobody is playing.')}</span>
         ) : (
           server.players.map((p) => (
             <div key={p} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -233,7 +234,7 @@ function Metrics({ server }: { server: ServerInfo }) {
         )}
       </div>
       <div className="card tight stack" style={{ gap: 6 }}>
-        <span style={{ fontWeight: 600 }}>Složka serveru</span>
+        <span style={{ fontWeight: 600 }}>{t('Server folder')}</span>
         <span className="mono small muted" style={{ wordBreak: 'break-all' }}>
           {server.dir}
         </span>
@@ -277,11 +278,11 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
   const save = async () => {
     setBusy(true);
     try {
-      if (diskOn && diskMb < 1024) throw new Error('Limit disku musí být aspoň 1 GB.');
+      if (diskOn && diskMb < 1024) throw new Error(t('The disk limit must be at least 1 GB.'));
       await api.update(server.id, { name, port, ramMaxMb: ramMb, jvmFlags: flags, extraJvmArgs: extra, autoStart, timezone, crashRestart, wakeOnJoin, sleepAfterMin: Number(sleepAfter), diskLimitMb: diskMb });
-      toast('ok', 'Uloženo', isActive(server) ? 'Port, RAM a Java argumenty se projeví po restartu.' : undefined);
+      toast('ok', t('Saved'), isActive(server) ? t('Port, RAM and Java arguments take effect after a restart.') : undefined);
     } catch (err) {
-      toast('error', 'Uložení selhalo', (err as Error).message);
+      toast('error', t('Saving failed'), (err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -289,11 +290,11 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
 
   return (
     <div className="row">
-      <section className="col-main card stack" style={{ gap: 18 }} aria-label="Základní nastavení">
-        <h2 className="h2">Základní nastavení</h2>
+      <section className="col-main card stack" style={{ gap: 18 }} aria-label={t('Basic settings')}>
+        <h2 className="h2">{t('Basic settings')}</h2>
         <div className="grid-auto" style={{ ['--min' as string]: '220px', gap: 14 }}>
           <label className="field">
-            <span className="label">Název serveru</span>
+            <span className="label">{t('Server name')}</span>
             <input className="input" value={name} maxLength={48} onChange={(e) => setName(e.target.value)} />
           </label>
           <label className="field">
@@ -305,46 +306,46 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
         {isJava && (
         <div className="grid-auto" style={{ ['--min' as string]: '240px', gap: 14 }}>
           <Dropdown
-            label="Optimalizace Javy"
+            label={t('Java tuning')}
             value={flags}
             onChange={(v) => setFlags(v as typeof flags)}
             options={[
-              { value: 'aikar', label: 'Aikar flags (doporučeno)' },
-              { value: 'default', label: 'Výchozí Java' },
+              { value: 'aikar', label: t('Aikar flags (recommended)') },
+              { value: 'default', label: t('Java defaults') },
             ]}
           />
           <label className="field">
-            <span className="label">Vlastní JVM argumenty</span>
+            <span className="label">{t('Custom JVM arguments')}</span>
             <input className="input mono" value={extra} placeholder="-Duser.timezone=Europe/Prague" onChange={(e) => setExtra(e.target.value)} />
           </label>
         </div>
         )}
         {isJava && (
           <div style={{ maxWidth: 420 }}>
-            <Dropdown label="Časové pásmo serveru" value={timezone} options={TIMEZONES} onChange={setTimezone} searchable />
+            <Dropdown label={t('Server time zone')} value={timezone} options={TIMEZONES} onChange={setTimezone} searchable />
           </div>
         )}
-        <Toggle label="Spustit server se zapnutím srvMC" checked={autoStart} onChange={setAutoStart} />
+        <Toggle label={t('Start the server when srvMC starts')} checked={autoStart} onChange={setAutoStart} />
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button type="button" className="btn primary" disabled={!dirty || busy} onClick={save}>
-            Uložit změny
+            {t('Save changes')}
           </button>
         </div>
       </section>
 
       <section className="col-side card stack" style={{ gap: 14 }} aria-labelledby="h-watch">
         <h2 id="h-watch" className="h2">
-          Hlídání a spánek
+          {t('Watchdog and sleep')}
         </h2>
-        <Toggle label="Po pádu restartovat (max 3× za 10 min)" checked={crashRestart} onChange={setCrashRestart} />
-        {editionOf(server.type) === 'java' && <Toggle label="Probudit, když se někdo připojí" checked={wakeOnJoin} onChange={setWakeOnJoin} />}
-        <Dropdown label="Uspat, když nikdo nehraje" value={sleepAfter} options={SLEEP_OPTIONS} onChange={setSleepAfter} searchable={false} />
-        <Toggle label="Limit disku" checked={diskOn} onChange={setDiskOn} />
+        <Toggle label={t('Restart after a crash (at most 3× in 10 min)')} checked={crashRestart} onChange={setCrashRestart} />
+        {editionOf(server.type) === 'java' && <Toggle label={t('Wake up when someone joins')} checked={wakeOnJoin} onChange={setWakeOnJoin} />}
+        <Dropdown label={t('Sleep when nobody plays')} value={sleepAfter} options={SLEEP_OPTIONS} onChange={setSleepAfter} searchable={false} />
+        <Toggle label={t('Disk limit')} checked={diskOn} onChange={setDiskOn} />
         {diskOn && (
           <label className="field">
-            <span className="label">Největší velikost složky serveru</span>
+            <span className="label">{t('Largest size of the server folder')}</span>
             <span className="unit-input">
-              <input inputMode="decimal" aria-label="Limit disku v GB" value={diskGb} onChange={(e) => setDiskGb(e.target.value.replace(/[^0-9,.]/g, ''))} />
+              <input inputMode="decimal" aria-label={t('Disk limit in GB')} value={diskGb} onChange={(e) => setDiskGb(e.target.value.replace(/[^0-9,.]/g, ''))} />
               <span className="muted">GB</span>
             </span>
           </label>
@@ -352,10 +353,10 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
         {server.diskUsageMb !== undefined && (
           <div className="stack" style={{ gap: 6 }}>
             <div className="kv" style={{ fontSize: 13 }}>
-              <span className="muted">Složka serveru</span>
+              <span className="muted">{t('Server folder')}</span>
               <span style={{ color: diskMb && server.diskUsageMb > diskMb ? 'var(--red-text)' : undefined }}>
                 {gb(server.diskUsageMb)}
-                {diskMb ? ` z ${gb(diskMb)}` : ''}
+                {diskMb ? ` ${t('of {ram}', { ram: gb(diskMb) })}` : ''}
               </span>
             </div>
             {diskMb > 0 && <Progress pct={Math.min(100, Math.round((server.diskUsageMb / diskMb) * 100))} />}
@@ -389,10 +390,10 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
   if (!server) {
     return (
       <main className="main">
-        <p className="muted">{loaded ? 'Server neexistuje.' : 'Načítám…'}</p>
+        <p className="muted">{loaded ? t('The server does not exist.') : t('Loading…')}</p>
         {loaded && (
           <a className="btn" href={href({ page: 'overview' })}>
-            Zpět na servery
+            {t('Back to servers')}
           </a>
         )}
       </main>
@@ -404,7 +405,7 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
     try {
       await api.action(server.id, action);
     } catch (err) {
-      toast('error', 'Akce selhala', (err as Error).message);
+      toast('error', t('The action failed'), (err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -414,17 +415,17 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
     setBusy(true);
     try {
       await api.remove(server.id);
-      toast('ok', 'Server smazán', server.name);
+      toast('ok', t('Server deleted'), server.name);
       navigate({ page: 'overview' });
     } catch (err) {
-      toast('error', 'Smazání selhalo', (err as Error).message);
+      toast('error', t('Deleting failed'), (err as Error).message);
       setBusy(false);
       setConfirmDelete(false);
     }
   };
 
   const s = server.status;
-  const tabs = TABS.filter((t) => can(auth, t.cap) && (!t.only || t.only(server)));
+  const tabs = TABS.filter((tb) => can(auth, tb.cap) && (!tb.only || tb.only(server)));
 
   return (
     <main className="main">
@@ -452,10 +453,10 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
             <>
               <button type="button" className="btn primary" disabled={busy} onClick={() => act('start')}>
                 <Icon name="play" size={16} />
-                Spustit
+                {t('Start')}
               </button>
               {can(auth, 'admin') && (
-                <button type="button" className="btn icon" aria-label="Smazat server" disabled={busy} onClick={() => setConfirmDelete(true)}>
+                <button type="button" className="btn icon" aria-label={t('Delete server')} disabled={busy} onClick={() => setConfirmDelete(true)}>
                   <Icon name="trash" size={17} />
                 </button>
               )}
@@ -464,24 +465,24 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
           {s === 'error' && !server.install && (
             <button type="button" className="btn" disabled={busy} onClick={() => setConfirmDelete(true)}>
               <Icon name="trash" size={17} />
-              Smazat
+              {t('Delete')}
             </button>
           )}
           {(s === 'running' || s === 'starting') && (
             <>
               <button type="button" className="btn" disabled={busy || s === 'starting'} onClick={() => act('restart')}>
                 <Icon name="restart" size={17} />
-                Restartovat
+                {t('Restart')}
               </button>
               <button type="button" className="btn danger" disabled={busy} onClick={() => act('stop')}>
                 <Icon name="stop" size={15} />
-                Zastavit
+                {t('Stop')}
               </button>
             </>
           )}
           {s === 'stopping' && (
             <button type="button" className="btn danger" onClick={() => act('kill')}>
-              Ukončit násilně
+              {t('Force stop')}
             </button>
           )}
         </div>
@@ -496,7 +497,7 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
           <Progress pct={server.install.pct} />
           {server.install.link && (
             <a className="btn primary" style={{ alignSelf: 'flex-start' }} href={server.install.link} target="_blank" rel="noreferrer">
-              Otevřít přihlášení
+              {t('Open sign-in')}
             </a>
           )}
           {server.install.manual && <ManualList items={server.install.manual} onCancel={() => void api.cancelManual(server.id)} />}
@@ -507,7 +508,7 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
           <strong>{server.notice.text}</strong>
           {server.notice.link && (
             <a className="btn sm primary" href={server.notice.link} target="_blank" rel="noreferrer">
-              Otevřít přihlášení
+              {t('Open sign-in')}
             </a>
           )}
         </div>
@@ -523,29 +524,22 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
       )}
       {s === 'crashed' && server.lastCrash ? (
         <div className="banner error" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', alignItems: 'baseline' }}>
-          <strong>Server spadl: {server.lastCrash.summary}</strong>
-          {server.lastCrash.suspects.length > 0 && <span>Podezřelé: {server.lastCrash.suspects.join(', ')}</span>}
+          <strong>{t('The server crashed: {summary}', { summary: server.lastCrash.summary })}</strong>
+          {server.lastCrash.suspects.length > 0 && <span>{t('Suspects: {list}', { list: server.lastCrash.suspects.join(', ') })}</span>}
           <a href={href({ page: 'server', id: server.id, tab: 'zaznamy' })} style={{ color: 'inherit' }}>
-            {server.lastCrash.report ? 'Crash report' : 'Záznamy'}
+            {server.lastCrash.report ? t('Crash report') : t('Logs')}
           </a>
         </div>
       ) : (
         (s === 'crashed' || s === 'error') && server.lastError && <div className="banner error">{server.lastError}</div>
       )}
 
-      <nav className="tabs" aria-label="Sekce serveru" ref={tabsRef}>
-        {tabs.map((t) =>
-          t.phase ? (
-            <button key={t.id} type="button" className="tab" disabled title={`Přijde ve fázi ${t.phase}`}>
-              {t.label}
-              <span className="soon">fáze {t.phase}</span>
-            </button>
-          ) : (
-            <a key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} href={href({ page: 'server', id: server.id, tab: t.id })}>
-              {t.label}
-            </a>
-          ),
-        )}
+      <nav className="tabs" aria-label={t('Server sections')} ref={tabsRef}>
+        {tabs.map((tb) => (
+          <a key={tb.id} className={`tab${tab === tb.id ? ' active' : ''}`} href={href({ page: 'server', id: server.id, tab: tb.id })}>
+            {tb.label}
+          </a>
+        ))}
       </nav>
 
       {tab === 'nastaveni' && <Settings key={server.id} server={server} system={system} />}
@@ -560,13 +554,13 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
       {tab === 'sit' && <NetworkTab key={server.id} server={server} />}
       {tab === 'statistiky' && <StatsTab key={server.id} server={server} />}
       {tab === 'proxy' && <ProxyTab key={server.id} server={server} />}
-      {!tabs.some((t) => t.id === tab && t.id !== 'konzole') && (
+      {!tabs.some((tb) => tb.id === tab && tb.id !== 'konzole') && (
         <div className="row">
           {can(auth, 'console') ? (
             <Console server={server} />
           ) : (
             <section className="col-main card">
-              <span className="muted">Konzoli a příkazy vidí moderátor a výš. Server můžeš zapnout a vypnout nahoře.</span>
+              <span className="muted">{t('Moderators and above see the console and commands. You can start and stop the server above.')}</span>
             </section>
           )}
           <Metrics server={server} />
@@ -575,13 +569,13 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
 
       {confirmDelete && (
         <ConfirmDialog
-          title={`Smazat server ${server.name}?`}
+          title={t('Delete server {name}?', { name: server.name })}
           text={
             <>
-              Smaže se celá složka serveru včetně světa a nastavení. <strong style={{ color: 'var(--text)' }}>Nejde to vrátit.</strong>
+              {t('The whole server folder is deleted, world and settings included.')} <strong style={{ color: 'var(--text)' }}>{t('This cannot be undone.')}</strong>
             </>
           }
-          confirmLabel="Smazat natrvalo"
+          confirmLabel={t('Delete for good')}
           danger
           busy={busy}
           onConfirm={remove}

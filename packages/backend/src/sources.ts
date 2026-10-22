@@ -6,6 +6,7 @@ import { downloadToCache } from './download.ts';
 import { fetchJson } from './http.ts';
 import type { Paths } from './paths.ts';
 import { UserError } from './providers/types.ts';
+import { t } from '@srvmc/shared';
 
 const HANGAR = 'https://hangar.papermc.io/api/v1';
 const SPIGET = 'https://api.spiget.org/v2';
@@ -34,7 +35,7 @@ async function assertJar(file: string): Promise<void> {
   try {
     const buf = Buffer.alloc(2);
     await fh.read(buf, 0, 2, 0);
-    if (buf.toString('latin1') !== 'PK') throw new UserError('Stažený soubor není jar – zdroj nejspíš vrátil webovou stránku.');
+    if (buf.toString('latin1') !== 'PK') throw new UserError(t('The downloaded file is not a jar – the source probably returned a web page.'));
   } finally {
     await fh.close();
   }
@@ -85,15 +86,15 @@ export async function installHangar(slug: string, opts: SimpleInstallOptions, re
   opts.present.add(key);
   const version = await hangarVersion(slug, opts.gameVersion);
   if (!version) {
-    if (depth === 0) throw new UserError(`${slug} na Hangaru nemá verzi pro ${opts.gameVersion}.`);
-    result.skipped.push(`${slug} (není verze pro ${opts.gameVersion})`);
+    if (depth === 0) throw new UserError(t('{name} has no version for {version} on Hangar.', { name: slug, version: opts.gameVersion }));
+    result.skipped.push(t('{name} (no version for {version})', { name: slug, version: opts.gameVersion }));
     return result;
   }
   const dl = version.downloads.PAPER;
   if (!dl?.downloadUrl || !dl.fileInfo) {
-    const where = dl?.externalUrl ? ` Stáhni ho ručně: ${dl.externalUrl}` : '';
-    if (depth === 0) throw new UserError(`${slug} se nestahuje z Hangaru, ale z webu autora.${where}`);
-    result.skipped.push(`${slug} (jen na webu autora)`);
+    const where = dl?.externalUrl ? ` ${t('Download it by hand: {url}', { url: dl.externalUrl })}` : '';
+    if (depth === 0) throw new UserError(`${t('{name} is not downloaded from Hangar but from the author\'s website.', { name: slug })}${where}`);
+    result.skipped.push(t('{name} (only on the author\'s website)', { name: slug }));
     return result;
   }
   const fileName = /^[\w.+()\[\] -]+\.jar$/.test(dl.fileInfo.name) ? dl.fileInfo.name : jarName(slug, version.name);
@@ -150,11 +151,11 @@ export async function searchSpiget(query: string, offset: number): Promise<Conte
 }
 
 export async function installSpiget(id: string, opts: SimpleInstallOptions): Promise<InstallResult> {
-  if (!/^\d+$/.test(id)) throw new UserError('Neplatné ID pluginu.');
+  if (!/^\d+$/.test(id)) throw new UserError(t('Invalid plugin ID.'));
   const r = await fetchJson<SpigetResource>(`${SPIGET}/resources/${id}`);
-  if (r.premium) throw new UserError(`${r.name} je placený plugin – kup a stáhni ho na SpigotMC a nahraj ručně.`);
+  if (r.premium) throw new UserError(t('{name} is a paid plugin – buy and download it on SpigotMC and upload it by hand.', { name: r.name }));
   if (r.external || r.file.type === 'external') {
-    throw new UserError(`${r.name} se stahuje z webu autora${r.file.externalUrl ? `: ${r.file.externalUrl}` : ''}. Stáhni ho a nahraj ručně.`);
+    throw new UserError(`${t('{name} downloads from the author\'s website', { name: r.name })}${r.file.externalUrl ? `: ${r.file.externalUrl}` : ''}. ${t('Download it and upload it by hand.')}`);
   }
   // The download URL never changes between releases; the version id keeps the cache honest.
   const fileName = jarName(r.name);

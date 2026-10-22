@@ -72,17 +72,17 @@ describe('players on a stopped server', () => {
     expect(info.bans[0]!.reason).toBe('Ničil stavby op Griefer99');
     expect(info.ips[0]).toMatchObject({ name: '203.0.113.7', expires: 'forever' });
 
-    await expect(addPlayer(inst, 'whitelist', { name: 'steve_cz' })).rejects.toThrow(/už v seznamu/);
+    await expect(addPlayer(inst, 'whitelist', { name: 'steve_cz' })).rejects.toThrow(/already on the list/);
     await removePlayer(inst, 'whitelist', 'STEVE_CZ');
     expect((await playersInfo(inst)).whitelist).toEqual([]);
-    await expect(removePlayer(inst, 'bans', 'Nobody')).rejects.toThrow(/není/);
+    await expect(removePlayer(inst, 'bans', 'Nobody')).rejects.toThrow(/not on the list/);
   });
 
   it('rejects bad names and IPs', async () => {
     const inst = instance();
-    await expect(addPlayer(inst, 'whitelist', { name: 'a b' })).rejects.toThrow(/Jméno hráče/);
-    await expect(addPlayer(inst, 'ops', { name: 'x;stop' })).rejects.toThrow(/Jméno hráče/);
-    await expect(addPlayer(inst, 'ips', { name: '999.1.1.1' })).rejects.toThrow(/IP adresu/);
+    await expect(addPlayer(inst, 'whitelist', { name: 'a b' })).rejects.toThrow(/player name/i);
+    await expect(addPlayer(inst, 'ops', { name: 'x;stop' })).rejects.toThrow(/player name/i);
+    await expect(addPlayer(inst, 'ips', { name: '999.1.1.1' })).rejects.toThrow(/IP address/);
   });
 
   it('toggles the whitelist in server.properties', async () => {
@@ -107,7 +107,7 @@ describe('server.properties validation', () => {
     expect(() => checkPropertyValues({ 'max-players': '0' })).toThrow();
     expect(() => checkPropertyValues({ pvp: 'yes' })).toThrow();
     expect(() => checkPropertyValues({ gamemode: 'god' })).toThrow();
-    expect(() => checkPropertyValues({ 'server-port': '1' })).toThrow(/Nastavení/);
+    expect(() => checkPropertyValues({ 'server-port': '1' })).toThrow(/Settings tab/);
     expect(() => checkPropertyValues({ 'Bad Key': '1' })).toThrow();
   });
 });
@@ -126,8 +126,8 @@ describe('file manager', () => {
     await mkdir(outside);
     await writeFile(path.join(outside, 'secret.txt'), 'x');
     await symlink(outside, path.join(serverDir, 'link'), 'junction');
-    await expect(resolveSafe(serverDir, 'link/secret.txt')).rejects.toThrow(/mimo/);
-    await expect(readText(serverDir, 'link/secret.txt')).rejects.toThrow(/mimo/);
+    await expect(resolveSafe(serverDir, 'link/secret.txt')).rejects.toThrow(/outside/);
+    await expect(readText(serverDir, 'link/secret.txt')).rejects.toThrow(/outside/);
   });
 
   it('lists, writes, reads, renames and trashes', async () => {
@@ -138,10 +138,10 @@ describe('file manager', () => {
     const list = await listDir(serverDir, '');
     expect(list.entries.map((e) => `${e.type}:${e.name}`)).toEqual(['dir:plugins', 'file:paper.jar']);
     expect((await readText(serverDir, 'plugins/config.yml')).content).toBe('motd: ahoj\n');
-    await expect(readText(serverDir, 'paper.jar')).rejects.toThrow(/textový/);
+    await expect(readText(serverDir, 'paper.jar')).rejects.toThrow(/not a text file/);
 
     await renamePath(serverDir, 'plugins/config.yml', 'plugins/config.old.yml');
-    await expect(renamePath(serverDir, 'paper.jar', 'plugins')).rejects.toThrow(/existuje/);
+    await expect(renamePath(serverDir, 'paper.jar', 'plugins')).rejects.toThrow(/already exists/);
 
     const trash = await trashPaths(serverDir, ['plugins'], path.join(root, 'trash'));
     expect(await stat(path.join(serverDir, 'plugins')).catch(() => null)).toBeNull();
@@ -152,8 +152,8 @@ describe('file manager', () => {
   it('streams uploads with a size limit', async () => {
     await saveUpload(serverDir, '', 'mod.jar', Readable.from([Buffer.alloc(1000)]), 2000, false);
     expect((await stat(path.join(serverDir, 'mod.jar'))).size).toBe(1000);
-    await expect(saveUpload(serverDir, '', 'mod.jar', Readable.from([Buffer.alloc(10)]), 2000, false)).rejects.toThrow(/existuje/);
-    await expect(saveUpload(serverDir, '', 'big.jar', Readable.from([Buffer.alloc(3000)]), 2000, false)).rejects.toThrow(/velký/);
+    await expect(saveUpload(serverDir, '', 'mod.jar', Readable.from([Buffer.alloc(10)]), 2000, false)).rejects.toThrow(/already exists/);
+    await expect(saveUpload(serverDir, '', 'big.jar', Readable.from([Buffer.alloc(3000)]), 2000, false)).rejects.toThrow(/too big/);
     expect(await stat(path.join(serverDir, 'big.jar.srvmc-upload')).catch(() => null)).toBeNull();
     await expect(saveUpload(serverDir, '', '..\\evil.jar', Readable.from([Buffer.alloc(1)]), 2000, false)).rejects.toThrow();
   });

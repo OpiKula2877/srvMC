@@ -61,4 +61,4 @@ await writeFile('packages/web/public/app-maskable.png', maskable);
 await writeFile('packages/web/public/apple-touch-icon.png', await sharp(maskable).resize(180, 180).png().toBuffer());
 
 // The server list preview tiles packages/web/public/mc-dirt.png (the game's 16×16 dirt), which is kept as it is.
-console.log('Ikony hotové: apps/desktop/assets, packages/web/public');
+console.log('Icons ready: apps/desktop/assets, packages/web/public');

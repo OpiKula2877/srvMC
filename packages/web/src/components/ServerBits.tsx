@@ -1,6 +1,7 @@
 import { serverTypeInfo, type ServerInfo } from '@srvmc/shared';
 import { Icon } from './Icon.tsx';
 import { useToast } from './Overlays.tsx';
+import { t } from '@srvmc/shared';
 
 export function ServerTile({ server, large }: { server: ServerInfo; large?: boolean }) {
   return (
@@ -23,10 +24,10 @@ export function AddressBox({ server }: { server: ServerInfo }) {
       <button
         type="button"
         className="btn icon sm"
-        aria-label="Kopírovat adresu"
+        aria-label={t('Copy address')}
         onClick={() => {
           void navigator.clipboard.writeText(address);
-          toast('ok', 'Adresa zkopírována', address);
+          toast('ok', t('Address copied'), address);
         }}
       >
         <Icon name="copy" size={16} />

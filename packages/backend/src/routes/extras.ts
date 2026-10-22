@@ -6,11 +6,12 @@ import type { DiscordService } from '../discord.ts';
 import type { PlayerStatsService } from '../playerstats.ts';
 import type { ProxyService } from '../proxy.ts';
 import { UserError } from '../providers/types.ts';
+import { t } from '@srvmc/shared';
 
 const ADDONS = new Set<AddonId>(['geyser', 'bluemap']);
 
 function addonId(v: string): AddonId {
-  if (!ADDONS.has(v as AddonId)) throw new UserError('Neznámý doplněk.');
+  if (!ADDONS.has(v as AddonId)) throw new UserError(t('Unknown add-on.'));
   return v as AddonId;
 }
 

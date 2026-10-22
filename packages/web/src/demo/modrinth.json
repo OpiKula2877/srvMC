@@ -1,0 +1,194 @@
+{
+ "hits": [
+  {
+   "id": "OhduvhIc",
+   "slug": "veinminer",
+   "title": "VeinMiner",
+   "author": "Miraculixx",
+   "description": "Mine the whole vein on mining a single ore/block. Make the tedious mining experience to something satisfying and fun! FTB Ultimine alternative",
+   "downloads": 100117170,
+   "iconUrl": "https://cdn.modrinth.com/data/OhduvhIc/5ea1f538e66ee4d4e5e571ad952cba0e06e0bd5c.png"
+  },
+  {
+   "id": "9eGKb6K1",
+   "slug": "simple-voice-chat",
+   "title": "Simple Voice Chat",
+   "author": "henkelmax",
+   "description": "A working voice chat in Minecraft!",
+   "downloads": 76128750,
+   "iconUrl": "https://cdn.modrinth.com/data/9eGKb6K1/icon.png"
+  },
+  {
+   "id": "vE2FN5qn",
+   "slug": "lmd",
+   "title": "Let Me Despawn",
+   "author": "frikinjay",
+   "description": "Improves performance by tweaking mob despawn rules. Say bye to pesky unintentional persistent mobs.",
+   "downloads": 25423863,
+   "iconUrl": "https://cdn.modrinth.com/data/vE2FN5qn/2609f745e46bd92e57a67e1da07319eb2154c6f7.png"
+  },
+  {
+   "id": "fALzjamp",
+   "slug": "chunky",
+   "title": "Chunky",
+   "author": "pop4959",
+   "description": "Pre-generates chunks, quickly and efficiently",
+   "downloads": 20017600,
+   "iconUrl": "https://cdn.modrinth.com/data/fALzjamp/e1954413665e57b7bae1feef44eda530270c7d47_96.webp"
+  },
+  {
+   "id": "4sP0LXxp",
+   "slug": "veinminer-enchantment",
+   "title": "VeinMiner Enchantment",
+   "author": "Miraculixx",
+   "description": "Veinminer Addon - Adds vineminer enchantment to enchanting tables. Only tools with the enchantment can veinmine",
+   "downloads": 18055467,
+   "iconUrl": "https://cdn.modrinth.com/data/4sP0LXxp/1e37ba60062cf9455fc75d61c653a75d11825783.png"
+  },
+  {
+   "id": "lfHFW1mp",
+   "slug": "journeymap",
+   "title": "JourneyMap",
+   "author": "mysticdrew",
+   "description": "Real-time map used for mapping in-game or your browser as you explore.",
+   "downloads": 15525635,
+   "iconUrl": "https://cdn.modrinth.com/data/lfHFW1mp/a1c571a21a88f6fa59eab67829f216f65ab393ee_96.webp"
+  },
+  {
+   "id": "1u6JkXh5",
+   "slug": "worldedit",
+   "title": "WorldEdit",
+   "author": "me4502",
+   "description": "A Minecraft Map Editor... that runs in-game!\nWith selections, schematics, copy and paste, brushes, and scripting.\nUse it in creative, or use it temporarily in survival.",
+   "downloads": 11845563,
+   "iconUrl": "https://cdn.modrinth.com/data/1u6JkXh5/30698991048ced77e60c4e8284007d3782f2e6a3_96.webp"
+  },
+  {
+   "id": "pZ2wrerK",
+   "slug": "emotecraft",
+   "title": "Emotecraft",
+   "author": "KosmX",
+   "description": "Create your own emotes in Minecraft.",
+   "downloads": 7972878,
+   "iconUrl": "https://cdn.modrinth.com/data/pZ2wrerK/eed7e2c9851392e5879c7d7cb763f142f124e6d2_96.webp"
+  },
+  {
+   "id": "HIuqnQpi",
+   "slug": "common-network",
+   "title": "Common Network",
+   "author": "mysticdrew",
+   "description": "Forge and Fabric Unified Networking Solution",
+   "downloads": 4474507,
+   "iconUrl": "https://cdn.modrinth.com/data/HIuqnQpi/a869c47caa01fa0e63c88ee156c86f51ab49be74_96.webp"
+  },
+  {
+   "id": "1bZhdhsH",
+   "slug": "plasmo-voice",
+   "title": "Plasmo Voice",
+   "author": "kpids",
+   "description": "A proximity voice chat mod with audio positioning and lots of features",
+   "downloads": 4151060,
+   "iconUrl": "https://cdn.modrinth.com/data/1bZhdhsH/72c1641d4af92d93546958a2c87e0b5fd1c3f650_96.webp"
+  },
+  {
+   "id": "XoHTb2Ap",
+   "slug": "calcmod",
+   "title": "CalcMod",
+   "author": "js802025",
+   "description": "A calculator in your chat with shortcuts designed for Minecraft",
+   "downloads": 3570520,
+   "iconUrl": "https://cdn.modrinth.com/data/XoHTb2Ap/fe87f9fb4d48afbe539314b17e1be68ba242e58a.gif"
+  },
+  {
+   "id": "P1OZGk5p",
+   "slug": "viaversion",
+   "title": "ViaVersion",
+   "author": "kennytv",
+   "description": "Allow newer Java Edition clients to connect to older servers.",
+   "downloads": 3467933,
+   "iconUrl": "https://cdn.modrinth.com/data/P1OZGk5p/ad14260a7308dc9e4c3385f3f6b5bdabfe17f295_96.webp"
+  }
+ ],
+ "proj": [
+  {
+   "id": "fALzjamp",
+   "slug": "chunky",
+   "title": "Chunky",
+   "description": "Pre-generates chunks, quickly and efficiently",
+   "downloads": 20053849,
+   "iconUrl": "https://cdn.modrinth.com/data/fALzjamp/e1954413665e57b7bae1feef44eda530270c7d47_96.webp"
+  },
+  {
+   "id": "9eGKb6K1",
+   "slug": "simple-voice-chat",
+   "title": "Simple Voice Chat",
+   "description": "A working voice chat in Minecraft!",
+   "downloads": 76236241,
+   "iconUrl": "https://cdn.modrinth.com/data/9eGKb6K1/icon.png"
+  },
+  {
+   "id": "P1OZGk5p",
+   "slug": "viaversion",
+   "title": "ViaVersion",
+   "description": "Allow newer Java Edition clients to connect to older servers.",
+   "downloads": 3481608,
+   "iconUrl": "https://cdn.modrinth.com/data/P1OZGk5p/ad14260a7308dc9e4c3385f3f6b5bdabfe17f295_96.webp"
+  },
+  {
+   "id": "wKkoqHrH",
+   "slug": "geyser",
+   "title": "Geyser",
+   "description": "A bridge/proxy allowing you to connect to Minecraft: Java Edition servers with Minecraft: Bedrock Edition.",
+   "downloads": 1511397,
+   "iconUrl": "https://cdn.modrinth.com/data/wKkoqHrH/6e8e781d5669ecef9e19a73b5c2eed060d6f73e7_96.webp"
+  },
+  {
+   "id": "hXiIvTyT",
+   "slug": "essentialsx",
+   "title": "EssentialsX",
+   "description": "The essential plugin suite for Paper and Spigot servers.",
+   "downloads": 925408,
+   "iconUrl": "https://cdn.modrinth.com/data/hXiIvTyT/e621675be1d0421b43b65ab8082507532d937009_96.webp"
+  },
+  {
+   "id": "gG7VFbG0",
+   "slug": "tab-was-taken",
+   "title": "TAB",
+   "description": "An all-in-one solution that works",
+   "downloads": 1349535,
+   "iconUrl": "https://cdn.modrinth.com/data/gG7VFbG0/4a7fcab5db748296adac920926efff93b1da416d_96.webp"
+  },
+  {
+   "id": "Vebnzrzj",
+   "slug": "luckperms",
+   "title": "LuckPerms",
+   "description": "A permissions plugin/mod for Minecraft servers.",
+   "downloads": 3040339,
+   "iconUrl": "https://cdn.modrinth.com/data/Vebnzrzj/90943902cc650e95b167265b8f2d7c893f82c8f4_96.webp"
+  },
+  {
+   "id": "Lu3KuzdV",
+   "slug": "coreprotect",
+   "title": "CoreProtect",
+   "description": "CoreProtect is a fast, efficient, data logging and anti-griefing tool. Rollback and restore any amount of damage. Designed with large servers in mind, CoreProtect will record and manage data without impacting your server performance.",
+   "downloads": 589893,
+   "iconUrl": "https://cdn.modrinth.com/data/Lu3KuzdV/b2c4b7b0033ab09cc166f2848003ef3a02c70a83.png"
+  },
+  {
+   "id": "1u6JkXh5",
+   "slug": "worldedit",
+   "title": "WorldEdit",
+   "description": "A Minecraft Map Editor... that runs in-game!\nWith selections, schematics, copy and paste, brushes, and scripting.\nUse it in creative, or use it temporarily in survival.",
+   "downloads": 11863113,
+   "iconUrl": "https://cdn.modrinth.com/data/1u6JkXh5/30698991048ced77e60c4e8284007d3782f2e6a3_96.webp"
+  },
+  {
+   "id": "PFb7ZqK6",
+   "slug": "squaremap",
+   "title": "squaremap",
+   "description": "squaremap is a minimalistic & lightweight world map viewer for Minecraft servers, using the vanilla map rendering style",
+   "downloads": 187218,
+   "iconUrl": "https://cdn.modrinth.com/data/PFb7ZqK6/6074e26ea9600af2cf87f33d3566a425ef309287_96.webp"
+  }
+ ]
+}

@@ -5,6 +5,7 @@ import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { type ProxyBackend, type ProxyState, type ServerType } from '@srvmc/shared';
 import { switchOffAuthPlugins } from './auth.ts';
+import { t } from '@srvmc/shared';
 import { effectiveType, installContent, removeContent, type ContentContext } from './content.ts';
 import type { ServerInstance } from './instance.ts';
 import type { ServerManager } from './manager.ts';
@@ -25,13 +26,13 @@ export function forwardingMethod(type: ServerType): Method | null {
 }
 
 function unsupportedReason(type: ServerType): string {
-  if (type === 'spigot') return 'Spigot umí jen starý způsob přeposílání. Použij Paper.';
-  if (type === 'forge' || type === 'neoforge' || type === 'arclight') return 'Forge a NeoForge za Velocity zatím nepropojím.';
-  if (type === 'vanilla') return 'Vanilla server za proxy nejde (potřebuje Paper nebo Fabric).';
+  if (type === 'spigot') return t('Spigot only knows the old forwarding. Use Paper.');
+  if (type === 'forge' || type === 'neoforge' || type === 'arclight') return t('Forge and NeoForge cannot be put behind Velocity yet.');
+  if (type === 'vanilla') return t('A Vanilla server cannot go behind a proxy (it needs Paper or Fabric).');
   return 'Za proxy jde jen server Minecraft Java (Paper, Purpur, Fabric, Quilt).';
 }
 
-/** Turns a server name into a Velocity server alias ("Survival s kamarády" → "survival-s-kamarady"). */
+/** Turns a server name into a Velocity server alias ("Café Survival" → "cafe-survival"). */
 export function aliasFor(name: string): string {
   const a = name
     .normalize('NFD')
@@ -107,7 +108,7 @@ export class ProxyService {
 
   private proxyOf(id: string): ServerInstance {
     const inst = this.manager.get(id);
-    if (inst.cfg.type !== 'velocity') throw new UserError('Tohle není Velocity server.');
+    if (inst.cfg.type !== 'velocity') throw new UserError(t('This is not a Velocity server.'));
     return inst;
   }
 
@@ -145,18 +146,18 @@ export class ProxyService {
     const aliases = new Set<string>();
     for (const w of wanted) {
       const b = this.manager.get(w.id);
-      if (b.cfg.type === 'velocity') throw new UserError('Proxy nejde dát za jinou proxy.');
+      if (b.cfg.type === 'velocity') throw new UserError(t('A proxy cannot go behind another proxy.'));
       if (!forwardingMethod(effectiveType(b.cfg))) throw new UserError(`${b.cfg.name}: ${unsupportedReason(effectiveType(b.cfg))}`);
-      if (b.cfg.behindProxy && b.cfg.behindProxy !== id) throw new UserError(`${b.cfg.name} už je za jinou proxy.`);
+      if (b.cfg.behindProxy && b.cfg.behindProxy !== id) throw new UserError(t('{name} is already behind another proxy.', { name: b.cfg.name }));
       let alias = (w.alias?.trim() || aliasFor(b.cfg.name)).toLowerCase();
-      if (!ALIAS_RE.test(alias)) throw new UserError('Název serveru v síti smí mít jen malá písmena, číslice, - a _.');
+      if (!ALIAS_RE.test(alias)) throw new UserError(t('A server name in the network may only have lowercase letters, digits, - and _.'));
       for (let n = 2; aliases.has(alias); n++) alias = `${alias.replace(/-\d+$/, '')}-${n}`;
       aliases.add(alias);
       next.push({ id: b.cfg.id, alias });
     }
     const changing = [...next.filter((s) => !before.has(s.id)), ...[...before].filter((b) => !next.some((s) => s.id === b)).map((b) => ({ id: b }))];
     const running = changing.map((c) => this.manager.get(c.id)).filter((i) => i.running);
-    if (running.length) throw new UserError(`Nejdřív zastav ${running.map((i) => i.cfg.name).join(', ')} – nastavení se mění u vypnutého serveru.`);
+    if (running.length) throw new UserError(t('Stop {list} first – the settings change while a server is stopped.', { list: running.map((i) => i.cfg.name).join(', ') }));
 
     const secret = await forwardingSecret(proxy.dir);
     for (const s of next) if (!before.has(s.id)) await this.link(this.manager.get(s.id), id, secret);
@@ -205,8 +206,8 @@ export class ProxyService {
     await this.manager.saveConfig(b.cfg.id, (cfg) => {
       cfg.behindProxy = proxyId;
     });
-    b.pushLog('system', 'Server je za Velocity proxy: hráči se připojují přes proxy, přímo už ne.');
-    if (hadPasswords) b.pushLog('system', 'Přihlašování heslem je vypnuté – účty hráčů teď ověřuje proxy.');
+    b.pushLog('system', t('The server is behind a Velocity proxy: players join through the proxy, no longer directly.'));
+    if (hadPasswords) b.pushLog('system', t('Password login is off – the proxy now checks player accounts.'));
   }
 
   private async unlink(b: ServerInstance): Promise<void> {
@@ -222,7 +223,7 @@ export class ProxyService {
     await this.manager.saveConfig(b.cfg.id, (cfg) => {
       cfg.behindProxy = undefined;
     });
-    b.pushLog('system', 'Server už není za proxy: hráči se připojují přímo.');
+    b.pushLog('system', t('The server is no longer behind a proxy: players join directly.'));
   }
 
   /** A server leaving the network (deleted) is dropped from its proxy; a deleted proxy frees its servers. */
@@ -231,7 +232,7 @@ export class ProxyService {
       await this.manager.saveConfig(b.cfg.id, (cfg) => {
         cfg.behindProxy = undefined;
       });
-      b.pushLog('warn', 'Proxy tohoto serveru byla smazána. Server má dál offline režim a adresu jen pro tento počítač – uprav to v Možnostech.');
+      b.pushLog('warn', t("This server's proxy was deleted. The server keeps offline mode and an address for this computer only – change that in Options."));
     }
     for (const p of this.manager.all().filter((i) => i.cfg.type === 'velocity' && i.cfg.proxy?.servers.some((s) => s.id === id))) {
       await this.manager.saveConfig(p.cfg.id, (cfg) => {

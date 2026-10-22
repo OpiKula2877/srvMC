@@ -1,5 +1,6 @@
 import type { ManualDownload } from '@srvmc/shared';
 import { Icon, Spinner } from './Icon.tsx';
+import { t } from '@srvmc/shared';
 
 /** Files the user downloads on their website; srvMC picks each one up from the Downloads folder. */
 export function ManualList({ items, onCancel }: { items: ManualDownload[]; onCancel?: () => void }) {
@@ -9,11 +10,11 @@ export function ManualList({ items, onCancel }: { items: ManualDownload[]; onCan
       <div className="banner info" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
         <Spinner size={16} />
         <span style={{ flex: 1, minWidth: 200 }}>
-          {left === 1 ? 'Jeden soubor' : `${left} souborů`} jde stáhnout jen z webu autora. Klikni na Stáhnout, soubor se uloží do Stažených souborů a srvMC si ho sám vezme.
+          {left === 1 ? t('One file can only be downloaded from its website. Click Download, the file is saved to Downloads and srvMC picks it up by itself.') : t('{n} files can only be downloaded from their website. Click Download, each file is saved to Downloads and srvMC picks it up by itself.', { n: left })}
         </span>
         {onCancel && (
           <button type="button" className="btn sm" onClick={onCancel}>
-            Zrušit
+            {t('Cancel')}
           </button>
         )}
       </div>
@@ -29,11 +30,11 @@ export function ManualList({ items, onCancel }: { items: ManualDownload[]; onCan
             {i.done ? (
               <span className="pill" style={{ background: 'var(--green-soft)', color: 'var(--green-text)', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                 <Icon name="check" size={14} />
-                Převzato
+                {t('Picked up')}
               </span>
             ) : (
               <a className="btn sm primary" href={i.url} target="_blank" rel="noreferrer">
-                Stáhnout
+                {t('Download')}
               </a>
             )}
           </li>

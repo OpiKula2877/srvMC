@@ -58,11 +58,11 @@ describe('scheduler times', () => {
     expect(created!.id).not.toBe('forged');
     expect(created).toMatchObject({ command: 'say hi op me', everyMin: 30, warn: false, days: [] });
     expect(created!.lastRun).toBeUndefined();
-    expect(() => sanitizeTasks([{ action: 'format c:', time: '04:00', days: [1] }])).toThrow(/Neznámá/);
+    expect(() => sanitizeTasks([{ action: 'format c:', time: '04:00', days: [1] }])).toThrow(/Unknown/);
     expect(() => sanitizeTasks([{ action: 'stop', time: '25:00', days: [1] }])).toThrow(/HH:MM/);
-    expect(() => sanitizeTasks([{ action: 'stop', time: '04:00', days: [] }])).toThrow(/den/);
-    expect(() => sanitizeTasks([{ action: 'stop', repeat: 'interval', time: '04:00', everyMin: 1 }])).toThrow(/Interval/);
-    expect(() => sanitizeTasks([{ action: 'command', time: '04:00', days: [1], command: ' ' }])).toThrow(/příkaz/);
+    expect(() => sanitizeTasks([{ action: 'stop', time: '04:00', days: [] }])).toThrow(/day/);
+    expect(() => sanitizeTasks([{ action: 'stop', repeat: 'interval', time: '04:00', everyMin: 1 }])).toThrow(/interval/i);
+    expect(() => sanitizeTasks([{ action: 'command', time: '04:00', days: [1], command: ' ' }])).toThrow(/command/);
   });
 });
 
@@ -137,7 +137,7 @@ describe('TPS', () => {
 
 describe('crash analysis', () => {
   it('names well-known causes', () => {
-    expect(describeCrash('java.lang.OutOfMemoryError: Java heap space', { port: 25565 })).toEqual({ summary: expect.stringMatching(/paměť/), permanent: false });
+    expect(describeCrash('java.lang.OutOfMemoryError: Java heap space', { port: 25565 })).toEqual({ summary: expect.stringMatching(/memory/), permanent: false });
     expect(describeCrash('**** FAILED TO BIND TO PORT!', { port: 25570 })).toEqual({ summary: expect.stringMatching(/25570/), permanent: true });
     expect(describeCrash('Incompatible mods found!', { port: 1 })?.permanent).toBe(true);
     expect(describeCrash('just an error', { port: 1 })).toBeNull();
@@ -159,9 +159,9 @@ describe('crash analysis', () => {
       { t: 4, level: 'info', text: '[main/INFO]: next' },
     ];
     expect(findSuspects(errorText(lines))).toEqual(['Sodium']);
-    expect(exitText(4294967295)).toMatch(/násilně/);
-    expect(exitText(4294967294)).toBe('Server skončil s kódem -2.');
-    expect(exitText(1)).toBe('Server skončil s kódem 1.');
+    expect(exitText(4294967295)).toMatch(/killed/);
+    expect(exitText(4294967294)).toBe('The server ended with code -2.');
+    expect(exitText(1)).toBe('The server ended with code 1.');
   });
 
   it('reads the newest crash report of the run', async () => {
@@ -175,7 +175,7 @@ describe('crash analysis', () => {
     expect(info).toMatchObject({ report: 'crash-new-server.txt', suspects: ['create-6.0'] });
     expect(info.summary).toBe('Ticking entity · NullPointerException: Cannot invoke "x"');
     const none = await analyzeCrash({ dir: path.join(root, 'nothing'), since: Date.now(), log: [], port: 1, code: 137 });
-    expect(none.summary).toBe('Server skončil s kódem 137.');
+    expect(none.summary).toBe('The server ended with code 137.');
   });
 });
 
@@ -187,8 +187,8 @@ describe('disk limit', () => {
     expect(await folderSize(root)).toBe(1024);
     expect(() => checkDiskRoom({}, 5000, 1e12)).not.toThrow();
     expect(() => checkDiskRoom({ diskLimitMb: 1000 }, 900, 50 * 1024 * 1024)).not.toThrow();
-    expect(() => checkDiskRoom({ diskLimitMb: 1000 }, 900, 200 * 1024 * 1024)).toThrow(/Překročil bys/);
-    expect(() => checkDiskRoom({ diskLimitMb: 1000 }, 1200)).toThrow(/překročil limit/);
+    expect(() => checkDiskRoom({ diskLimitMb: 1000 }, 900, 200 * 1024 * 1024)).toThrow(/would cross/);
+    expect(() => checkDiskRoom({ diskLimitMb: 1000 }, 1200)).toThrow(/crossed its disk limit/);
   });
 });
 

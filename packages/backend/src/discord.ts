@@ -5,6 +5,7 @@ import type { ServerInstance } from './instance.ts';
 import type { ServerManager } from './manager.ts';
 import { UserError } from './providers/types.ts';
 import { seal, unseal, type SecretBox } from './secrets.ts';
+import { t } from '@srvmc/shared';
 
 const WEBHOOK_RE = /^https:\/\/(?:(?:ptb|canary)\.)?(?:discord|discordapp)\.com\/api\/webhooks\/\d{5,25}\/[\w-]{20,100}$/;
 
@@ -20,7 +21,7 @@ const COLORS: Record<DiscordEvent | 'test', number> = {
 
 export function checkWebhook(url: string): string {
   const u = url.trim();
-  if (!WEBHOOK_RE.test(u)) throw new UserError('Vlož adresu webhooku z Discordu (Nastavení kanálu → Integrace → Webhooky → Kopírovat URL).');
+  if (!WEBHOOK_RE.test(u)) throw new UserError(t('Paste the webhook address from Discord (Edit Channel → Integrations → Webhooks → Copy Webhook URL).'));
   return u;
 }
 
@@ -57,18 +58,18 @@ export class DiscordService {
       const now = inst.status;
       if (before === now) return;
       this.prev.set(id, now);
-      if (now === 'running' && before === 'starting') this.notify(inst, 'start', `Server běží. Hráči se mohou připojit na port ${inst.cfg.port}.`);
+      if (now === 'running' && before === 'starting') this.notify(inst, 'start', t('The server is running. Players can join on port {port}.', { port: inst.cfg.port }));
       else if (now === 'stopped' && (before === 'stopping' || before === 'running')) {
         const slept = this.asleep.delete(id);
-        this.notify(inst, slept ? 'sleep' : 'stop', slept ? `Nikdo nehrál, server usnul.${inst.cfg.wakeOnJoin ? ' Probudí se, až se někdo připojí.' : ''}` : 'Server je vypnutý.');
+        this.notify(inst, slept ? 'sleep' : 'stop', slept ? `${t('Nobody played, the server fell asleep.')}${inst.cfg.wakeOnJoin ? ` ${t('It wakes up when someone joins.')}` : ''}` : t('The server is stopped.'));
       }
       else if (now === 'crashed') {
         // The crash analysis lands a moment after the status.
-        setTimeout(() => this.notify(inst, 'crash', `Server spadl${inst.lastCrash ? `: ${inst.lastCrash.summary}` : '.'}`), 2500).unref();
+        setTimeout(() => this.notify(inst, 'crash', inst.lastCrash ? t('The server crashed: {summary}', { summary: inst.lastCrash.summary }) : t('The server crashed.')), 2500).unref();
       }
     });
     inst.on('player', (what: 'join' | 'leave', name: string) =>
-      this.notify(inst, what, what === 'join' ? `**${name}** se připojil (online ${inst.players.size}).` : `**${name}** odešel (online ${inst.players.size}).`),
+      this.notify(inst, what, what === 'join' ? t('**{name}** joined ({n} online).', { name, n: inst.players.size }) : t('**{name}** left ({n} online).', { name, n: inst.players.size })),
     );
   }
 
@@ -118,7 +119,7 @@ export class DiscordService {
     const events = [...new Set(input.events)].filter((e): e is DiscordEvent => (DISCORD_EVENTS as readonly string[]).includes(e));
     const current = inst.cfg.discord?.webhook;
     const webhook = input.webhook ? seal(this.box, checkWebhook(input.webhook)) : current;
-    if (!webhook) throw new UserError('Vlož adresu webhooku z Discordu.');
+    if (!webhook) throw new UserError(t('Paste the webhook address from Discord.'));
     await this.manager.saveConfig(id, (cfg) => {
       cfg.discord = { webhook, events };
     });
@@ -133,11 +134,11 @@ export class DiscordService {
   async test(id: string): Promise<void> {
     const inst = this.manager.get(id);
     const url = this.webhookOf(inst);
-    if (!url) throw new UserError('Nejdřív ulož webhook.');
-    const res = await post(url, embed(inst.cfg.name, 'test', 'Zkušební zpráva ze srvMC. Notifikace fungují.')).catch(() => null);
-    if (!res) throw new UserError('Discord neodpovídá.');
-    if (res.status === 401 || res.status === 404) throw new UserError('Discord webhook nezná – možná byl smazán. Vytvoř nový a vlož ho znovu.');
-    if (!res.ok) throw new UserError(`Discord odmítl zprávu (HTTP ${res.status}).`);
+    if (!url) throw new UserError(t('Save a webhook first.'));
+    const res = await post(url, embed(inst.cfg.name, 'test', t('A test message from srvMC. Notifications work.'))).catch(() => null);
+    if (!res) throw new UserError(t('Discord is not answering.'));
+    if (res.status === 401 || res.status === 404) throw new UserError(t('Discord does not know the webhook – maybe it was deleted. Create a new one and paste it again.'));
+    if (!res.ok) throw new UserError(t('Discord refused the message (HTTP {status}).', { status: res.status }));
   }
 }
 

@@ -7,6 +7,7 @@ import { editionOf, type CrashInfo, type Edition, type InstallProgress, type Log
 import { parseDeviceLogin } from './providers/hytale.ts';
 import { UserError } from './providers/index.ts';
 import { ProcessSampler } from './stats.ts';
+import { t } from '@srvmc/shared';
 
 const PID_FILE = '.srvmc.pid';
 
@@ -183,16 +184,16 @@ export class ServerInstance extends EventEmitter {
   }
 
   start(java: string, args: string[]): void {
-    if (this.proc) throw new UserError('Server už běží.');
+    if (this.proc) throw new UserError(t('The server is already running.'));
     this.stopRequested = false;
     this.players.clear();
     this.setStatus('starting', '');
     const edition = editionOf(this.cfg.type);
-    this.pushLog('system', this.cfg.runtime === 'native' ? `Spouštím ${this.cfg.launchJar}` : `Spouštím ${this.cfg.launchJar} · Java ${this.cfg.javaMajor} · ${this.cfg.ramMaxMb} MB RAM`);
+    this.pushLog('system', this.cfg.runtime === 'native' ? t('Starting {program}', { program: this.cfg.launchJar ?? '' }) : t('Starting {program} · Java {java} · {ram} MB RAM', { program: this.cfg.launchJar ?? '', java: this.cfg.javaMajor ?? '', ram: this.cfg.ramMaxMb }));
     if (edition === 'hytale') {
       setTimeout(() => {
         if (this.proc === proc && this.status === 'starting') {
-          this.pushLog('system', 'Hytale nenapsal, že je připravený, ale běží – beru ho jako spuštěný.');
+          this.pushLog('system', t('Hytale did not say it is ready, but it runs – treating it as started.'));
           this.ready();
         }
       }, HYTALE_READY_AFTER).unref();
@@ -203,7 +204,7 @@ export class ServerInstance extends EventEmitter {
     this.startedAt = Date.now();
 
     proc.on('error', (err) => {
-      this.pushLog('error', `Nepodařilo se spustit Javu: ${err.message}`);
+      this.pushLog('error', t('Could not start Java: {message}', { message: err.message }));
       // A process that never started emits no 'close'.
       if (this.proc === proc && proc.pid === undefined) this.onExit(-1, null);
     });
@@ -254,7 +255,7 @@ export class ServerInstance extends EventEmitter {
   }
 
   private ready(): void {
-    this.pushLog('system', 'Server je připravený. Hráči se mohou připojit.');
+    this.pushLog('system', t('The server is ready. Players can join.'));
     this.setStatus('running');
     // A new Hytale server has to sign in to the owner's account once before players can join.
     if (editionOf(this.cfg.type) === 'hytale' && !this.cfg.hytaleAuthed) {
@@ -280,7 +281,7 @@ export class ServerInstance extends EventEmitter {
       return;
     }
     if (parseDeviceLogin(text, this.login) && this.login.link) {
-      this.notice = { text: `Přihlas server k účtu Hytale${this.login.code ? ` – kód ${this.login.code}` : ''}`, link: this.login.link };
+      this.notice = { text: this.login.code ? t('Sign the server in to a Hytale account – code {code}', { code: this.login.code }) : t('Sign the server in to a Hytale account'), link: this.login.link };
       this.emit('status');
     }
   }
@@ -299,7 +300,7 @@ export class ServerInstance extends EventEmitter {
     if (crashed) {
       // Windows reports exit codes as unsigned 32-bit numbers (4294967295 = -1).
       const shown = code !== null && code > 2 ** 31 ? code - 2 ** 32 : (code ?? signal);
-      const msg = `Server spadl (kód ${shown}).`;
+      const msg = t('The server crashed (code {code}).', { code: String(shown) });
       this.pushLog('error', msg);
       this.setStatus('crashed', msg);
     } else {
@@ -312,7 +313,7 @@ export class ServerInstance extends EventEmitter {
 
   sendCommand(command: string): void {
     const stdin = this.proc?.stdin;
-    if (!stdin?.writable) throw new UserError('Server neběží.');
+    if (!stdin?.writable) throw new UserError(t('The server is not running.'));
     const clean = command.replace(/[\r\n]+/g, ' ').trim().replace(/^\//, '');
     if (!clean) return;
     if (clean === stopCommand(this.cfg.type) || clean === 'stop') this.stopRequested = true;
@@ -375,7 +376,7 @@ export class ServerInstance extends EventEmitter {
       // stdin already closed; fall through to the kill below
     }
     if (!(await this.waitForExit(timeoutMs))) {
-      this.pushLog('warn', 'Server neodpověděl včas, ukončuji ho násilně.');
+      this.pushLog('warn', t('The server did not answer in time, killing it.'));
       this.kill();
       await this.waitForExit(10_000);
     }

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../api.ts';
 import { Spinner } from '../components/Icon.tsx';
+import { t } from '@srvmc/shared';
 
 export function Login() {
   const [name, setName] = useState('');
@@ -32,11 +33,11 @@ export function Login() {
           </h1>
         </div>
         <label className="field">
-          <span className="label">Jméno</span>
+          <span className="label">{t('User name')}</span>
           <input className="input" autoFocus autoComplete="username" value={name} maxLength={32} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="field">
-          <span className="label">Heslo</span>
+          <span className="label">{t('Password')}</span>
           <input className="input" type="password" autoComplete="current-password" value={password} maxLength={200} onChange={(e) => setPassword(e.target.value)} />
         </label>
         {error && (
@@ -46,7 +47,7 @@ export function Login() {
         )}
         <button type="submit" className="btn primary" style={{ minHeight: 46 }} disabled={busy || !name.trim() || !password}>
           {busy ? <Spinner size={16} /> : null}
-          Přihlásit
+          {t('Sign in')}
         </button>
       </form>
     </main>

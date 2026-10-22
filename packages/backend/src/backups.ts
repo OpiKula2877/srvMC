@@ -8,6 +8,7 @@ import type { ServerManager } from './manager.ts';
 import type { Paths } from './paths.ts';
 import { UserError } from './providers/index.ts';
 import { collectFiles, writeZip } from './zip.ts';
+import { t } from '@srvmc/shared';
 
 const NAME_RE = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})_(manual|auto|safety)\.zip$/;
 
@@ -97,7 +98,7 @@ export class BackupService {
   }
 
   fileFor(id: string, file: string): string {
-    if (!parseBackupName(file)) throw new UserError('Neplatný název zálohy.');
+    if (!parseBackupName(file)) throw new UserError(t('Invalid backup name.'));
     return path.join(this.dirFor(id), file);
   }
 
@@ -119,7 +120,7 @@ export class BackupService {
     inst.sendCommand('save-off');
     const saved = inst.waitForLine(/Saved the game|All dimensions are saved|Saved the world/i, 120_000);
     inst.sendCommand('save-all flush');
-    if (!(await saved)) inst.pushLog('warn', 'Server nepotvrdil uložení světa, pokračuji i tak.');
+    if (!(await saved)) inst.pushLog('warn', t('The server did not confirm saving the world, going on anyway.'));
     let resumed = false;
     return () => {
       if (resumed) return;
@@ -139,7 +140,7 @@ export class BackupService {
       inst.sendCommand('save query');
       ready = !!(await answer);
     }
-    if (!ready) inst.pushLog('warn', 'Server nepotvrdil uložení světa, pokračuji i tak.');
+    if (!ready) inst.pushLog('warn', t('The server did not confirm saving the world, going on anyway.'));
     let resumed = false;
     return () => {
       if (resumed) return;
@@ -158,24 +159,24 @@ export class BackupService {
   }
 
   async create(id: string, kind: BackupKind): Promise<BackupInfo> {
-    return this.manager.runTask(id, 'backup', 'Připravuji zálohu', (report) => this.createUnlocked(id, kind, report));
+    return this.manager.runTask(id, 'backup', t('Preparing the backup'), (report) => this.createUnlocked(id, kind, report));
   }
 
   private async createUnlocked(id: string, kind: BackupKind, report: (pct: number | null, text?: string) => void): Promise<BackupInfo> {
     const inst = this.manager.get(id);
-    if (!inst.cfg.installed) throw new UserError('Server ještě není nainstalovaný.');
+    if (!inst.cfg.installed) throw new UserError(t('The server is not installed yet.'));
     const dir = this.dirFor(id);
     await mkdir(dir, { recursive: true });
     const file = backupFileName(kind);
     await this.withSavesPaused(inst, async () => {
-      report(null, 'Hledám soubory k zálohování');
+      report(null, t('Looking for files to back up'));
       const tops = (await readdir(inst.dir)).filter((n) => !skipInBackup(n));
       const items = await collectFiles(inst.dir, tops, skipInBackup);
       const mb = (n: number) => (n / 1024 / 1024).toFixed(0);
-      await writeZip(items, path.join(dir, file), (done, total) => report(total ? Math.round((done / total) * 100) : null, `Zálohuji · ${mb(done)} z ${mb(total)} MB`));
+      await writeZip(items, path.join(dir, file), (done, total) => report(total ? Math.round((done / total) * 100) : null, t('Backing up · {done} of {total} MB', { done: mb(done), total: mb(total) })));
     });
     const s = await stat(path.join(dir, file));
-    inst.pushLog('system', `Záloha hotová: ${file} (${(s.size / 1024 / 1024).toFixed(1)} MB)`);
+    inst.pushLog('system', t('Backup done: {file} ({size} MB)', { file, size: (s.size / 1024 / 1024).toFixed(1) }));
     await this.rotate(inst.cfg);
     return { file, kind, createdAt: parseBackupName(file)!.createdAt, size: s.size };
   }
@@ -196,12 +197,12 @@ export class BackupService {
    */
   async restore(id: string, file: string): Promise<void> {
     const inst = this.manager.get(id);
-    if (inst.running) throw new UserError('Nejdřív server zastav.');
+    if (inst.running) throw new UserError(t('Stop the server first.'));
     const zip = this.fileFor(id, file);
-    if (!(await stat(zip).catch(() => null))) throw new UserError('Záloha neexistuje.');
+    if (!(await stat(zip).catch(() => null))) throw new UserError(t('The backup does not exist.'));
 
-    await this.manager.runTask(id, 'restore', 'Zálohuji současný stav', async (report) => {
-      await this.createUnlocked(id, 'safety', (pct, text) => report(pct, text && `Pojistná záloha · ${text}`));
+    await this.manager.runTask(id, 'restore', t('Backing up the current state'), async (report) => {
+      await this.createUnlocked(id, 'safety', (pct, text) => report(pct, text && t('Safety backup · {text}', { text })));
       const tmp = path.join(inst.dir, `.srvmc-restore-${Date.now()}`);
       await mkdir(tmp, { recursive: true });
       try {
@@ -210,17 +211,17 @@ export class BackupService {
           dir: tmp,
           onEntry: (_e, z) => {
             seen++;
-            if (seen % 50 === 0) report(Math.round((seen / Math.max(1, z.entryCount)) * 100), 'Rozbaluji zálohu');
+            if (seen % 50 === 0) report(Math.round((seen / Math.max(1, z.entryCount)) * 100), t('Unpacking the backup'));
           },
         });
         const tops = await readdir(tmp);
-        report(null, 'Vracím soubory na místo');
+        report(null, t('Putting the files back'));
         await trashPaths(inst.dir, tops.filter((t) => t !== path.basename(tmp)), path.join(this.paths.trash, id));
         for (const t of tops) await rename(path.join(tmp, t), path.join(inst.dir, t));
       } finally {
         await rm(tmp, { recursive: true, force: true });
       }
-      inst.pushLog('system', `Obnoveno ze zálohy ${file}.`);
+      inst.pushLog('system', t('Restored from the backup {file}.', { file }));
     });
   }
 
@@ -258,7 +259,7 @@ export class BackupService {
       try {
         await this.create(server.id, 'auto');
       } catch (err) {
-        this.manager.get(server.id).pushLog('error', `Automatická záloha selhala: ${(err as Error).message}`);
+        this.manager.get(server.id).pushLog('error', t('Automatic backup failed: {message}', { message: (err as Error).message }));
       }
     }
   }

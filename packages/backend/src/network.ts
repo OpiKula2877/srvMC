@@ -14,6 +14,7 @@ import { UserError } from './providers/types.ts';
 import { seal, unseal, type SecretBox } from './secrets.ts';
 import { addMapping, deleteMapping, externalIp, findGateway, type Gateway, type Mapping } from './upnp.ts';
 import { WakeListener } from './wake.ts';
+import { t } from '@srvmc/shared';
 
 const MINUTE = 60_000;
 
@@ -90,7 +91,7 @@ export class NetworkService {
     if (duck) this.duck = { configured: true, domain: duck.domain };
     const secret = this.secret();
     if (secret) void this.agent.start(secret).catch(() => undefined);
-    else if (this.stored.playit) this.playitError = 'Klíč playit.gg nejde přečíst (byl uložený jinou instalací). Propoj účet znovu.';
+    else if (this.stored.playit) this.playitError = t('The playit.gg key cannot be read (another installation saved it). Connect the account again.');
     // Leases run out and routers reboot: mappings and the DuckDNS address are refreshed regularly.
     this.timers.push(setInterval(() => void this.renewUpnp(), 20 * MINUTE));
     this.timers.push(setInterval(() => void this.updateDuck(), 10 * MINUTE));
@@ -178,14 +179,14 @@ export class NetworkService {
     const inst = this.manager.get(id);
     if (enabled) {
       const gw = await this.gatewayCached(true);
-      if (!gw) throw new UserError('Router neodpovídá na UPnP. Zapni UPnP v jeho nastavení, nebo otevři port ručně (návod níže).');
+      if (!gw) throw new UserError(t('The router does not answer UPnP. Turn on UPnP in its settings, or open the port by hand (steps below).'));
     }
     await this.manager.saveConfig(id, (cfg) => {
       cfg.upnp = enabled || undefined;
     });
     await this.syncUpnp(inst);
     const state = this.upnp.get(id);
-    if (enabled && state?.error) throw new UserError(`Router port neotevřel: ${state.error}`);
+    if (enabled && state?.error) throw new UserError(t('The router did not open the port: {error}', { error: state.error }));
     return this.serverNetwork(id);
   }
 
@@ -198,7 +199,7 @@ export class NetworkService {
     if (!current && want === null) return;
     const gw = await this.gatewayCached();
     if (!gw) {
-      if (want !== null) this.upnp.set(id, { port: want, mappings: wanted, mapped: false, error: 'Router neodpovídá na UPnP.' });
+      if (want !== null) this.upnp.set(id, { port: want, mappings: wanted, mapped: false, error: t('The router does not answer UPnP.') });
       return;
     }
     try {
@@ -206,11 +207,11 @@ export class NetworkService {
       if (current?.mapped) for (const m of current.mappings) if (!wanted.some((w) => same(w, m))) await deleteMapping(gw, m);
       if (want === null) {
         this.upnp.delete(id);
-        inst.pushLog('system', 'Port na routeru zavřen (UPnP).');
+        inst.pushLog('system', t('Port closed on the router (UPnP).'));
         return;
       }
       for (const m of wanted) await addMapping(gw, m);
-      if (!current?.mapped || current.port !== want) inst.pushLog('system', `Port ${want} je na routeru otevřený (UPnP${wanted.length > 1 ? `, ${wanted.length} pravidel` : ''}).`);
+      if (!current?.mapped || current.port !== want) inst.pushLog('system', wanted.length > 1 ? t('Port {port} is open on the router (UPnP, {n} rules).', { port: want, n: wanted.length }) : t('Port {port} is open on the router (UPnP).', { port: want }));
       this.upnp.set(id, { port: want, mappings: wanted, mapped: true });
     } catch (err) {
       this.upnp.set(id, { port: want ?? current?.port ?? 0, mappings: wanted, mapped: false, error: (err as Error).message });
@@ -238,30 +239,30 @@ export class NetworkService {
   async checkPort(id: string): Promise<PortCheck> {
     const inst = this.manager.get(id);
     const edition = editionOf(inst.cfg.type);
-    if (edition !== 'java') throw new UserError(edition === 'hytale' ? 'Port Hytale serveru (QUIC) zvenku zatím ověřit neumím.' : 'Port nového Bedrocku (NetherNet) zvenku zatím ověřit neumím.');
+    if (edition !== 'java') throw new UserError(edition === 'hytale' ? t('Checking the port of a Hytale server (QUIC) from outside is not possible yet.') : t('Checking the port of the new Bedrock (NetherNet) from outside is not possible yet.'));
     const ip = await publicIp();
-    if (!ip) throw new UserError('Nepodařilo se zjistit veřejnou IP. Jsi připojený k internetu?');
-    if (inst.status === 'starting' || inst.status === 'stopping' || inst.launching) throw new UserError('Počkej, až server naběhne nebo se vypne.');
+    if (!ip) throw new UserError(t('Could not find the public IP. Are you connected to the internet?'));
+    if (inst.status === 'starting' || inst.status === 'stopping' || inst.launching) throw new UserError(t('Wait until the server has started or stopped.'));
     const address = `${ip}:${inst.cfg.port}`;
     const needProbe = !inst.running && !inst.sleeping;
     if (needProbe) {
       const probe = new WakeListener({
         port: inst.cfg.port,
-        kickMessage: 'srvMC jen zkouší port.',
-        status: async () => ({ motd: 'srvMC – zkouška portu', maxPlayers: 0 }),
+        kickMessage: t('srvMC is only testing the port.'),
+        status: async () => ({ motd: t('srvMC – port test'), maxPlayers: 0 }),
         onJoin: () => undefined,
       });
       try {
         await probe.open();
       } catch {
-        throw new UserError(`Port ${inst.cfg.port} drží jiný program, nejde vyzkoušet.`);
+        throw new UserError(t('Another program holds port {port}, it cannot be tested.', { port: inst.cfg.port }));
       }
       this.probes.set(id, probe);
     }
     try {
       return { address, open: await checkFromInternet(address), checkedAt: Date.now() };
     } catch {
-      throw new UserError('Služba na kontrolu portu teď neodpovídá. Zkus to za chvíli.');
+      throw new UserError(t('The port check service is not answering. Try again in a moment.'));
     } finally {
       if (needProbe) await this.closeProbe(id);
     }
@@ -278,9 +279,9 @@ export class NetworkService {
 
   async setDuckDns(domain: string, token: string): Promise<DuckDnsState> {
     const name = normalizeDuckDomain(domain);
-    const t = checkDuckToken(token);
-    if (!(await updateDuckDns(name, t).catch(() => false))) throw new UserError('DuckDNS změnu odmítl. Zkontroluj název subdomény a token na duckdns.org.');
-    this.stored.duckdns = { domain: name, token: seal(this.box, t) };
+    const checked = checkDuckToken(token);
+    if (!(await updateDuckDns(name, checked).catch(() => false))) throw new UserError(t('DuckDNS refused the change. Check the subdomain name and the token at duckdns.org.'));
+    this.stored.duckdns = { domain: name, token: seal(this.box, checked) };
     await this.save();
     this.duck = { configured: true, domain: name, lastUpdate: Date.now(), lastOk: true };
     return this.duck;
@@ -298,14 +299,14 @@ export class NetworkService {
     if (!stored) return;
     const token = unseal(this.box, stored.token);
     if (!token) {
-      this.duck = { configured: true, domain: stored.domain, lastOk: false, error: 'Token nejde přečíst. Zadej ho znovu.' };
+      this.duck = { configured: true, domain: stored.domain, lastOk: false, error: t('The token cannot be read. Enter it again.') };
       return;
     }
     try {
       const ok = await updateDuckDns(stored.domain, token);
-      this.duck = { configured: true, domain: stored.domain, lastUpdate: Date.now(), lastOk: ok, ...(!ok && { error: 'DuckDNS změnu odmítl (token nebo název už neplatí).' }) };
+      this.duck = { configured: true, domain: stored.domain, lastUpdate: Date.now(), lastOk: ok, ...(!ok && { error: t('DuckDNS refused the change (the token or name is no longer valid).') }) };
     } catch (err) {
-      this.duck = { configured: true, domain: stored.domain, lastUpdate: this.duck.lastUpdate, lastOk: false, error: `DuckDNS neodpovídá: ${(err as Error).message}` };
+      this.duck = { configured: true, domain: stored.domain, lastUpdate: this.duck.lastUpdate, lastOk: false, error: t('DuckDNS is not answering: {message}', { message: (err as Error).message }) };
     }
   }
 
@@ -313,7 +314,7 @@ export class NetworkService {
 
   /** Starts linking the user's playit account. The returned URL is where they approve srvMC. */
   async connectPlayit(): Promise<PlayitState> {
-    if (process.platform !== 'win32') throw new UserError('playit.gg zatím umím spustit jen na Windows.');
+    if (process.platform !== 'win32') throw new UserError(t('playit.gg can only run on Windows for now.'));
     if (this.claim && !this.claim.cancelled) return this.playitState();
     const code = claimCode();
     const claim = { code, url: claimUrl(code), cancelled: false };
@@ -329,7 +330,7 @@ export class NetworkService {
     try {
       while (!claim.cancelled && Date.now() < until) {
         const state = await claimSetup(claim.code, this.version).catch(() => 'WaitingForUser' as const);
-        if (state === 'UserRejected') throw new UserError('Propojení bylo na playit.gg zamítnuto.');
+        if (state === 'UserRejected') throw new UserError(t('The connection was rejected on playit.gg.'));
         if (state === 'UserAccepted') {
           const secret = await claimExchange(claim.code);
           this.stored.playit = { secret: seal(this.box, secret) };
@@ -340,7 +341,7 @@ export class NetworkService {
         }
         await new Promise((r) => setTimeout(r, 2000));
       }
-      if (!claim.cancelled) this.playitError = 'Propojení vypršelo. Zkus to znovu.';
+      if (!claim.cancelled) this.playitError = t('The connection timed out. Try again.');
     } catch (err) {
       this.playitError = (err as Error).message;
     } finally {
@@ -367,26 +368,26 @@ export class NetworkService {
       this.tunnels = { list: run.tunnels, agentId: run.agentId, at: Date.now() };
     } catch (err) {
       this.tunnels.at = Date.now();
-      if (err instanceof PlayitApiError && err.status === 401) this.playitError = 'playit.gg klíč už neplatí. Propoj účet znovu.';
+      if (err instanceof PlayitApiError && err.status === 401) this.playitError = t('The playit.gg key is no longer valid. Connect the account again.');
     }
   }
 
   async createPlayitTunnel(id: string): Promise<ServerNetwork> {
     const inst = this.manager.get(id);
     const edition = editionOf(inst.cfg.type);
-    if (edition === 'hytale') throw new UserError(`Pro Hytale vytvoř na playit.gg tunel typu UDP na port ${inst.cfg.port} ručně.`);
-    if (edition === 'bedrock') throw new UserError('playit.gg zatím nový Bedrock (NetherNet) neumí.');
+    if (edition === 'hytale') throw new UserError(t('For Hytale, create a UDP tunnel to port {port} on playit.gg by hand.', { port: inst.cfg.port }));
+    if (edition === 'bedrock') throw new UserError(t('playit.gg does not support the new Bedrock (NetherNet) yet.'));
     const secret = this.secret();
-    if (!secret) throw new UserError('Nejdřív propoj účet playit.gg.');
+    if (!secret) throw new UserError(t('Connect a playit.gg account first.'));
     await this.refreshTunnels(true);
-    if (!this.tunnels.agentId) throw new UserError('playit.gg teď neodpovídá. Zkus to za chvíli.');
+    if (!this.tunnels.agentId) throw new UserError(t('playit.gg is not answering. Try again in a moment.'));
     if (!this.tunnelFor(inst.cfg.port)) {
       try {
         await createTunnel(secret, this.tunnels.agentId, `srvMC ${inst.cfg.name}`, inst.cfg.port);
       } catch (err) {
-        throw new UserError(`Tunel se nepodařilo vytvořit: ${(err as Error).message}. Můžeš ho přidat i na playit.gg (Minecraft Java, port ${inst.cfg.port}).`);
+        throw new UserError(t('Could not create the tunnel: {message}. You can also add it on playit.gg (Minecraft Java, port {port}).', { message: (err as Error).message, port: inst.cfg.port }));
       }
-      inst.pushLog('system', 'Tunel playit.gg vytvořen. Adresa se objeví za chvilku.');
+      inst.pushLog('system', t('playit.gg tunnel created. The address shows up in a moment.'));
     }
     await this.refreshTunnels(true);
     return this.serverNetwork(id);
@@ -396,7 +397,7 @@ export class NetworkService {
 
   async setDomain(id: string, domain: DomainConfig | null): Promise<ServerNetwork> {
     const clean = domain ? normalizeDomain(domain) : undefined;
-    if (clean?.target === 'duckdns' && !this.stored.duckdns) throw new UserError('Nejdřív nastav DuckDNS.');
+    if (clean?.target === 'duckdns' && !this.stored.duckdns) throw new UserError(t('Set up DuckDNS first.'));
     await this.manager.saveConfig(id, (cfg) => {
       cfg.domain = clean;
     });
@@ -405,7 +406,7 @@ export class NetworkService {
 
   async checkDomain(id: string): Promise<DomainCheck> {
     const net = await this.serverNetwork(id);
-    if (!net.domain) throw new UserError('Nejdřív zadej doménu.');
+    if (!net.domain) throw new UserError(t('Enter a domain first.'));
     return checkDomain(net.domain, net.records);
   }
 }

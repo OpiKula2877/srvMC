@@ -43,7 +43,7 @@ export function readVarInt(buf: Buffer, off: number): { value: number; size: num
     value |= (b & 0x7f) << (7 * size);
     if (!(b & 0x80)) return { value: value | 0, size: size + 1 };
   }
-  throw new Error('VarInt je moc dlouhý.');
+  throw new Error('VarInt is too long.');
 }
 
 export function mcString(s: string): Buffer {
@@ -71,10 +71,10 @@ export function takePackets(buf: Buffer): { packets: { id: number; data: Buffer 
   for (;;) {
     const len = readVarInt(buf, off);
     if (!len || off + len.size + len.value > buf.length) break;
-    if (len.value <= 0 || len.value > MAX_BUFFER) throw new Error('Neplatná délka paketu.');
+    if (len.value <= 0 || len.value > MAX_BUFFER) throw new Error('Invalid packet length.');
     const body = buf.subarray(off + len.size, off + len.size + len.value);
     const id = readVarInt(body, 0);
-    if (!id) throw new Error('Neplatný paket.');
+    if (!id) throw new Error('Invalid packet.');
     packets.push({ id: id.value, data: body.subarray(id.size) });
     off += len.size + len.value;
   }

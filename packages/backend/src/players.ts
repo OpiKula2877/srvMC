@@ -7,6 +7,7 @@ import type { ServerInstance } from './instance.ts';
 import { readServerProperties, updateServerProperties } from './properties.ts';
 import { UserError } from './providers/index.ts';
 import { lookupProfile, offlineUuid } from './uuid.ts';
+import { t } from '@srvmc/shared';
 
 export const LIST_FILES: Record<PlayerListKind, string> = {
   whitelist: 'whitelist.json',
@@ -66,9 +67,9 @@ function cleanReason(reason: string | undefined): string {
 
 function validate(kind: PlayerListKind, name: string): void {
   if (kind === 'ips') {
-    if (!net.isIP(name)) throw new UserError('Zadej platnou IP adresu, např. 203.0.113.7.');
+    if (!net.isIP(name)) throw new UserError(t('Enter a valid IP address, e.g. 203.0.113.7.'));
   } else if (!PLAYER_NAME_RE.test(name)) {
-    throw new UserError('Jméno hráče smí obsahovat jen písmena, číslice a podtržítko (max 16 znaků).');
+    throw new UserError(t('A player name may only contain letters, digits and underscores (max 16 characters).'));
   }
 }
 
@@ -106,7 +107,7 @@ async function runListCommand(inst: ServerInstance, kind: PlayerListKind, comman
     .filter((l) => l.t >= sentAt && l.level !== 'cmd')
     .map((l) => l.text.replace(/^\[[^\]]*\](?: \[[^\]]*\])*:\s*/, '').replace(/^System chat:\s*/, ''))
     .at(-1);
-  throw new UserError(reply ? `Server odpověděl: ${reply}` : 'Server příkaz nepotvrdil.');
+  throw new UserError(reply ? t('The server answered: {reply}', { reply }) : t('The server did not confirm the command.'));
 }
 
 function isBedrock(inst: ServerInstance): boolean {
@@ -114,7 +115,7 @@ function isBedrock(inst: ServerInstance): boolean {
 }
 
 function noPlayerLists(inst: ServerInstance): void {
-  if (editionOf(inst.cfg.type) === 'hytale') throw new UserError('Hráče na Hytale serveru zatím spravuj příkazy v konzoli.');
+  if (editionOf(inst.cfg.type) === 'hytale') throw new UserError(t('Manage players of a Hytale server with console commands for now.'));
 }
 
 export async function playersInfo(inst: ServerInstance): Promise<PlayersInfo> {
@@ -144,14 +145,14 @@ export async function playersInfo(inst: ServerInstance): Promise<PlayersInfo> {
  * files); a stopped one gets its JSON file edited, with the UUID resolved the way the server would.
  */
 export async function addPlayer(inst: ServerInstance, kind: PlayerListKind, req: AddPlayerRequest): Promise<void> {
-  if (!inst.cfg.installed) throw new UserError('Server ještě není nainstalovaný.');
+  if (!inst.cfg.installed) throw new UserError(t('The server is not installed yet.'));
   noPlayerLists(inst);
   if (isBedrock(inst)) return bedrockAddPlayer(inst, kind, req);
   const name = req.name.trim();
   validate(kind, name);
   const reason = cleanReason(req.reason);
   const list = await readList(inst.dir, kind);
-  if (list.some((r) => keyOf(kind, r) === name.toLowerCase())) throw new UserError(`${name} už v seznamu je.`);
+  if (list.some((r) => keyOf(kind, r) === name.toLowerCase())) throw new UserError(t('{name} is already on the list.', { name }));
 
   if (inst.running) {
     const cmd = {
@@ -172,7 +173,7 @@ export async function addPlayer(inst: ServerInstance, kind: PlayerListKind, req:
     if (await onlineMode(inst.dir)) {
       const profile = await lookupProfile(name);
       if (!profile) {
-        throw new UserError(`Účet „${name}“ neexistuje. Pro hráče bez placeného Minecraftu vypni v Možnostech ověřování účtů.`);
+        throw new UserError(t('The account "{name}" does not exist. For players without paid Minecraft, turn off account checks in Options.', { name }));
       }
       uuid = profile.uuid;
       realName = profile.name;
@@ -191,7 +192,7 @@ export async function removePlayer(inst: ServerInstance, kind: PlayerListKind, k
   if (isBedrock(inst)) return bedrockRemovePlayer(inst, kind, key);
   const name = key.trim();
   validate(kind, name);
-  if (!(await readList(inst.dir, kind)).some((r) => keyOf(kind, r) === name.toLowerCase())) throw new UserError(`${name} v seznamu není.`);
+  if (!(await readList(inst.dir, kind)).some((r) => keyOf(kind, r) === name.toLowerCase())) throw new UserError(t('{name} is not on the list.', { name }));
   if (inst.running) {
     const cmd = { whitelist: `whitelist remove ${name}`, ops: `deop ${name}`, bans: `pardon ${name}`, ips: `pardon-ip ${name}` }[kind];
     await runListCommand(inst, kind, cmd, name, false);
@@ -220,7 +221,7 @@ export async function setWhitelistEnabled(inst: ServerInstance, enabled: boolean
 
 export function kickPlayer(inst: ServerInstance, name: string, reason?: string): void {
   if (isBedrock(inst)) return bedrockKick(inst, name, reason);
-  if (!PLAYER_NAME_RE.test(name)) throw new UserError('Neplatné jméno hráče.');
+  if (!PLAYER_NAME_RE.test(name)) throw new UserError(t('Invalid player name.'));
   const why = cleanReason(reason);
   inst.sendCommand(`kick ${name}${why ? ` ${why}` : ''}`);
 }

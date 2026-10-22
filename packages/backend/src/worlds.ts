@@ -6,6 +6,7 @@ import { trashPaths, validName } from './files.ts';
 import { nbtPath, readNbt } from './nbt.ts';
 import { readServerProperties, updateServerProperties } from './properties.ts';
 import { UserError } from './providers/index.ts';
+import { t } from '@srvmc/shared';
 
 const DIM_SUFFIXES = ['_nether', '_the_end'] as const;
 
@@ -108,7 +109,7 @@ export async function findWorlds(serverDir: string, base = serverDir): Promise<W
 export function checkWorldName(name: string): void {
   // Bedrock's default world is "Bedrock level": spaces are fine inside a name.
   if (!validName(name) || name.length > 64 || DIM_SUFFIXES.some((s) => name.endsWith(s)) || /^\s|\s$/.test(name)) {
-    throw new UserError('Neplatný název světa. Použij písmena, číslice, pomlčku nebo podtržítko.');
+    throw new UserError(t('Invalid world name. Use letters, digits, dash or underscore.'));
   }
 }
 
@@ -120,7 +121,7 @@ export async function setActiveWorld(serverDir: string, name: string, extra: Rec
 export async function trashWorld(serverDir: string, name: string, trashDir: string, base = serverDir): Promise<void> {
   checkWorldName(name);
   const folders = await worldFolders(base, name);
-  if (folders.length === 0) throw new UserError('Svět neexistuje.');
+  if (folders.length === 0) throw new UserError(t('The world does not exist.'));
   await trashPaths(
     serverDir,
     folders.map((f) => path.relative(serverDir, path.join(base, f)).split(path.sep).join('/')),
@@ -175,7 +176,7 @@ export async function importWorld(serverDir: string, zipFile: string, desiredNam
       },
     });
     const levelDirs = await findLevelDirs(tmp);
-    if (levelDirs.length === 0) throw new UserError('V zipu není svět Minecraftu (chybí level.dat).');
+    if (levelDirs.length === 0) throw new UserError(t('There is no Minecraft world in the zip (level.dat is missing).'));
 
     const byDepth = (p: string) => path.relative(tmp, p).split(path.sep).filter(Boolean).length;
     const main =

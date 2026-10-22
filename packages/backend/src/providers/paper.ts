@@ -2,6 +2,7 @@ import type { BuildInfo } from '@srvmc/shared';
 import { cached, fetchJson } from '../http.ts';
 import { javaMajorFor } from '../mojang.ts';
 import { UserError, type Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 const FILL = 'https://fill.papermc.io/v3/projects';
 
@@ -57,9 +58,9 @@ export function paperFamily(project: 'paper' | 'folia' | 'velocity', type: Provi
 
     async plan(version, build) {
       const chosen = pickPaperBuild(await builds(project, version), build);
-      if (!chosen) throw new UserError(`Build ${build ?? ''} pro ${version} neexistuje.`);
+      if (!chosen) throw new UserError(t('{name} does not exist.', { name: `Build ${build ?? ''} (${version})` }));
       const dl = chosen.downloads['server:default'];
-      if (!dl) throw new UserError(`Build #${chosen.id} nemá soubor ke stažení.`);
+      if (!dl) throw new UserError(t('Build #{id} has no file to download.', { id: chosen.id }));
       return {
         files: [{ url: dl.url, sha256: dl.checksums.sha256, size: dl.size, fileName: dl.name, target: `${project}.jar` }],
         javaMajor: await javaMajorFor(version),

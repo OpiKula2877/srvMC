@@ -79,12 +79,12 @@ button:disabled { cursor: not-allowed; }
 .sidebar { flex: 1 1 230px; max-width: 100%; padding: 20px 14px; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 18px; }
 .side-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .side-body { display: flex; flex-direction: column; gap: 18px; flex: 1; }
-.menu-btn { display: none; }
+.sidebar .menu-btn { display: none; }
 @media (min-width: 900px) { .sidebar { max-width: 260px; min-height: 100vh; position: sticky; top: 0; align-self: flex-start; } }
 /* Phones and small tablets: a slim top bar; the server list opens from the menu button. */
 @media (max-width: 899px) {
   .sidebar { flex-basis: 100%; position: sticky; top: 0; z-index: 60; padding: max(10px, env(safe-area-inset-top)) 14px 10px; gap: 0; border-right: none; border-bottom: 1px solid var(--line); }
-  .menu-btn { display: inline-flex; }
+  .sidebar .menu-btn { display: inline-flex; }
   .side-body { display: none; }
   .sidebar.open .side-body { display: flex; padding-top: 14px; max-height: calc(100dvh - 64px); overflow-y: auto; }
 }

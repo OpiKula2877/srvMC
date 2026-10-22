@@ -5,6 +5,7 @@ import type { ScheduleAction, ScheduledTask, ScheduleState } from '@srvmc/shared
 import type { BackupService } from './backups.ts';
 import type { ServerManager } from './manager.ts';
 import { UserError } from './providers/types.ts';
+import { t } from '@srvmc/shared';
 
 const MINUTE = 60_000;
 /** Chat countdown before a restart or stop, in seconds before the run. */
@@ -40,23 +41,23 @@ export function nextTaskRun(task: Pick<ScheduledTask, 'enabled' | 'repeat' | 'ti
 
 /** Validates tasks sent by the panel. Ids and run history of known tasks are kept; new tasks get an id. */
 export function sanitizeTasks(input: unknown, existing: ScheduledTask[] = []): ScheduledTask[] {
-  if (!Array.isArray(input)) throw new UserError('Neplatný seznam úloh.');
-  if (input.length > MAX_TASKS) throw new UserError(`Nejvýš ${MAX_TASKS} úloh na server.`);
+  if (!Array.isArray(input)) throw new UserError(t('Invalid task list.'));
+  if (input.length > MAX_TASKS) throw new UserError(t('At most {n} tasks per server.', { n: MAX_TASKS }));
   return input.map((raw: Partial<ScheduledTask>) => {
-    if (!raw || typeof raw !== 'object') throw new UserError('Neplatná úloha.');
+    if (!raw || typeof raw !== 'object') throw new UserError(t('Invalid task.'));
     const action = raw.action as ScheduleAction;
-    if (!ACTIONS.has(action)) throw new UserError('Neznámá akce.');
+    if (!ACTIONS.has(action)) throw new UserError(t('Unknown action.'));
     const time = String(raw.time ?? '');
-    if (!TIME_RE.test(time)) throw new UserError('Čas zadej jako HH:MM.');
+    if (!TIME_RE.test(time)) throw new UserError(t('Enter the time as HH:MM.'));
     const repeat = raw.repeat === 'interval' ? 'interval' : 'days';
     const days = [...new Set((Array.isArray(raw.days) ? raw.days : []).map(Number))].filter((d) => Number.isInteger(d) && d >= 0 && d <= 6).sort();
-    if (repeat === 'days' && days.length === 0) throw new UserError('Vyber aspoň jeden den.');
+    if (repeat === 'days' && days.length === 0) throw new UserError(t('Pick at least one day.'));
     const everyMin = repeat === 'interval' ? Math.round(Number(raw.everyMin)) : undefined;
-    if (everyMin !== undefined && !(everyMin >= 5 && everyMin <= 1440)) throw new UserError('Interval musí být 5 minut až 24 hodin.');
+    if (everyMin !== undefined && !(everyMin >= 5 && everyMin <= 1440)) throw new UserError(t('The interval must be 5 minutes to 24 hours.'));
     let command: string | undefined;
     if (action === 'command') {
       command = String(raw.command ?? '').replace(/[\r\n]+/g, ' ').trim().replace(/^\//, '');
-      if (!command || command.length > 300) throw new UserError('Zadej příkaz (nejvýš 300 znaků).');
+      if (!command || command.length > 300) throw new UserError(t('Enter a command (at most 300 characters).'));
     }
     const known = typeof raw.id === 'string' ? existing.find((t) => t.id === raw.id) : undefined;
     return {
@@ -77,8 +78,8 @@ export function sanitizeTasks(input: unknown, existing: ScheduledTask[] = []): S
 const signature = (t: ScheduledTask) => JSON.stringify([t.enabled, t.repeat, t.time, t.days, t.everyMin]);
 
 function countdownText(action: ScheduleAction, seconds: number): string {
-  const when = seconds >= 60 ? `${seconds / 60} ${seconds === 60 ? 'minutu' : seconds < 300 ? 'minuty' : 'minut'}` : `${seconds} sekund`;
-  return action === 'restart' ? `Server se restartuje za ${when}.` : `Server se vypne za ${when}.`;
+  const when = seconds >= 60 ? (seconds === 60 ? t('1 minute') : t('{n} minutes', { n: seconds / 60 })) : t('{n} seconds', { n: seconds });
+  return action === 'restart' ? t('The server restarts in {when}.', { when }) : t('The server stops in {when}.', { when });
 }
 
 export class Scheduler {
@@ -160,37 +161,37 @@ export class Scheduler {
     const key = `${serverId}|${taskId}`;
     const inst = this.manager.get(serverId);
     const task = inst.cfg.schedule?.find((t) => t.id === taskId);
-    if (!task) throw new UserError('Úloha neexistuje.');
-    if (this.running.has(key)) throw new UserError('Úloha už běží.');
+    if (!task) throw new UserError(t('The task does not exist.'));
+    if (this.running.has(key)) throw new UserError(t('The task is already running.'));
     this.running.add(key);
     let result = 'ok';
     try {
       const up = inst.running;
       switch (task.action) {
         case 'restart':
-          if (!up) result = 'Přeskočeno – server neběžel.';
+          if (!up) result = t('Skipped – the server was not running.');
           else await this.manager.restart(serverId);
           break;
         case 'start':
-          if (up) result = 'Přeskočeno – server už běžel.';
+          if (up) result = t('Skipped – the server was already running.');
           else await this.manager.start(serverId);
           break;
         case 'stop':
-          if (!up) result = 'Přeskočeno – server neběžel.';
+          if (!up) result = t('Skipped – the server was not running.');
           else await this.manager.stop(serverId);
           break;
         case 'backup':
           await this.backups.create(serverId, 'auto');
           break;
         case 'command':
-          if (!up) result = 'Přeskočeno – server neběžel.';
+          if (!up) result = t('Skipped – the server was not running.');
           else inst.sendCommand(task.command ?? '');
           break;
       }
-      inst.pushLog('system', `Plánovač: ${ACTION_LABEL[task.action]}${task.action === 'command' ? ` „${task.command}“` : ''}${result === 'ok' ? '' : ` – ${result}`}`);
+      inst.pushLog('system', `${t('Scheduler: {action}', { action: t(ACTION_LABEL[task.action]) })}${task.action === 'command' ? ` "${task.command}"` : ''}${result === 'ok' ? '' : ` – ${result}`}`);
     } catch (err) {
       result = `Chyba: ${(err as Error).message}`;
-      inst.pushLog('error', `Plánovač: ${ACTION_LABEL[task.action]} selhal – ${(err as Error).message}`);
+      inst.pushLog('error', t('Scheduler: {action} failed – {message}', { action: t(ACTION_LABEL[task.action]), message: (err as Error).message }));
     } finally {
       this.running.delete(key);
     }
@@ -205,8 +206,8 @@ export class Scheduler {
 
 const ACTION_LABEL: Record<ScheduleAction, string> = {
   restart: 'restart',
-  start: 'zapnutí',
-  stop: 'vypnutí',
-  backup: 'záloha',
-  command: 'příkaz',
+  start: 'start',
+  stop: 'stop',
+  backup: 'backup',
+  command: 'command',
 };

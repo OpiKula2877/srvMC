@@ -4,6 +4,7 @@ import path from 'node:path';
 import { cached, fetchJson, fetchOk } from '../http.ts';
 import { javaMajorFor } from '../mojang.ts';
 import { compareVersions, UserError, type Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 const VERSIONS = 'https://hub.spigotmc.org/versions/';
 const BUILDTOOLS = 'https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar';
@@ -41,8 +42,8 @@ export const spigot: Provider = {
 
   async listBuilds() {
     return [
-      { id: 'spigot', label: 'Spigot (doporučeno)', channel: 'stable' },
-      { id: 'craftbukkit', label: 'CraftBukkit (čistý Bukkit)', channel: 'stable' },
+      { id: 'spigot', label: t('Spigot (recommended)'), channel: 'stable' },
+      { id: 'craftbukkit', label: t('CraftBukkit (plain Bukkit)'), channel: 'stable' },
     ];
   },
 
@@ -50,7 +51,7 @@ export const spigot: Provider = {
     const variant = build ?? 'spigot';
     if (variant !== 'spigot' && variant !== 'craftbukkit') throw new UserError('Vyber Spigot nebo CraftBukkit.');
     const meta = await fetchJson<SpigotVersion>(`${VERSIONS}${encodeURIComponent(mc)}.json`).catch(() => {
-      throw new UserError(`Spigot ${mc} neexistuje.`);
+      throw new UserError(t('{name} does not exist.', { name: `Spigot ${mc}` }));
     });
     const javaMajor = spigotJava(await javaMajorFor(mc), meta.javaVersions);
     return {
@@ -73,7 +74,7 @@ export const spigot: Provider = {
               await mkdir(outDir, { recursive: true });
               // BuildTools compiles with Maven, which needs javac – a JRE is not enough.
               const jdk = await ctx.ensureJdk();
-              ctx.progress(`Kompiluji ${variant === 'spigot' ? 'Spigot' : 'CraftBukkit'} ${mc} – poprvé to trvá 10–30 minut`, null);
+              ctx.progress(t('Compiling {name} {version} – the first time takes 10–30 minutes', { name: variant === 'spigot' ? 'Spigot' : 'CraftBukkit', version: mc }), null);
               let stage = '';
               await ctx.run(['-jar', buildToolsJar, '--rev', mc, '--compile', variant.toUpperCase(), '--output-dir', outDir, '--final-name', jarName, '--nogui'], {
                 cwd: work,
@@ -91,7 +92,7 @@ export const spigot: Provider = {
             queue = job.catch(() => undefined);
             await job;
           }
-          if (!(await stat(built).catch(() => null))) throw new UserError('BuildTools doběhl, ale výsledný jar chybí. Podrobnosti jsou v konzoli.');
+          if (!(await stat(built).catch(() => null))) throw new UserError(t('BuildTools finished, but the resulting jar is missing. The details are in the console.'));
           await copyFile(built, path.join(ctx.dir, target));
         } finally {
           await rm(buildToolsJar, { force: true });

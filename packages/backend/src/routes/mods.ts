@@ -18,6 +18,7 @@ import type { ManualDownloads } from '../manual.ts';
 import { packVersions, searchPacks } from '../providers/modpack.ts';
 import { UserError } from '../providers/index.ts';
 import { searchHangar, searchSpiget } from '../sources.ts';
+import { t } from '@srvmc/shared';
 
 const SOURCES = ['modrinth', 'hangar', 'spigot', 'curseforge'] as const;
 const MAX_JAR = 200 * 1024 * 1024;
@@ -49,7 +50,7 @@ export function registerModRoutes(app: FastifyInstance, manager: ServerManager, 
       const i = inst(req.params.id);
       const target = targetFor(i.cfg, req.query.folder);
       const { source } = req.query;
-      if (!target.sources.includes(source)) throw new UserError('Tenhle zdroj se pro tento server nehodí.');
+      if (!target.sources.includes(source)) throw new UserError(t('This source does not fit this server.'));
       const query = req.query.q?.trim() ?? '';
       const offset = offsetOf(req.query.offset);
       let hits: ContentHit[];
@@ -88,7 +89,7 @@ export function registerModRoutes(app: FastifyInstance, manager: ServerManager, 
     async (req) => {
       const { id } = req.params;
       checkDiskRoom(inst(id).cfg, inst(id).diskUsageMb);
-      const result = await manager.runTask(id, 'content', 'Stahuji', () => installContent(inst(id), ctxFor(id), req.body.source, req.body.id, req.body.folder));
+      const result = await manager.runTask(id, 'content', t('Downloading'), () => installContent(inst(id), ctxFor(id), req.body.source, req.body.id, req.body.folder));
       await afterChange(id);
       return result;
     },
@@ -100,7 +101,7 @@ export function registerModRoutes(app: FastifyInstance, manager: ServerManager, 
     async (req) => {
       const { id } = req.params;
       const only = req.body.folder && req.body.file ? { folder: req.body.folder, file: req.body.file } : undefined;
-      const updated = await manager.runTask(id, 'content', 'Aktualizuji', () => updateContent(inst(id), ctxFor(id), only));
+      const updated = await manager.runTask(id, 'content', t('Updating'), () => updateContent(inst(id), ctxFor(id), only));
       await afterChange(id);
       return { updated };
     },
@@ -130,12 +131,12 @@ export function registerModRoutes(app: FastifyInstance, manager: ServerManager, 
       const i = inst(req.params.id);
       const target = targetFor(i.cfg, req.query.folder);
       const { name } = req.query;
-      if (!validName(name) || !/\.jar$/i.test(name)) throw new UserError('Nahrát jde jen soubor .jar.');
-      if (Number(req.headers['content-length'] ?? 0) > MAX_JAR) throw new UserError('Jar je moc velký (max 200 MB).');
+      if (!validName(name) || !/\.jar$/i.test(name)) throw new UserError(t('Only .jar files can be uploaded.'));
+      if (Number(req.headers['content-length'] ?? 0) > MAX_JAR) throw new UserError(t('The jar is too big (max 200 MB).'));
       checkDiskRoom(i.cfg, i.diskUsageMb, Number(req.headers['content-length'] ?? 0));
       const final = path.join(i.dir, target.folder, name);
-      if (req.query.overwrite !== '1' && (await stat(final).catch(() => null))) throw new UserError(`Soubor ${name} už na serveru je.`);
-      if (i.running && (await stat(final).catch(() => null))) throw new UserError('Nejdřív server zastav – za běhu má Windows jary zamčené.');
+      if (req.query.overwrite !== '1' && (await stat(final).catch(() => null))) throw new UserError(t('The file {name} is already on the server.', { name }));
+      if (i.running && (await stat(final).catch(() => null))) throw new UserError(t('Stop the server first – Windows keeps the jars locked while it runs.'));
 
       const tmpName = `srvmc-upload-${randomBytes(6).toString('hex')}.tmp`;
       await mkdir(path.join(i.dir, target.folder), { recursive: true });
@@ -143,11 +144,11 @@ export function registerModRoutes(app: FastifyInstance, manager: ServerManager, 
       const tmp = path.join(i.dir, target.folder, tmpName);
       try {
         const meta = await readJarMeta(tmp).catch(() => {
-          throw new UserError('Soubor není platný jar.');
+          throw new UserError(t('The file is not a valid jar.'));
         });
         checkUploadedJar(i.cfg, target, meta);
         await rename(tmp, final);
-        i.pushLog('system', `Nahráno: ${name}${i.running ? ' – projeví se po restartu.' : ''}`);
+        i.pushLog('system', `${t('Uploaded: {name}', { name })}${i.running ? ` – ${t('takes effect after a restart.')}` : ''}`);
         await afterChange(req.params.id);
         return { file: name, name: meta.name ?? name, version: meta.version };
       } finally {
@@ -185,7 +186,7 @@ export function registerModRoutes(app: FastifyInstance, manager: ServerManager, 
     (req) => searchPacks(req.query.source ?? 'modrinth', req.query.q?.trim() ?? '', offsetOf(req.query.offset)),
   );
   app.get<{ Params: { project: string } }>('/api/modpacks/:project/versions', (req) => {
-    if (!/^(?:cf:\d{1,12}|technic:[A-Za-z0-9._-]{1,80}|[A-Za-z0-9_-]{1,64})$/.test(req.params.project)) throw new UserError('Neplatný modpack.');
+    if (!/^(?:cf:\d{1,12}|technic:[A-Za-z0-9._-]{1,80}|[A-Za-z0-9_-]{1,64})$/.test(req.params.project)) throw new UserError(t('Invalid modpack.'));
     return packVersions(req.params.project);
   });
 
@@ -196,7 +197,7 @@ export function registerModRoutes(app: FastifyInstance, manager: ServerManager, 
     { schema: { body: { type: 'object', required: ['mode'], additionalProperties: false, properties: { mode: { type: 'string', enum: ['online', 'hybrid', 'offline'] } } } } },
     async (req) => {
       const { id } = req.params;
-      const state = await manager.runTask(id, 'content', 'Nastavuji přihlašování', () => setAuthMode(inst(id), ctxFor(id), req.body.mode));
+      const state = await manager.runTask(id, 'content', t('Setting the login mode'), () => setAuthMode(inst(id), ctxFor(id), req.body.mode));
       await afterChange(id);
       return state;
     },

@@ -5,23 +5,24 @@ import { Spinner } from '../../components/Icon.tsx';
 import { useToast } from '../../components/Overlays.tsx';
 import { TimeChart, type ChartPoint } from '../../components/TimeChart.tsx';
 import { gb } from '../../format.ts';
+import { locale, t } from '@srvmc/shared';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 
 const RANGES: { id: HistoryRange; label: string; span: number; bucket: number; tick: number }[] = [
-  { id: '1h', label: '1 hodina', span: HOUR, bucket: MIN, tick: 10 * MIN },
-  { id: '24h', label: '24 hodin', span: DAY, bucket: 5 * MIN, tick: 3 * HOUR },
-  { id: '7d', label: '7 dní', span: 7 * DAY, bucket: 30 * MIN, tick: DAY },
-  { id: '30d', label: '30 dní', span: 30 * DAY, bucket: 2 * HOUR, tick: 5 * DAY },
+  { id: '1h', label: t('1 hour'), span: HOUR, bucket: MIN, tick: 10 * MIN },
+  { id: '24h', label: t('24 hours'), span: DAY, bucket: 5 * MIN, tick: 3 * HOUR },
+  { id: '7d', label: t('7 days'), span: 7 * DAY, bucket: 30 * MIN, tick: DAY },
+  { id: '30d', label: t('30 days'), span: 30 * DAY, bucket: 2 * HOUR, tick: 5 * DAY },
 ];
 
-const hm = new Intl.DateTimeFormat('cs-CZ', { hour: '2-digit', minute: '2-digit' });
-const wd = new Intl.DateTimeFormat('cs-CZ', { weekday: 'short', day: 'numeric' });
-const dm = new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'numeric' });
-const full = new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
-const dec = new Intl.NumberFormat('cs-CZ', { maximumFractionDigits: 1 });
+const hm = new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit' });
+const wd = new Intl.DateTimeFormat(locale(), { weekday: 'short', day: 'numeric' });
+const dm = new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'numeric' });
+const full = new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+const dec = new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 });
 
 /** Tick times inside [from, to]: multiples of the step counted from local midnight, or whole days. */
 function tickTimes(from: number, to: number, step: number): number[] {
@@ -68,7 +69,7 @@ export function GraphsTab({ server }: { server: ServerInfo }) {
       setPoints(list);
       setNow(Date.now());
     } catch (err) {
-      toast('error', 'Historii se nepodařilo načíst', (err as Error).message);
+      toast('error', t('Could not load the history'), (err as Error).message);
     }
   }, [server.id, range, toast]);
 
@@ -81,7 +82,7 @@ export function GraphsTab({ server }: { server: ServerInfo }) {
 
   const from = now - spec.span;
   const ticks = useMemo(() => tickTimes(from, now, spec.tick), [from, now, spec.tick]);
-  const tickFormat = (t: number) => (spec.tick < DAY ? hm.format(t) : spec.id === '7d' ? wd.format(t) : dm.format(t));
+  const tickFormat = (at: number) => (spec.tick < DAY ? hm.format(at) : spec.id === '7d' ? wd.format(at) : dm.format(at));
   const series = (pick: (p: HistoryPoint) => number | null): ChartPoint[] => (points ?? []).map((p) => ({ t: p.t, v: pick(p) }));
 
   const cpu = (points ?? []).map((p) => p.cpu);
@@ -93,42 +94,42 @@ export function GraphsTab({ server }: { server: ServerInfo }) {
 
   const charts = [
     {
-      title: 'Procesor',
+      title: t('CPU'),
       stats: [
-        ['průměr', `${dec.format(avg(cpu))} %`],
-        ['špička', `${dec.format(Math.max(0, ...cpu))} %`],
+        [t('average'), `${dec.format(avg(cpu))} %`],
+        [t('peak'), `${dec.format(Math.max(0, ...cpu))} %`],
       ],
-      chart: <TimeChart label="Využití procesoru v čase" points={series((p) => p.cpu)} bucket={spec.bucket} from={from} to={now} max={100} color="var(--blue)" format={(v) => `${dec.format(v)} %`} tickFormat={tickFormat} ticks={ticks} />,
+      chart: <TimeChart label={t('CPU use over time')} points={series((p) => p.cpu)} bucket={spec.bucket} from={from} to={now} max={100} color="var(--blue)" format={(v) => `${dec.format(v)} %`} tickFormat={tickFormat} ticks={ticks} />,
     },
     {
-      title: 'Paměť',
+      title: t('Memory'),
       stats: [
-        ['špička', mem.length ? gb(Math.max(...mem)) : '–'],
-        ['limit', gb(server.ramMaxMb)],
+        [t('peak'), mem.length ? gb(Math.max(...mem)) : '–'],
+        [t('limit'), gb(server.ramMaxMb)],
       ],
-      chart: <TimeChart label="Využití paměti v čase" points={series((p) => p.memMb)} bucket={spec.bucket} from={from} to={now} max={ramScale(server.ramMaxMb)} color="var(--green)" format={(v) => gb(v)} tickFormat={tickFormat} ticks={ticks} />,
+      chart: <TimeChart label={t('Memory use over time')} points={series((p) => p.memMb)} bucket={spec.bucket} from={from} to={now} max={ramScale(server.ramMaxMb)} color="var(--green)" format={(v) => gb(v)} tickFormat={tickFormat} ticks={ticks} />,
     },
     {
-      title: 'Hráči',
+      title: t('Players'),
       stats: [
-        ['nejvíc najednou', String(Math.max(0, ...players))],
-        ['průměr', dec.format(avg(players))],
+        [t('most at once'), String(Math.max(0, ...players))],
+        [t('average'), dec.format(avg(players))],
       ],
-      chart: <TimeChart label="Počet hráčů v čase" points={series((p) => p.players)} bucket={spec.bucket} from={from} to={now} max={Math.max(4, Math.ceil(Math.max(0, ...players) / 4) * 4)} color="var(--blue)" format={(v) => dec.format(Math.round(v))} tickFormat={tickFormat} ticks={ticks} />,
+      chart: <TimeChart label={t('Players over time')} points={series((p) => p.players)} bucket={spec.bucket} from={from} to={now} max={Math.max(4, Math.ceil(Math.max(0, ...players) / 4) * 4)} color="var(--blue)" format={(v) => dec.format(Math.round(v))} tickFormat={tickFormat} ticks={ticks} />,
     },
     {
       title: 'TPS',
       stats: hasTps
         ? [
-            ['nejnižší', dec.format(Math.min(...tps))],
-            ['průměr', dec.format(avg(tps))],
+            [t('lowest'), dec.format(Math.min(...tps))],
+            [t('average'), dec.format(avg(tps))],
           ]
         : [],
       chart: hasTps ? (
-        <TimeChart label="Ticky za sekundu v čase" points={series((p) => p.tps)} bucket={spec.bucket} from={from} to={now} max={20} color="var(--green)" format={(v) => dec.format(v)} tickFormat={tickFormat} ticks={ticks} />
+        <TimeChart label={t('Ticks per second over time')} points={series((p) => p.tps)} bucket={spec.bucket} from={from} to={now} max={20} color="var(--green)" format={(v) => dec.format(v)} tickFormat={tickFormat} ticks={ticks} />
       ) : (
         <div className="muted small" style={{ minHeight: 120, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
-          Tenhle typ nebo verze serveru TPS neukazuje.
+          {t('This server type or version does not report TPS.')}
         </div>
       ),
     },
@@ -137,7 +138,7 @@ export function GraphsTab({ server }: { server: ServerInfo }) {
   return (
     <div className="stack" style={{ gap: 16 }}>
       <div className="section-head">
-        <div className="seg" role="tablist" aria-label="Období">
+        <div className="seg" role="tablist" aria-label={t('Period')}>
           {RANGES.map((r) => (
             <button key={r.id} type="button" role="tab" className="seg-btn" aria-selected={r.id === range} onClick={() => setRange(r.id)}>
               {r.label}
@@ -145,7 +146,7 @@ export function GraphsTab({ server }: { server: ServerInfo }) {
           ))}
         </div>
         <button type="button" className="btn sm" style={{ minHeight: 40 }} aria-pressed={table} onClick={() => setTable((v) => !v)}>
-          {table ? 'Zobrazit grafy' : 'Zobrazit tabulku'}
+          {table ? t('Show graphs') : t('Show table')}
         </button>
       </div>
 
@@ -153,18 +154,18 @@ export function GraphsTab({ server }: { server: ServerInfo }) {
         <Spinner />
       ) : points.length === 0 ? (
         <div className="empty">
-          <span style={{ fontWeight: 600 }}>Zatím žádná data</span>
-          <span className="muted">Grafy se plní, když server běží.</span>
+          <span style={{ fontWeight: 600 }}>{t('No data yet')}</span>
+          <span className="muted">{t('The graphs fill up while the server runs.')}</span>
         </div>
       ) : table ? (
         <div className="table-wrap card" style={{ maxHeight: 520, overflow: 'auto', padding: 0 }}>
           <table className="table">
             <thead>
               <tr>
-                <th>Čas</th>
+                <th>{t('Time')}</th>
                 <th className="num">CPU</th>
                 <th className="num">RAM</th>
-                <th className="num">Hráči</th>
+                <th className="num">{t('Players')}</th>
                 <th className="num">TPS</th>
               </tr>
             </thead>

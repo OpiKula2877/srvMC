@@ -7,20 +7,21 @@ import { Icon, Spinner } from '../../components/Icon.tsx';
 import { ConfirmDialog, useToast } from '../../components/Overlays.tsx';
 import { ago, bytes, dateTime, nameColor } from '../../format.ts';
 import { href } from '../../router.ts';
+import { locale, t } from '@srvmc/shared';
 
 const WORLD_TYPES = [
-  { value: 'minecraft:normal', label: 'Normální' },
-  { value: 'minecraft:flat', label: 'Plochý' },
-  { value: 'minecraft:large_biomes', label: 'Velké biomy' },
-  { value: 'minecraft:amplified', label: 'Zesílený (amplified)' },
+  { value: 'minecraft:normal', label: t('Normal') },
+  { value: 'minecraft:flat', label: t('Flat') },
+  { value: 'minecraft:large_biomes', label: t('Large biomes') },
+  { value: 'minecraft:amplified', label: t('Amplified') },
 ];
 
 const SCHEDULES: { value: BackupSchedule; label: string }[] = [
-  { value: 'off', label: 'Vypnuto' },
-  { value: 'hourly', label: 'Každou hodinu' },
-  { value: '6h', label: 'Každých 6 hodin' },
-  { value: 'daily', label: 'Každý den' },
-  { value: 'weekly', label: 'Každé pondělí' },
+  { value: 'off', label: t('Off') },
+  { value: 'hourly', label: t('Every hour') },
+  { value: '6h', label: t('Every 6 hours') },
+  { value: 'daily', label: t('Every day') },
+  { value: 'weekly', label: t('Every Monday') },
 ];
 
 const TIMES = Array.from({ length: 48 }, (_, i) => {
@@ -28,9 +29,9 @@ const TIMES = Array.from({ length: 48 }, (_, i) => {
   return { value: t, label: t };
 });
 
-const KEEP = [3, 5, 7, 14, 30].map((n) => ({ value: String(n), label: `${n} záloh` }));
+const KEEP = [3, 5, 7, 14, 30].map((n) => ({ value: String(n), label: t('{n} backups', { n }) }));
 
-const KIND_LABEL: Record<BackupInfo['kind'], string> = { manual: 'ruční', auto: 'automatická', safety: 'před obnovou' };
+const KIND_LABEL: Record<BackupInfo['kind'], string> = { manual: t('manual'), auto: t('automatic'), safety: t('before restore') };
 
 const PREGEN_SUPPORTED = new Set(['paper', 'purpur', 'spigot', 'fabric', 'quilt', 'forge', 'neoforge', 'arclight']);
 
@@ -53,26 +54,26 @@ function NewWorldDialog({ onCreate, onCancel, bedrock }: { onCreate: (b: { name:
         onKeyDown={(e) => e.key === 'Escape' && onCancel()}
       >
         <h2 id="nw-title" style={{ fontSize: 18, fontWeight: 600 }}>
-          Nový svět
+          {t('New world')}
         </h2>
         <p className="muted" style={{ lineHeight: 1.5 }}>
-          Svět se vygeneruje při dalším startu serveru. Současný svět zůstane uložený a můžeš se na něj kdykoli vrátit.
+          {t('The world is generated on the next server start. The current world stays saved and you can switch back any time.')}
         </p>
         <label className="field">
-          <span className="label">Název složky</span>
-          <input autoFocus className="input mono" value={name} maxLength={48} placeholder="napr. survival2" onChange={(e) => setName(e.target.value.replace(/[^A-Za-z0-9_-]/g, ''))} />
+          <span className="label">{t('Folder name')}</span>
+          <input autoFocus className="input mono" value={name} maxLength={48} placeholder={t('e.g. survival2')} onChange={(e) => setName(e.target.value.replace(/[^A-Za-z0-9_-]/g, ''))} />
         </label>
         <label className="field">
-          <span className="label">Seed (nepovinné)</span>
-          <input className="input mono" value={seed} maxLength={64} placeholder="prázdné = náhodný" onChange={(e) => setSeed(e.target.value)} />
+          <span className="label">{t('Seed (optional)')}</span>
+          <input className="input mono" value={seed} maxLength={64} placeholder={t('empty = random')} onChange={(e) => setSeed(e.target.value)} />
         </label>
-        {!bedrock && <Dropdown label="Typ světa" value={type} options={WORLD_TYPES} onChange={setType} searchable={false} />}
+        {!bedrock && <Dropdown label={t('World type')} value={type} options={WORLD_TYPES} onChange={setType} searchable={false} />}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button type="button" className="btn ghost" onClick={onCancel}>
-            Zrušit
+            {t('Cancel')}
           </button>
           <button type="submit" className="btn primary" disabled={!name.trim()}>
-            Vytvořit a nastavit aktivní
+            {t('Create and make active')}
           </button>
         </div>
       </form>
@@ -92,24 +93,24 @@ function WorldCard({ world, server, busy, onAction }: { world: WorldInfo; server
             {world.name}
           </span>
           <span className="muted small">
-            {pending ? 'vygeneruje se při startu' : [world.version && `verze ${world.version}`, world.seed && `seed ${world.seed}`].filter(Boolean).join(' · ') || 'svět Minecraftu'}
+            {pending ? t('generated on start') : [world.version && t('version {v}', { v: world.version }), world.seed && `seed ${world.seed}`].filter(Boolean).join(' · ') || t('Minecraft world')}
           </span>
         </div>
         <span className="pill" style={world.active ? { background: 'var(--green-soft)', color: 'var(--green-text)' } : { background: 'var(--raised)', color: '#b5bcc4' }}>
-          {world.active ? 'Aktivní' : 'Neaktivní'}
+          {world.active ? t('Active') : t('Inactive')}
         </span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8, fontSize: 13 }}>
         <div className="stack" style={{ gap: 2 }}>
-          <span className="muted small">Velikost</span>
+          <span className="muted small">{t('Size')}</span>
           <span>{pending ? '–' : bytes(world.sizeBytes)}</span>
         </div>
         <div className="stack" style={{ gap: 2 }}>
-          <span className="muted small">Dimenze</span>
-          <span>{pending ? '–' : world.folders.length === 1 ? 'v jedné složce' : world.folders.length}</span>
+          <span className="muted small">{t('Dimensions')}</span>
+          <span>{pending ? '–' : world.folders.length === 1 ? t('in one folder') : world.folders.length}</span>
         </div>
         <div className="stack" style={{ gap: 2 }}>
-          <span className="muted small">Hráno</span>
+          <span className="muted small">{t('Played')}</span>
           <span>{world.lastPlayed ? ago(world.lastPlayed) : '–'}</span>
         </div>
       </div>
@@ -119,22 +120,22 @@ function WorldCard({ world, server, busy, onAction }: { world: WorldInfo; server
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 3v12M7 10l5 5 5-5M4 21h16" />
             </svg>
-            Stáhnout .zip
+            {t('Download .zip')}
           </a>
         )}
         {world.active ? (
           !pending && (
-            <button type="button" className="btn sm" style={{ flex: '1 1 auto', minHeight: 40, background: 'var(--amber-soft)', borderColor: 'transparent', color: 'var(--amber-text)' }} disabled={busy || running} title={running ? 'Nejdřív zastav server' : undefined} onClick={() => onAction('reset')}>
-              Resetovat
+            <button type="button" className="btn sm" style={{ flex: '1 1 auto', minHeight: 40, background: 'var(--amber-soft)', borderColor: 'transparent', color: 'var(--amber-text)' }} disabled={busy || running} title={running ? t('Stop the server first') : undefined} onClick={() => onAction('reset')}>
+              {t('Reset')}
             </button>
           )
         ) : (
-          <button type="button" className="btn sm primary" style={{ flex: '1 1 auto', minHeight: 40 }} disabled={busy || running} title={running ? 'Nejdřív zastav server' : undefined} onClick={() => onAction('activate')}>
-            Nastavit aktivní
+          <button type="button" className="btn sm primary" style={{ flex: '1 1 auto', minHeight: 40 }} disabled={busy || running} title={running ? t('Stop the server first') : undefined} onClick={() => onAction('activate')}>
+            {t('Make active')}
           </button>
         )}
         {!world.active && (
-          <button type="button" className="btn icon sm" style={{ width: 40, minHeight: 40, color: 'var(--red-text)' }} aria-label={`Smazat svět ${world.name}`} disabled={busy || running} onClick={() => onAction('delete')}>
+          <button type="button" className="btn icon sm" style={{ width: 40, minHeight: 40, color: 'var(--red-text)' }} aria-label={t('Delete world {name}', { name: world.name })} disabled={busy || running} onClick={() => onAction('delete')}>
             <Icon name="trash" size={15} />
           </button>
         )}
@@ -169,29 +170,29 @@ function PregenCard({ server }: { server: ServerInfo }) {
   return (
     <section className="card stack" aria-labelledby="h-pregen" style={{ gap: 14 }}>
       <h2 id="h-pregen" className="h2">
-        Pre-generace světa
+        {t('World pre-generation')}
       </h2>
 
       {!PREGEN_SUPPORTED.has(server.type) ? (
-        <div className="banner info">Vanilla server neumí pluginy ani mody. Pre-generace funguje na Paperu nebo Fabricu.</div>
+        <div className="banner info">{t('A Vanilla server has no plugins or mods. Pre-generation works on Paper or Fabric.')}</div>
       ) : !p?.installed ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
           <span className="muted" style={{ flex: '1 1 260px', fontSize: 13 }}>
-            Chunky není nainstalovaný.
+            {t('Chunky is not installed.')}
           </span>
           <button
             type="button"
             className="btn primary"
             disabled={busy}
             onClick={() =>
-              void act('Instalace selhala', async () => {
+              void act(t('Installing failed'), async () => {
                 const r = await api.pregenInstall(server.id);
-                toast('ok', 'Chunky nainstalován', r.needsRestart ? 'Restartuj server, aby se načetl.' : 'Načte se při dalším startu.');
+                toast('ok', t('Chunky installed'), r.needsRestart ? t('Restart the server to load it.') : t('It loads on the next start.'));
               })
             }
           >
             {busy ? <Spinner size={16} /> : null}
-            Nainstalovat Chunky
+            {t('Install Chunky')}
           </button>
         </div>
       ) : (
@@ -200,30 +201,30 @@ function PregenCard({ server }: { server: ServerInfo }) {
             <div className="stack" style={{ gap: 8 }} aria-live="polite">
               <div className="kv" style={{ fontSize: 13 }}>
                 <span style={{ color: 'var(--text-2)' }}>
-                  {p.state === 'running' ? 'Generuji' : p.state === 'paused' ? 'Pozastaveno' : 'Hotovo'} · {p.world}
+                  {p.state === 'running' ? t('Generating') : p.state === 'paused' ? t('Paused') : t('Done')} · {p.world}
                 </span>
-                <span>{p.pct.toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} %</span>
+                <span>{p.pct.toLocaleString(locale(), { maximumFractionDigits: 1 })} %</span>
               </div>
               <Progress pct={p.pct} />
               <span className="muted small">
-                {p.chunks.toLocaleString('cs-CZ')} chunků
-                {p.state === 'running' && p.eta ? ` · zbývá ${p.eta}` : ''}
-                {p.state === 'running' && p.rate ? ` · ${p.rate.toLocaleString('cs-CZ')} chunků/s` : ''}
+                {t('{n} chunks', { n: p.chunks.toLocaleString(locale()) })}
+                {p.state === 'running' && p.eta ? ` · ${t('{time} left', { time: p.eta })}` : ''}
+                {p.state === 'running' && p.rate ? ` · ${t('{n} chunks/s', { n: p.rate.toLocaleString(locale()) })}` : ''}
               </span>
               <div style={{ display: 'flex', gap: 8 }}>
                 {p.state === 'running' && (
-                  <button type="button" className="btn sm" disabled={busy || !running} onClick={() => void act('Akce selhala', () => api.pregenAction(server.id, 'pause'))}>
-                    Pozastavit
+                  <button type="button" className="btn sm" disabled={busy || !running} onClick={() => void act(t('The action failed'), () => api.pregenAction(server.id, 'pause'))}>
+                    {t('Pause')}
                   </button>
                 )}
                 {p.state === 'paused' && (
-                  <button type="button" className="btn sm primary" disabled={busy || !running} onClick={() => void act('Akce selhala', () => api.pregenAction(server.id, 'continue'))}>
-                    Pokračovat
+                  <button type="button" className="btn sm primary" disabled={busy || !running} onClick={() => void act(t('The action failed'), () => api.pregenAction(server.id, 'continue'))}>
+                    {t('Continue')}
                   </button>
                 )}
                 {p.state !== 'done' && (
-                  <button type="button" className="btn sm ghost" disabled={busy || !running} onClick={() => void act('Akce selhala', () => api.pregenAction(server.id, 'cancel'))}>
-                    Zrušit
+                  <button type="button" className="btn sm ghost" disabled={busy || !running} onClick={() => void act(t('The action failed'), () => api.pregenAction(server.id, 'cancel'))}>
+                    {t('Cancel')}
                   </button>
                 )}
               </div>
@@ -233,7 +234,7 @@ function PregenCard({ server }: { server: ServerInfo }) {
             <div className="stack" style={{ gap: 14 }}>
               <div className="grid-auto" style={{ ['--min' as string]: '200px', gap: 12 }}>
                 <Dropdown
-                  label="Dimenze"
+                  label={t('Dimension')}
                   value={dimension}
                   onChange={(v) => setDimension(v as PregenRequest['dimension'])}
                   searchable={false}
@@ -244,29 +245,29 @@ function PregenCard({ server }: { server: ServerInfo }) {
                   ]}
                 />
                 <Dropdown
-                  label="Tvar"
+                  label={t('Shape')}
                   value={shape}
                   onChange={(v) => setShape(v as PregenRequest['shape'])}
                   searchable={false}
                   options={[
-                    { value: 'square', label: 'Čtverec' },
-                    { value: 'circle', label: 'Kruh' },
+                    { value: 'square', label: t('Square') },
+                    { value: 'circle', label: t('Circle') },
                   ]}
                 />
               </div>
-              <Slider id="pregen-radius" label="Poloměr od středu (0, 0)" valueLabel={`${radius.toLocaleString('cs-CZ')} bloků`} value={radius} min={500} max={20000} step={500} onChange={setRadius} />
-              <span className="muted small">Cca {chunksEstimate.toLocaleString('cs-CZ')} chunků</span>
-              {dimension === 'overworld' && <Toggle label={`Nastavit hranici světa na ${(radius * 2).toLocaleString('cs-CZ')} bloků`} checked={border} onChange={setBorder} />}
+              <Slider id="pregen-radius" label={t('Radius from the center (0, 0)')} valueLabel={t('{n} blocks', { n: radius.toLocaleString(locale()) })} value={radius} min={500} max={20000} step={500} onChange={setRadius} />
+              <span className="muted small">{t('About {n} chunks', { n: chunksEstimate.toLocaleString(locale()) })}</span>
+              {dimension === 'overworld' && <Toggle label={t('Set the world border to {n} blocks', { n: (radius * 2).toLocaleString(locale()) })} checked={border} onChange={setBorder} />}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="btn primary"
                   disabled={busy || !running}
-                  onClick={() => void act('Start selhal', () => api.pregenStart(server.id, { dimension, radius, shape, setBorder: border && dimension === 'overworld' }), 'Pre-generace spuštěna')}
+                  onClick={() => void act(t('Starting failed'), () => api.pregenStart(server.id, { dimension, radius, shape, setBorder: border && dimension === 'overworld' }), t('Pre-generation started'))}
                 >
-                  Spustit pre-generaci
+                  {t('Start pre-generation')}
                 </button>
-                {!running && <span className="muted small">Server musí běžet.</span>}
+                {!running && <span className="muted small">{t('The server must be running.')}</span>}
               </div>
             </div>
           )}
@@ -292,7 +293,7 @@ function BackupsPanel({ server }: { server: ServerInfo }) {
           setList(r.backups);
           setNextRun(r.nextRun);
         })
-        .catch((err: Error) => toast('error', 'Zálohy se nepodařilo načíst', err.message)),
+        .catch((err: Error) => toast('error', t('Could not load the backups'), err.message)),
     [server.id, toast],
   );
 
@@ -301,33 +302,33 @@ function BackupsPanel({ server }: { server: ServerInfo }) {
     if (!server.task) void load();
   }, [load, server.task, server.backupSchedule, server.backupTime, server.backupKeep]);
 
-  const update = (patch: Parameters<typeof api.update>[1]) => void api.update(server.id, patch).catch((err: Error) => toast('error', 'Nastavení se nepodařilo uložit', err.message));
+  const update = (patch: Parameters<typeof api.update>[1]) => void api.update(server.id, patch).catch((err: Error) => toast('error', t('Could not save the settings'), err.message));
   const schedule = server.backupSchedule ?? 'off';
 
   return (
     <aside className="col-side card stack" aria-labelledby="h-backup" style={{ gap: 16, alignSelf: 'flex-start' }}>
       <div className="section-head">
         <h2 id="h-backup" className="h2">
-          Zálohy
+          {t('Backups')}
         </h2>
         <button
           type="button"
           className="btn primary sm"
           style={{ minHeight: 40 }}
           disabled={!!server.task || !server.installed}
-          onClick={() => void api.createBackup(server.id).catch((err: Error) => toast('error', 'Záloha nezačala', err.message))}
+          onClick={() => void api.createBackup(server.id).catch((err: Error) => toast('error', t('The backup did not start'), err.message))}
         >
-          Zálohovat teď
+          {t('Back up now')}
         </button>
       </div>
-      <Dropdown label="Automaticky" value={schedule} options={SCHEDULES} onChange={(v) => update({ backupSchedule: v as BackupSchedule })} searchable={false} />
-      {(schedule === 'daily' || schedule === 'weekly') && <Dropdown label="V kolik hodin" value={server.backupTime ?? '04:00'} options={TIMES} onChange={(v) => update({ backupTime: v })} mono />}
-      <Dropdown label="Ponechat automatických" value={String(server.backupKeep ?? DEFAULT_BACKUP_KEEP)} options={KEEP} onChange={(v) => update({ backupKeep: Number(v) })} searchable={false} />
-      {nextRun && <span className="muted small">Další automatická záloha: {dateTime(nextRun)}</span>}
+      <Dropdown label={t('Automatically')} value={schedule} options={SCHEDULES} onChange={(v) => update({ backupSchedule: v as BackupSchedule })} searchable={false} />
+      {(schedule === 'daily' || schedule === 'weekly') && <Dropdown label={t('At what time')} value={server.backupTime ?? '04:00'} options={TIMES} onChange={(v) => update({ backupTime: v })} mono />}
+      <Dropdown label={t('Automatic backups to keep')} value={String(server.backupKeep ?? DEFAULT_BACKUP_KEEP)} options={KEEP} onChange={(v) => update({ backupKeep: Number(v) })} searchable={false} />
+      {nextRun && <span className="muted small">{t('Next automatic backup: {time}', { time: dateTime(nextRun) })}</span>}
 
       <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', maxHeight: 420, overflowY: 'auto' }}>
         {list === null && <Spinner />}
-        {list?.length === 0 && <li className="muted small">Zatím žádná záloha.</li>}
+        {list?.length === 0 && <li className="muted small">{t('No backups yet.')}</li>}
         {list?.map((b) => (
           <li key={b.file} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 2px', borderTop: '1px solid #22282f' }}>
             <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -336,21 +337,21 @@ function BackupsPanel({ server }: { server: ServerInfo }) {
                 {bytes(b.size)} · {KIND_LABEL[b.kind]}
               </span>
             </span>
-            <button type="button" className="btn sm" disabled={!!server.task || !stopped} title={stopped ? undefined : 'Nejdřív zastav server'} onClick={() => setRestoring(b)}>
-              Obnovit
+            <button type="button" className="btn sm" disabled={!!server.task || !stopped} title={stopped ? undefined : t('Stop the server first')} onClick={() => setRestoring(b)}>
+              {t('Restore')}
             </button>
             <MenuButton
-              label={`Akce se zálohou ${dateTime(b.createdAt)}`}
+              label={t('Actions for the backup from {time}', { time: dateTime(b.createdAt) })}
               items={[
-                { label: 'Stáhnout', onClick: () => (window.location.href = api.backupDownloadUrl(server.id, b.file)) },
-                { label: 'Smazat', color: 'var(--red-text)', onClick: () => setDeleting(b) },
+                { label: t('Download'), onClick: () => (window.location.href = api.backupDownloadUrl(server.id, b.file)) },
+                { label: t('Delete'), color: 'var(--red-text)', onClick: () => setDeleting(b) },
               ]}
             />
           </li>
         ))}
       </ul>
       <div className="stack" style={{ gap: 4, fontSize: 12 }}>
-        <span className="muted">Složka záloh</span>
+        <span className="muted">{t('Backup folder')}</span>
         <span className="mono" style={{ color: 'var(--text-2)', wordBreak: 'break-all' }}>
           {server.dir.replace(/servers[\\/][^\\/]+$/, `backups\\${server.id}`)}
         </span>
@@ -358,22 +359,22 @@ function BackupsPanel({ server }: { server: ServerInfo }) {
 
       {restoring && (
         <ConfirmDialog
-          title={`Obnovit zálohu z ${dateTime(restoring.createdAt)}?`}
-          text="Současný stav se nejdřív sám zazálohuje (záloha „před obnovou“). Potom se svět, pluginy a nastavení vrátí do stavu ze zálohy."
-          confirmLabel="Obnovit"
+          title={t('Restore the backup from {time}?', { time: dateTime(restoring.createdAt) })}
+          text={t('The current state is backed up first (a "before restore" backup). Then the world, plugins and settings go back to the backup.')}
+          confirmLabel={t('Restore')}
           onCancel={() => setRestoring(null)}
           onConfirm={() => {
             const b = restoring;
             setRestoring(null);
-            void api.restoreBackup(server.id, b.file).catch((err: Error) => toast('error', 'Obnova nezačala', err.message));
+            void api.restoreBackup(server.id, b.file).catch((err: Error) => toast('error', t('The restore did not start'), err.message));
           }}
         />
       )}
       {deleting && (
         <ConfirmDialog
-          title="Smazat zálohu?"
-          text={`Záloha z ${dateTime(deleting.createdAt)} (${bytes(deleting.size)}) se smaže natrvalo.`}
-          confirmLabel="Smazat natrvalo"
+          title={t('Delete the backup?')}
+          text={t('The backup from {time} ({size}) is deleted for good.', { time: dateTime(deleting.createdAt), size: bytes(deleting.size) })}
+          confirmLabel={t('Delete for good')}
           danger
           onCancel={() => setDeleting(null)}
           onConfirm={() => {
@@ -382,7 +383,7 @@ function BackupsPanel({ server }: { server: ServerInfo }) {
             void api
               .deleteBackup(server.id, b.file)
               .then((r) => setList(r.backups))
-              .catch((err: Error) => toast('error', 'Smazání selhalo', err.message));
+              .catch((err: Error) => toast('error', t('Deleting failed'), err.message));
           }}
         />
       )}
@@ -405,7 +406,7 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
   const edition = editionOf(server.type);
   const bedrock = edition === 'bedrock';
 
-  const load = useCallback(() => api.worlds(server.id).then(setWorlds).catch((err: Error) => toast('error', 'Světy se nepodařilo načíst', err.message)), [server.id, toast]);
+  const load = useCallback(() => api.worlds(server.id).then(setWorlds).catch((err: Error) => toast('error', t('Could not load the worlds'), err.message)), [server.id, toast]);
 
   useEffect(() => {
     if (!server.task) void load();
@@ -425,15 +426,15 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
 
   const importFile = async (file: File | undefined) => {
     if (!file) return;
-    if (!/\.(zip|mcworld)$/i.test(file.name)) return toast('error', bedrock ? 'Nahraj svět jako .mcworld nebo .zip' : 'Nahraj svět jako .zip');
+    if (!/\.(zip|mcworld)$/i.test(file.name)) return toast('error', bedrock ? t('Upload the world as .mcworld or .zip') : t('Upload the world as .zip'));
     setUpload({ name: file.name, pct: 0 });
     try {
       const r = await api.importWorld(server.id, file, importName.trim() || file.name.replace(/\.(zip|mcworld)$/i, ''), activate && !running, (pct) => setUpload({ name: file.name, pct }));
       setWorlds(r.worlds);
-      toast('ok', `Svět nahrán jako „${r.name}“`, activate && !running ? 'Je nastavený jako aktivní.' : undefined);
+      toast('ok', t('World uploaded as "{name}"', { name: r.name }), activate && !running ? t('It is set as active.') : undefined);
       setImportName('');
     } catch (err) {
-      toast('error', 'Nahrání světa selhalo', (err as Error).message);
+      toast('error', t('Uploading the world failed'), (err as Error).message);
     } finally {
       setUpload(null);
     }
@@ -450,9 +451,9 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
       <div className="row">
         <div className="col-main">
           <div className="empty">
-            <span style={{ fontWeight: 600 }}>Svět Hytale je ve složce universe</span>
+            <span style={{ fontWeight: 600 }}>{t('The Hytale world is in the universe folder')}</span>
             <a className="btn" href={href({ page: 'server', id: server.id, tab: 'soubory', file: 'universe' })}>
-              Otevřít v Souborech
+              {t('Open in Files')}
             </a>
           </div>
         </div>
@@ -467,14 +468,14 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
         <section className="stack" aria-labelledby="h-worlds" style={{ gap: 14 }}>
           <div className="section-head">
             <h2 id="h-worlds" className="h2">
-              Světy
+              {t('Worlds')}
             </h2>
-            <button type="button" className="btn" disabled={busy || running} title={running ? 'Nejdřív zastav server' : undefined} onClick={() => setNewOpen(true)}>
+            <button type="button" className="btn" disabled={busy || running} title={running ? t('Stop the server first') : undefined} onClick={() => setNewOpen(true)}>
               <Icon name="plus" size={17} strokeWidth={2.2} />
-              Nový svět
+              {t('New world')}
             </button>
           </div>
-          {running && <div className="banner info">Server běží. Přepnout, resetovat nebo smazat svět jde až po zastavení. Stahovat můžeš i za běhu.</div>}
+          {running && <div className="banner info">{t('The server is running. Switching, resetting or deleting a world works once it is stopped. Downloading works while it runs.')}</div>}
           <div className="grid-auto" style={{ ['--min' as string]: '320px', gap: 14 }}>
             {worlds === null && <Spinner />}
             {worlds?.map((w) => (
@@ -483,7 +484,7 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
                 world={w}
                 server={server}
                 busy={busy}
-                onAction={(a) => (a === 'activate' ? void run('Přepnutí selhalo', () => api.activateWorld(server.id, w.name), `Aktivní svět: ${w.name}`) : setConfirm({ world: w, action: a }))}
+                onAction={(a) => (a === 'activate' ? void run(t('Switching failed'), () => api.activateWorld(server.id, w.name), t('Active world: {name}', { name: w.name })) : setConfirm({ world: w, action: a }))}
               />
             ))}
           </div>
@@ -501,7 +502,7 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
             {upload ? (
               <div className="stack" style={{ width: '100%', maxWidth: 420, gap: 8 }}>
                 <span>
-                  Nahrávám {upload.name} · {upload.pct} %
+                  {t('Uploading {name} · {pct} %', { name: upload.name, pct: upload.pct })}
                 </span>
                 <Progress pct={upload.pct} />
               </div>
@@ -512,16 +513,16 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
                     <path d="M12 21V9M7 14l5-5 5 5M4 3h16" />
                   </svg>
                 </span>
-                <span style={{ fontWeight: 600 }}>{bedrock ? 'Přetáhni sem svět (.mcworld nebo .zip)' : 'Přetáhni sem svět (.zip)'}</span>
+                <span style={{ fontWeight: 600 }}>{bedrock ? t('Drop a world here (.mcworld or .zip)') : t('Drop a world here (.zip)')}</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-                  <input className="input mono" style={{ width: 200 }} value={importName} maxLength={48} placeholder="název (nepovinné)" aria-label="Název nahraného světa" onChange={(e) => setImportName(e.target.value)} />
+                  <input className="input mono" style={{ width: 200 }} value={importName} maxLength={48} placeholder={t('name (optional)')} aria-label={t('Name of the uploaded world')} onChange={(e) => setImportName(e.target.value)} />
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: running ? 'var(--muted)' : 'var(--text-2)' }}>
                     <input type="checkbox" className="check" checked={activate && !running} disabled={running} onChange={(e) => setActivate(e.target.checked)} />
-                    Nastavit jako aktivní
+                    {t('Make it active')}
                   </label>
                   <input ref={fileRef} type="file" accept={bedrock ? '.mcworld,.zip,application/zip' : '.zip,application/zip'} hidden onChange={(e) => void importFile(e.target.files?.[0])} />
                   <button type="button" className="btn primary" disabled={!!server.task} onClick={() => fileRef.current?.click()}>
-                    Vybrat soubor
+                    {t('Choose a file')}
                   </button>
                 </div>
               </>
@@ -540,27 +541,27 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
           onCancel={() => setNewOpen(false)}
           onCreate={(b) => {
             setNewOpen(false);
-            void run('Svět se nepodařilo založit', () => api.newWorld(server.id, { name: b.name, seed: b.seed, type: b.type }), `Nový svět ${b.name} se vygeneruje při startu`);
+            void run(t('Could not create the world'), () => api.newWorld(server.id, { name: b.name, seed: b.seed, type: b.type }), t('The new world {name} is generated on start', { name: b.name }));
           }}
         />
       )}
       {confirm && (
         <ConfirmDialog
-          title={confirm.action === 'reset' ? `Resetovat svět ${confirm.world.name}?` : `Smazat svět ${confirm.world.name}?`}
+          title={confirm.action === 'reset' ? t('Reset world {name}?', { name: confirm.world.name }) : t('Delete world {name}?', { name: confirm.world.name })}
           text={
             confirm.action === 'reset'
-              ? 'Svět se přesune do koše srvMC a při dalším startu se vygeneruje nový se stejným seedem. Chceš-li jistotu, udělej předtím zálohu.'
-              : 'Svět se přesune do koše srvMC (složka trash). Odtud ho jde ručně vrátit.'
+              ? t("The world moves to srvMC's trash and a new one with the same seed is generated on the next start. To be safe, make a backup first.")
+              : t("The world moves to srvMC's trash (the trash folder). You can bring it back from there by hand.")
           }
-          confirmLabel={confirm.action === 'reset' ? 'Resetovat' : 'Přesunout do koše'}
+          confirmLabel={confirm.action === 'reset' ? t('Reset') : t('Move to trash')}
           danger
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
             const c = confirm;
             setConfirm(null);
             void (c.action === 'reset'
-              ? run('Reset selhal', () => api.resetWorld(server.id, c.world.name), 'Svět resetován')
-              : run('Mazání selhalo', () => api.deleteWorld(server.id, c.world.name), 'Svět přesunut do koše'));
+              ? run(t('Resetting failed'), () => api.resetWorld(server.id, c.world.name), t('World reset'))
+              : run(t('Deleting failed'), () => api.deleteWorld(server.id, c.world.name), t('World moved to trash')));
           }}
         />
       )}

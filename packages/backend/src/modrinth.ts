@@ -5,6 +5,7 @@ import { downloadToCache } from './download.ts';
 import { fetchJson } from './http.ts';
 import type { Paths } from './paths.ts';
 import { UserError } from './providers/types.ts';
+import { t } from '@srvmc/shared';
 
 const API = 'https://api.modrinth.com/v2';
 
@@ -154,18 +155,18 @@ export async function installModrinth(project: string, opts: ModrinthInstallOpti
   opts.present.add(project);
   const info = await getProject(project);
   if (info.server_side === 'unsupported') {
-    if (depth === 0) throw new UserError(`${info.title} je jen pro hráče (klienta). Server ho nepotřebuje a mohl by kvůli němu spadnout.`);
-    result.skipped.push(`${info.title} (jen pro klienta)`);
+    if (depth === 0) throw new UserError(t('{name} is only for players (the client). The server does not need it and could crash because of it.', { name: info.title }));
+    result.skipped.push(t('{name} (client only)', { name: info.title }));
     return result;
   }
   const version = await findVersion(info.id, opts.loaders, opts.gameVersion);
   if (!version) {
-    if (depth === 0) throw new UserError(`${info.title} zatím nemá verzi pro ${opts.gameVersion} (${opts.loaders[0]}).`);
-    result.skipped.push(`${info.title} (není verze pro ${opts.gameVersion})`);
+    if (depth === 0) throw new UserError(t('{name} has no version for {version} yet.', { name: info.title, version: `${opts.gameVersion} (${opts.loaders[0]})` }));
+    result.skipped.push(t('{name} (no version for {version})', { name: info.title, version: opts.gameVersion }));
     return result;
   }
   const file = primaryFile(version);
-  if (!file || !SAFE_JAR.test(file.filename)) throw new UserError(`${info.title} nemá použitelný soubor ke stažení.`);
+  if (!file || !SAFE_JAR.test(file.filename)) throw new UserError(t('{name} has no usable file to download.', { name: info.title }));
 
   const cached = await downloadToCache(opts.paths, { url: file.url, fileName: file.filename, sha1: file.hashes.sha1, size: file.size });
   await mkdir(opts.dir, { recursive: true });

@@ -4,6 +4,7 @@ import { cached, fetchJson } from '../http.ts';
 import { mavenChecksum } from '../maven.ts';
 import { javaMajorFor } from '../mojang.ts';
 import { UserError, type Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 const META = 'https://meta.quiltmc.org/v3';
 
@@ -32,7 +33,7 @@ export const quilt: Provider = {
   async listBuilds(mc) {
     return (await loadersFor(mc)).map(({ loader }, i) => ({
       id: loader.version,
-      label: `Quilt Loader ${loader.version}${i === 0 ? ' (doporučeno)' : ''}`,
+      label: `Quilt Loader ${loader.version}${i === 0 ? ` (${t('recommended')})` : ''}`,
       channel: i === 0 || !/beta|alpha|pre|rc/i.test(loader.version) ? 'stable' : 'beta',
     }));
   },
@@ -40,10 +41,10 @@ export const quilt: Provider = {
   async plan(mc, build) {
     const builds = await this.listBuilds(mc);
     const loader = build ?? builds[0]?.id;
-    if (!loader || !builds.some((b) => b.id === loader)) throw new UserError(`Quilt Loader pro ${mc} neexistuje.`);
+    if (!loader || !builds.some((b) => b.id === loader)) throw new UserError(t('{name} does not exist.', { name: `Quilt Loader (${mc})` }));
     const installers = await cached('quilt-installers', 10 * 60_000, () => fetchJson<QuiltInstaller[]>(`${META}/versions/installer`));
     const inst = installers[0];
-    if (!inst) throw new UserError('Quilt installer není dostupný.');
+    if (!inst) throw new UserError(t('The Quilt installer is not available.'));
     // The hashes in Quilt Meta can lag behind the file Maven serves; Maven's own checksum is the one to trust.
     const sha256 = await mavenChecksum(inst.url, 'sha256');
     return {

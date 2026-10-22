@@ -17,7 +17,7 @@ export interface Need {
 }
 
 /** The desktop window and the single-user (no accounts) mode act as the owner. */
-export const LOCAL_OWNER: PanelUser = { id: 'local', name: 'Tento počítač', role: 'owner', servers: 'all', createdAt: 0 };
+export const LOCAL_OWNER: PanelUser = { id: 'local', name: 'This computer', role: 'owner', servers: 'all', createdAt: 0 };
 
 const POWER = new Set(['start', 'stop', 'restart', 'kill']);
 

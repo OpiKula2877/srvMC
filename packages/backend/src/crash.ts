@@ -3,6 +3,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { CrashInfo, LogLine } from '@srvmc/shared';
+import { t } from '@srvmc/shared';
 
 interface Known {
   re: RegExp;
@@ -13,22 +14,22 @@ interface Known {
 
 // First match wins, so the most specific causes come first.
 const KNOWN: Known[] = [
-  { re: /OutOfMemoryError/, summary: () => 'Serveru došla paměť. Přidej mu RAM v Nastavení.' },
-  { re: /FAILED TO BIND TO PORT|Address already in use|BindException/i, summary: ({ port }) => `Port ${port} používá jiný program.`, permanent: true },
+  { re: /OutOfMemoryError/, summary: () => t('The server ran out of memory. Give it more RAM in Settings.') },
+  { re: /FAILED TO BIND TO PORT|Address already in use|BindException/i, summary: ({ port }) => t('Port {port} is used by another program.', { port }), permanent: true },
   {
     re: /UnsupportedClassVersionError|Unsupported class file major version|compiled by a more recent version of the Java Runtime/,
-    summary: () => 'Některý mod nebo plugin potřebuje novější Javu, než tahle verze Minecraftu používá.',
+    summary: () => t('A mod or plugin needs a newer Java than this Minecraft version uses.'),
     permanent: true,
   },
   {
     re: /Incompatible mods? found|Mod resolution failed|Missing or unsupported mandatory dependencies|requires (any )?version .* of /i,
-    summary: () => 'Mody spolu nesedí nebo některý chybí. V konzoli je, co který potřebuje.',
+    summary: () => t('The mods do not fit together or one is missing. The console says what each needs.'),
     permanent: true,
   },
-  { re: /Mixin apply (for mod \S+ )?failed|MixinApplyError|InvalidInjectionException|MixinTransformerError/, summary: () => 'Některý mod se nepodařilo načíst (chyba mixinu).', permanent: true },
-  { re: /You need to agree to the EULA/, summary: () => 'Chybí souhlas s Minecraft EULA.', permanent: true },
-  { re: /Failed to (load|read) level\.dat|Exception reading .*level\.dat/i, summary: () => 'Svět se nepodařilo načíst. Zkus obnovit zálohu.', permanent: true },
-  { re: /The server has stopped responding|A single server tick took [\d.,]+ seconds/i, summary: () => 'Server zamrzl a jeho hlídač ho ukončil.' },
+  { re: /Mixin apply (for mod \S+ )?failed|MixinApplyError|InvalidInjectionException|MixinTransformerError/, summary: () => t('A mod failed to load (mixin error).'), permanent: true },
+  { re: /You need to agree to the EULA/, summary: () => t('The Minecraft EULA has not been accepted.'), permanent: true },
+  { re: /Failed to (load|read) level\.dat|Exception reading .*level\.dat/i, summary: () => t('The world failed to load. Try restoring a backup.'), permanent: true },
+  { re: /The server has stopped responding|A single server tick took [\d.,]+ seconds/i, summary: () => t('The server froze and its watchdog stopped it.') },
 ];
 
 // Names that show up in stack traces and reports but are the platform, not a suspect.
@@ -89,8 +90,8 @@ export function errorText(lines: LogLine[]): string {
 /** Exit codes come as unsigned 32-bit numbers on Windows (4294967295 = -1, a forced kill). */
 export function exitText(code: number | string | null): string {
   const n = Number(code);
-  if (code === null || code === 'SIGKILL' || n === -1 || n === 4294967295) return 'Proces Javy byl násilně ukončen (zvenku, nebo došla paměť počítače).';
-  return `Server skončil s kódem ${n > 2 ** 31 ? n - 2 ** 32 : code}.`;
+  if (code === null || code === 'SIGKILL' || n === -1 || n === 4294967295) return t('The Java process was killed (from outside, or the computer ran out of memory).');
+  return t('The server ended with code {code}.', { code: String(n > 2 ** 31 ? n - 2 ** 32 : code) });
 }
 
 export function describeCrash(text: string, ctx: { port: number }): { summary: string; permanent: boolean } | null {

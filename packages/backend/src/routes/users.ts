@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AuthInfo, PanelRole, PanelUser } from '@srvmc/shared';
 import { UserError } from '../providers/types.ts';
 import { UserStore } from '../users.ts';
+import { t } from '@srvmc/shared';
 
 export const SESSION_COOKIE = 'srvmc_session';
 
@@ -76,11 +77,11 @@ export function registerUserRoutes(app: FastifyInstance, users: UserStore, port:
     { schema: { body: { type: 'object', required: ['name', 'password'], additionalProperties: false, properties: { name: { type: 'string', maxLength: 64 }, password: { type: 'string', maxLength: 200 } } } } },
     async (req, reply) => {
       const ip = req.socket.remoteAddress ?? '?';
-      if (tooMany(ip)) return reply.code(429).send({ error: 'Moc špatných pokusů. Zkus to za 15 minut.' });
+      if (tooMany(ip)) return reply.code(429).send({ error: t('Too many wrong attempts. Try again in 15 minutes.') });
       const user = await users.verify(req.body.name, req.body.password);
       if (!user) {
         fail(ip);
-        return reply.code(401).send({ error: 'Špatné jméno nebo heslo.' });
+        return reply.code(401).send({ error: t('Wrong name or password.') });
       }
       failures.delete(ip);
       setCookie(reply, await users.startSession(user.id), UserStore.sessionMaxAge);
@@ -99,8 +100,8 @@ export function registerUserRoutes(app: FastifyInstance, users: UserStore, port:
     { schema: { body: { type: 'object', required: ['current', 'next'], additionalProperties: false, properties: { current: { type: 'string', maxLength: 200 }, next: { type: 'string', maxLength: 200 } } } } },
     async (req, reply) => {
       const user = principalOf(req);
-      if (!user || user.id === 'local') throw new UserError('Heslo se mění u přihlášeného účtu.');
-      if (!(await users.verify(user.name, req.body.current))) return reply.code(401).send({ error: 'Současné heslo nesedí.' });
+      if (!user || user.id === 'local') throw new UserError(t('The password changes for a signed-in account.'));
+      if (!(await users.verify(user.name, req.body.current))) return reply.code(401).send({ error: t('The current password is wrong.') });
       await users.update(user.id, { password: req.body.next });
       // A password change signs out everywhere; this browser gets a fresh session.
       setCookie(reply, await users.startSession(user.id), UserStore.sessionMaxAge);
@@ -118,7 +119,7 @@ export function registerUserRoutes(app: FastifyInstance, users: UserStore, port:
     users.update(req.params.id, req.body),
   );
   app.delete<{ Params: { id: string } }>('/api/users/:id', async (req, reply) => {
-    if (principalOf(req)?.id === req.params.id) throw new UserError('Vlastní účet tady smazat nejde.');
+    if (principalOf(req)?.id === req.params.id) throw new UserError(t('You cannot delete your own account here.'));
     await users.remove(req.params.id);
     reply.code(204);
   });

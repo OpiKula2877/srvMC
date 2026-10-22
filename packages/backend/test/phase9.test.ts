@@ -67,11 +67,11 @@ describe('accounts', () => {
     const first = await store.create({ name: 'Samuel', password: 'heslo1234', role: 'starter' });
     expect(first.role).toBe('owner');
     const mod = await store.create({ name: 'mod', password: 'heslo1234', role: 'moderator', servers: ['s1'] });
-    await expect(store.create({ name: 'MOD', password: 'heslo1234', role: 'starter' })).rejects.toThrow(/jiný účet/);
+    await expect(store.create({ name: 'MOD', password: 'heslo1234', role: 'starter' })).rejects.toThrow(/Another account/);
     await expect(store.create({ name: 'x', password: 'heslo1234', role: 'starter' })).rejects.toThrow(/2–32/);
-    await expect(store.create({ name: 'kratke', password: '123', role: 'starter' })).rejects.toThrow(/8 znaků/);
-    await expect(store.update(first.id, { role: 'admin' })).rejects.toThrow(/Poslední vlastník/);
-    await expect(store.remove(first.id)).rejects.toThrow(/Posledního vlastníka/);
+    await expect(store.create({ name: 'kratke', password: '123', role: 'starter' })).rejects.toThrow(/8 characters/);
+    await expect(store.update(first.id, { role: 'admin' })).rejects.toThrow(/last owner must stay/);
+    await expect(store.remove(first.id)).rejects.toThrow(/last owner cannot/);
     expect(await store.verify('SAMUEL', 'heslo1234')).toMatchObject({ id: first.id });
     expect(await store.verify('Samuel', 'nope')).toBeNull();
     expect(await store.verify('nikdo', 'heslo1234')).toBeNull();

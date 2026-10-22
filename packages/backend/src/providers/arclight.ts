@@ -3,6 +3,7 @@ import type { BuildInfo } from '@srvmc/shared';
 import { cached, fetchJson } from '../http.ts';
 import { javaMajorFor } from '../mojang.ts';
 import { compareVersions, UserError, type Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 interface GhAsset {
   name: string;
@@ -76,7 +77,7 @@ export const arclight: Provider = {
   async plan(mc, build) {
     const all = (await builds()).filter((b) => b.mc === mc);
     const chosen = build ? all.find((b) => buildId(b) === build) : (all.find((b) => !b.prerelease) ?? all[0]);
-    if (!chosen) throw new UserError(`Arclight pro ${mc} neexistuje.`);
+    if (!chosen) throw new UserError(t('{name} does not exist.', { name: `Arclight ${mc}` }));
     const sha256 = chosen.asset.digest?.startsWith('sha256:') ? chosen.asset.digest.slice(7) : undefined;
     return {
       files: [{ url: chosen.asset.browser_download_url, sha256, size: chosen.asset.size, fileName: chosen.asset.name, target: 'arclight.jar' }],

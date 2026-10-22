@@ -32,6 +32,7 @@ import { fabric } from './fabric.ts';
 import { forge, forgeBuilds, neoforge } from './forge.ts';
 import { quilt } from './quilt.ts';
 import { UserError, type InstallContext, type InstallPlan, type PlanEnv, type Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 const LOADER_PROVIDERS: Record<PackLoader['type'], Provider> = { fabric, quilt, forge, neoforge };
 
@@ -77,15 +78,15 @@ async function planFromPack(p: Prepared): Promise<InstallPlan> {
         displayVersion: mc || p.info.versionNumber,
         modpack: { ...p.info, loader: p.loader?.type ?? 'forge' },
         async install(ctx) {
-          ctx.progress('Kopíruji server pack', null);
+          ctx.progress(t('Copying the server pack'), null);
           const n = await copyPack(p.root, ctx.dir, 'server');
-          await done(ctx, `server pack použit tak, jak je (${n} souborů).`);
+          await done(ctx, t('server pack used as it is ({n} files).', { n }));
           return platformArgs(asIs);
         },
       };
     }
   }
-  if (!p.loader || !p.loader.mc) throw new UserError('Nepoznal jsem, na jakém loaderu a verzi Minecraftu modpack běží.');
+  if (!p.loader || !p.loader.mc) throw new UserError(t('Could not tell which loader and Minecraft version the modpack runs on.'));
   const loader = p.loader;
   const base = await loaderPlan(loader);
   return {
@@ -97,14 +98,14 @@ async function planFromPack(p: Prepared): Promise<InstallPlan> {
     async install(ctx) {
       const launch = base.install ? await base.install(ctx) : ['-jar', base.launchJar!];
       await p.fetchMods?.(ctx);
-      ctx.progress('Kopíruji mody a nastavení modpacku', null);
+      ctx.progress(t('Copying the mods and settings of the modpack'), null);
       const n = await copyPack(p.root, ctx.dir, p.kind === 'server' ? 'content' : 'client');
       let dropped: string[] = [];
       if (p.kind === 'client') {
-        ctx.progress('Vyřazuji mody jen pro hráče', null);
+        ctx.progress(t('Setting aside player-only mods'), null);
         dropped = await dropClientMods(path.join(ctx.dir, 'mods'), path.join(ctx.paths.trash, ctx.serverId, 'jen-pro-klienta'));
       }
-      await done(ctx, `${p.kind === 'server' ? 'server pack' : 'klientské soubory'}, ${n} souborů${dropped.length ? `, ${dropped.length} modů jen pro hráče odloženo do koše (${dropped.join(', ')})` : ''}.`);
+      await done(ctx, `${t(p.kind === 'server' ? 'server pack, {n} files' : 'client files, {n} files', { n })}${dropped.length ? `, ${t('{n} player-only mods put in the trash ({list})', { n: dropped.length, list: dropped.join(', ') })}` : ''}.`);
       return launch;
     },
   };
@@ -127,9 +128,9 @@ async function cfPackFile(mod: CfMod, f: CfFile, env: PlanEnv, what: string): Pr
       env.progress?.(`Stahuji ${what} · ${Math.round(d / 1048576)}${t ? ` z ${Math.round(t / 1048576)}` : ''} MB`, t ? Math.round((d / t) * 100) : null),
     );
   }
-  if (!env.manual || !env.serverId) throw new UserError(`${mod.name}: autor povolil stahování jen na CurseForge.`);
+  if (!env.manual || !env.serverId) throw new UserError(t('{name}: the author allows downloads only on CurseForge.', { name: mod.name }));
   const mf = manualFileOf(mod, f);
-  await env.manual.waitAll(env.serverId, [mf], async () => undefined, (items) => env.progress?.(`Stáhni ${what} z CurseForge – srvMC si ho vezme ze složky Stažené soubory`, null, items));
+  await env.manual.waitAll(env.serverId, [mf], async () => undefined, (items) => env.progress?.(t('Download the {what} from CurseForge – srvMC picks it up from the Downloads folder', { what: t(what) }), null, items));
   return cachedPath(env.paths, mf);
 }
 
@@ -137,10 +138,10 @@ const SERVER_CLASSES = new Set<number>([CLASS.mod, CLASS.plugin]);
 
 async function cfPrepared(modId: number, fileId: number, env: PlanEnv): Promise<Prepared> {
   const [mod, file] = await Promise.all([getMod(modId), getFile(modId, fileId)]);
-  if (file.modId !== mod.id) throw new UserError('Verze nepatří k tomuto modpacku.');
+  if (file.modId !== mod.id) throw new UserError(t('The version does not belong to this modpack.'));
   const zip = await cfPackFile(mod, file, env, 'modpack');
   const manifest = JSON.parse((await readJarEntries(zip, new Set(['manifest.json']))).get('manifest.json') ?? 'null') as CfManifest | null;
-  if (!manifest?.minecraft) throw new UserError('Soubor modpacku je poškozený (chybí manifest.json).');
+  if (!manifest?.minecraft) throw new UserError(t('The modpack file is damaged (manifest.json is missing).'));
   const mc = manifest.minecraft.version;
   const primary = manifest.minecraft.modLoaders.find((l) => l.primary) ?? manifest.minecraft.modLoaders[0];
   const loader = primary ? manifestLoader(mc, primary.id) : null;
@@ -165,7 +166,7 @@ async function cfPrepared(modId: number, fileId: number, env: PlanEnv): Promise<
     staging,
     async fetchMods(ctx) {
       const wanted = manifest.files.filter((f) => f.required !== false);
-      ctx.progress('Zjišťuji mody modpacku', null);
+      ctx.progress(t('Finding the mods of the modpack'), null);
       const [files, mods] = await Promise.all([getFiles(wanted.map((f) => f.fileID)), getMods([...new Set(wanted.map((f) => f.projectID))])]);
       const byMod = new Map(mods.map((m) => [m.id, m]));
       const manual: { mf: ManualFile; out: string }[] = [];
@@ -191,7 +192,7 @@ async function cfPrepared(modId: number, fileId: number, env: PlanEnv): Promise<
         await copyFile(cached, out);
       }
       if (manual.length) {
-        if (!ctx.manual) throw new UserError('Některé mody jdou stáhnout jen z webu CurseForge.');
+        if (!ctx.manual) throw new UserError(t('Some mods can only be downloaded from the CurseForge website.'));
         await ctx.manual.waitAll(
           ctx.serverId,
           manual.map((m) => m.mf),
@@ -200,10 +201,10 @@ async function cfPrepared(modId: number, fileId: number, env: PlanEnv): Promise<
             await mkdir(path.dirname(out), { recursive: true });
             await copyFile(cached, out);
           },
-          (items) => ctx.progress(`Stáhni ${items.filter((x) => !x.done).length} z ${items.length} modů z CurseForge – srvMC si je vezme ze složky Stažené soubory`, Math.round((items.filter((x) => x.done).length / items.length) * 100), undefined, items),
+          (items) => ctx.progress(t('Download {left} of {total} mods from CurseForge – srvMC picks them up from the Downloads folder', { left: items.filter((x) => !x.done).length, total: items.length }), Math.round((items.filter((x) => x.done).length / items.length) * 100), undefined, items),
         );
       }
-      ctx.log(`Modpack: ${files.length - skipped} modů staženo, ${skipped} jen pro hráče přeskočeno${manual.length ? `, ${manual.length} staženo ručně` : ''}.`);
+      ctx.log(`${t('Modpack: {n} mods downloaded, {skipped} player-only skipped', { n: files.length - skipped, skipped })}${manual.length ? `, ${t('{n} downloaded by hand', { n: manual.length })}` : ''}.`);
     },
   };
 }
@@ -247,7 +248,7 @@ interface SolderBuild {
 const SLUG = /^[a-z0-9][a-z0-9._-]{0,80}$/i;
 
 function technicPack(slug: string): Promise<TechnicPack> {
-  if (!SLUG.test(slug)) throw new UserError('Neplatný modpack.');
+  if (!SLUG.test(slug)) throw new UserError(t('Invalid modpack.'));
   return fetchJson<TechnicPack>(`${TECHNIC}/modpack/${encodeURIComponent(slug)}?build=${TECHNIC_BUILD}`);
 }
 
@@ -277,7 +278,7 @@ async function technicSearch(query: string): Promise<ModpackHit[]> {
 async function technicVersions(slug: string): Promise<ModpackVersion[]> {
   const p = await technicPack(slug);
   // Technic's own Minecraft version field is often stale; the pack itself says the truth on install.
-  return [{ id: 'latest', name: p.version ?? 'nejnovější', versionNumber: p.version ?? 'nejnovější', gameVersions: [], loaders: [], ...(p.serverPackUrl && { serverPack: true }) }];
+  return [{ id: 'latest', name: p.version ?? t('latest'), versionNumber: p.version ?? t('latest'), gameVersions: [], loaders: [], ...(p.serverPackUrl && { serverPack: true }) }];
 }
 
 async function technicPrepared(slug: string, env: PlanEnv): Promise<Prepared> {
@@ -310,7 +311,7 @@ async function technicPrepared(slug: string, env: PlanEnv): Promise<Prepared> {
     const api = p.solder.replace(/\/?$/, '/');
     const list = await fetchJson<{ recommended?: string; latest?: string }>(`${api}modpack/${encodeURIComponent(slug)}`);
     const buildId = list.recommended ?? list.latest;
-    if (!buildId) throw new UserError('Modpack na Technicu nemá žádnou verzi.');
+    if (!buildId) throw new UserError(t('The modpack has no version on Technic.'));
     const build = await fetchJson<SolderBuild>(`${api}modpack/${encodeURIComponent(slug)}/${encodeURIComponent(buildId)}`);
     await rm(staging, { recursive: true, force: true });
     await mkdir(staging, { recursive: true });
@@ -323,7 +324,7 @@ async function technicPrepared(slug: string, env: PlanEnv): Promise<Prepared> {
     }
     return { root: staging, kind: 'client', loader: await detectLoader(staging, build.minecraft), mcHint: build.minecraft, info: { ...info, versionId: buildId, versionNumber: buildId }, build: buildId, staging };
   }
-  throw new UserError('Tenhle modpack nemá na Technicu soubory ke stažení.');
+  throw new UserError(t('This modpack has no files to download on Technic.'));
 }
 
 export const technicPacks = {

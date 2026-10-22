@@ -4,7 +4,7 @@
   "version": "1.0.1",
   "private": true,
   "type": "module",
-  "description": "srvMC – lokální správce Minecraft serverů",
+  "description": "srvMC – local Minecraft server manager",
   "author": "OpiKula",
   "main": "dist/main.mjs",
   "scripts": {

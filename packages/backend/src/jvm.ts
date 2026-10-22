@@ -1,4 +1,5 @@
 import type { JvmFlagsPreset } from '@srvmc/shared';
+import { t } from '@srvmc/shared';
 
 // Aikar's G1 flags (https://docs.papermc.io/paper/aikars-flags), tuned for heaps up to 12 GB.
 const AIKAR_BASE = [
@@ -40,8 +41,8 @@ export function splitJvmArgs(text: string): string[] {
   const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
   for (const m of text.matchAll(re)) out.push(m[1] ?? m[2] ?? m[3] ?? '');
   for (const arg of out) {
-    if (!arg.startsWith('-')) throw new Error(`Neplatný JVM argument: ${arg}`);
-    if (arg === '-jar' || arg.startsWith('-Xmx') || arg.startsWith('-Xms')) throw new Error(`Argument ${arg} nastavuje srvMC sám.`);
+    if (!arg.startsWith('-')) throw new Error(t('Invalid JVM argument: {arg}', { arg }));
+    if (arg === '-jar' || arg.startsWith('-Xmx') || arg.startsWith('-Xms')) throw new Error(t('srvMC sets {arg} itself.', { arg }));
   }
   return out;
 }

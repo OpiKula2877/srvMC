@@ -40,6 +40,7 @@ nsis:
   runAfterFinish: true
   # Servers, worlds and backups live in %USERPROFILE%\srvMC and are never removed by uninstalling.
   deleteAppDataOnUninstall: false
-  language: '1029'
-  installerLanguages: [cs_CZ]
+  # English or Czech, whichever matches the Windows language.
+  multiLanguageInstaller: true
+  installerLanguages: [en_US, cs_CZ]
   artifactName: srvMC-Setup-${version}.${ext}

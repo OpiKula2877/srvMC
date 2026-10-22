@@ -4,6 +4,7 @@ import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'no
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import type { PanelRole, PanelUser } from '@srvmc/shared';
 import { UserError } from './providers/types.ts';
+import { t } from '@srvmc/shared';
 
 const ROLES: PanelRole[] = ['owner', 'admin', 'moderator', 'starter'];
 const NAME_RE = /^[\p{L}\p{N}_.-]{2,32}$/u;
@@ -48,7 +49,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
 const sha = (token: string) => createHash('sha256').update(token).digest('hex');
 
 export function checkPassword(password: string): void {
-  if (password.length < 8 || password.length > 200) throw new UserError('Heslo musí mít aspoň 8 znaků.');
+  if (password.length < 8 || password.length > 200) throw new UserError(t('The password must have at least 8 characters.'));
 }
 
 const strip = (u: StoredUser): PanelUser => ({ id: u.id, name: u.name, role: u.role, servers: u.servers, createdAt: u.createdAt });
@@ -92,7 +93,7 @@ export class UserStore {
   }
 
   async setLan(enabled: boolean): Promise<void> {
-    if (enabled && !this.hasUsers) throw new UserError('Přístup ze sítě jde zapnout až s účty – jinak by panel mohl ovládat kdokoli v síti.');
+    if (enabled && !this.hasUsers) throw new UserError(t('Network access can only be turned on with accounts – otherwise anyone on the network could control the panel.'));
     this.data.lan = enabled;
     await this.save();
   }
@@ -108,12 +109,12 @@ export class UserStore {
 
   private validate(input: { name?: string; role?: PanelRole; servers?: 'all' | string[] }, exceptId?: string): void {
     if (input.name !== undefined) {
-      if (!NAME_RE.test(input.name)) throw new UserError('Jméno: 2–32 znaků, písmena, číslice, tečka, pomlčka, podtržítko.');
-      if (this.data.users.some((u) => u.id !== exceptId && u.name.toLowerCase() === input.name!.toLowerCase())) throw new UserError('Tohle jméno už má jiný účet.');
+      if (!NAME_RE.test(input.name)) throw new UserError(t('Name: 2–32 characters, letters, digits, dot, dash, underscore.'));
+      if (this.data.users.some((u) => u.id !== exceptId && u.name.toLowerCase() === input.name!.toLowerCase())) throw new UserError(t('Another account already has this name.'));
     }
-    if (input.role !== undefined && !ROLES.includes(input.role)) throw new UserError('Neznámá role.');
+    if (input.role !== undefined && !ROLES.includes(input.role)) throw new UserError(t('Unknown role.'));
     if (input.servers !== undefined && input.servers !== 'all' && !(Array.isArray(input.servers) && input.servers.every((s) => typeof s === 'string' && s.length < 64))) {
-      throw new UserError('Neplatný seznam serverů.');
+      throw new UserError(t('Invalid server list.'));
     }
   }
 
@@ -142,9 +143,9 @@ export class UserStore {
 
   async update(id: string, patch: { name?: string; role?: PanelRole; servers?: 'all' | string[]; password?: string }): Promise<PanelUser> {
     const u = this.data.users.find((x) => x.id === id);
-    if (!u) throw new UserError('Účet neexistuje.');
+    if (!u) throw new UserError(t('The account does not exist.'));
     this.validate(patch, id);
-    if (patch.role && patch.role !== 'owner' && u.role === 'owner' && this.owners().length === 1) throw new UserError('Poslední vlastník musí zůstat vlastníkem.');
+    if (patch.role && patch.role !== 'owner' && u.role === 'owner' && this.owners().length === 1) throw new UserError(t('The last owner must stay an owner.'));
     if (patch.name !== undefined) u.name = patch.name.trim();
     if (patch.role !== undefined) u.role = patch.role;
     if (patch.servers !== undefined) u.servers = patch.servers;
@@ -160,8 +161,8 @@ export class UserStore {
 
   async remove(id: string): Promise<void> {
     const u = this.data.users.find((x) => x.id === id);
-    if (!u) throw new UserError('Účet neexistuje.');
-    if (u.role === 'owner' && this.owners().length === 1) throw new UserError('Posledního vlastníka nejde smazat.');
+    if (!u) throw new UserError(t('The account does not exist.'));
+    if (u.role === 'owner' && this.owners().length === 1) throw new UserError(t('The last owner cannot be deleted.'));
     this.data.users = this.data.users.filter((x) => x.id !== id);
     this.revokeUser(id);
     await this.save();

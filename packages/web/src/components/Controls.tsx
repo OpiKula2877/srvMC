@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { ServerInfo } from '@srvmc/shared';
 import { statusLook } from '../format.ts';
+import { locale, t } from '@srvmc/shared';
 
 export interface MenuItem {
   label: string;
@@ -60,7 +61,7 @@ export function Stepper({ value, min, max, onChange, label }: { value: number; m
   const clamp = (n: number) => Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n));
   return (
     <div className="stepper">
-      <button type="button" aria-label={`${label}: méně`} disabled={min !== undefined && value <= min} onClick={() => onChange(clamp(value - 1))}>
+      <button type="button" aria-label={t('{label}: less', { label: String(label) })} disabled={min !== undefined && value <= min} onClick={() => onChange(clamp(value - 1))}>
         −
       </button>
       <input
@@ -74,7 +75,7 @@ export function Stepper({ value, min, max, onChange, label }: { value: number; m
           if (e.target.value !== '' && Number.isFinite(n)) onChange(clamp(Math.round(n)));
         }}
       />
-      <button type="button" aria-label={`${label}: více`} disabled={max !== undefined && value >= max} onClick={() => onChange(clamp(value + 1))}>
+      <button type="button" aria-label={t('{label}: more', { label: String(label) })} disabled={max !== undefined && value >= max} onClick={() => onChange(clamp(value + 1))}>
         +
       </button>
     </div>
@@ -126,7 +127,7 @@ export function Slider(props: {
   );
 }
 
-const gbText = (mb: number) => `${(mb / 1024).toLocaleString('cs-CZ', { maximumFractionDigits: 2 })} GB`;
+const gbText = (mb: number) => `${(mb / 1024).toLocaleString(locale(), { maximumFractionDigits: 2 })} GB`;
 
 /** RAM in MB: a slider for quick moves plus an exact number (e.g. 1536 MB = 1,5 GB). */
 export function RamPicker({ id, label, valueMb, maxMb, onChange }: { id: string; label: string; valueMb: number; maxMb: number; onChange: (mb: number) => void }) {
@@ -145,14 +146,14 @@ export function RamPicker({ id, label, valueMb, maxMb, onChange }: { id: string;
       <div className="kv muted" style={{ fontSize: 13 }}>
         <label htmlFor={id}>{label}</label>
         <span style={{ color: 'var(--text)', fontWeight: 600 }}>
-          {gbText(valueMb)} z {gbText(maxMb)}
+          {t('{value} of {max}', { value: gbText(valueMb), max: gbText(maxMb) })}
         </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         <input
           type="range"
           className="slider"
-          aria-label={`${label} (posuvník)`}
+          aria-label={t('{label} (slider)', { label })}
           min={min}
           max={maxMb}
           step={256}

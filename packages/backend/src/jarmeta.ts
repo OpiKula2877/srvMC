@@ -19,7 +19,7 @@ const MAX_ENTRY = 1024 * 1024;
 export function readJarEntries(file: string, wanted: Set<string> = WANTED): Promise<Map<string, string>> {
   return new Promise((resolve, reject) => {
     yauzl.open(file, { lazyEntries: true, autoClose: true }, (err, zip) => {
-      if (err || !zip) return reject(err ?? new Error('Nelze otevřít jar.'));
+      if (err || !zip) return reject(err ?? new Error('Cannot open the jar.'));
       const out = new Map<string, string>();
       zip.on('entry', (entry: yauzl.Entry) => {
         if (!wanted.has(entry.fileName) || entry.uncompressedSize > MAX_ENTRY) return zip.readEntry();

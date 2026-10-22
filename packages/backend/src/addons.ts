@@ -10,13 +10,14 @@ import type { ServerManager } from './manager.ts';
 import { isPortFree, isUdpPortFree } from './net.ts';
 import type { Paths } from './paths.ts';
 import { UserError } from './providers/types.ts';
+import { t as tr } from '@srvmc/shared';
 
 const GEYSER_API = 'https://download.geysermc.org/v2/projects';
 // Floodgate for mod loaders lives on Modrinth; Fabric servers also need Fabric API.
 const FLOODGATE_MODRINTH = 'bWrNNfkb';
 const FABRIC_API = 'P7dR8mSH';
 const BLUEMAP = 'swbUV1cr';
-const PROXIED_GEYSER = 'Server je za proxy – crossplay zapni u proxy, Bedrock hráči přijdou přes ni.';
+const PROXIED_GEYSER = 'The server is behind a proxy – turn on crossplay on the proxy, Bedrock players come through it.';
 
 interface GeyserTarget {
   platform: 'spigot' | 'fabric' | 'neoforge' | 'velocity';
@@ -67,7 +68,7 @@ const read = (file: string) => readFile(file, 'utf8').catch(() => null);
 async function geyserMcJar(paths: Paths, project: 'geyser' | 'floodgate', platform: string, dir: string): Promise<string> {
   const build = await fetchJson<{ version: string; build: number; downloads: Record<string, { name: string; sha256: string }> }>(`${GEYSER_API}/${project}/versions/latest/builds/latest`);
   const dl = build.downloads[platform];
-  if (!dl) throw new UserError(`${project === 'geyser' ? 'Geyser' : 'Floodgate'} pro ${platform} neexistuje.`);
+  if (!dl) throw new UserError(tr('{name} does not exist.', { name: `${project === 'geyser' ? 'Geyser' : 'Floodgate'} (${platform})` }));
   const url = `${GEYSER_API}/${project}/versions/${build.version}/builds/${build.build}/downloads/${platform}`;
   const cached = await downloadToCache(paths, { url, fileName: dl.name, sha256: dl.sha256 });
   await mkdir(dir, { recursive: true });
@@ -109,22 +110,22 @@ export class AddonService {
     const bmDir = bluemapConfigDir(type);
     const bmInstalled = !!(await this.bluemapJar(inst));
     const core = bmDir ? await read(path.join(inst.dir, bmDir, 'core.conf')) : null;
-    const notJava = editionOf(inst.cfg.type) !== 'java' ? (editionOf(inst.cfg.type) === 'bedrock' ? 'Bedrock server hráče z Bedrocku obslouží sám.' : 'Pro Hytale to nejde.') : undefined;
+    const notJava = editionOf(inst.cfg.type) !== 'java' ? (editionOf(inst.cfg.type) === 'bedrock' ? tr('A Bedrock server serves Bedrock players by itself.') : tr('Not available for Hytale.')) : undefined;
     // Behind a proxy the server only lets in the proxy, so Bedrock players come through Geyser on the proxy.
     const proxied = !!inst.cfg.behindProxy;
     return [
       {
         id: 'geyser',
         supported: !!t && (!proxied || geyserInstalled),
-        ...(!t && { reason: notJava ?? 'Geyser běží na Paperu, Purpuru, Spigotu, Fabricu, NeoForge a Velocity.' }),
-        ...(t && proxied && { reason: PROXIED_GEYSER }),
+        ...(!t && { reason: notJava ?? tr('Geyser runs on Paper, Purpur, Spigot, Fabric, NeoForge and Velocity.') }),
+        ...(t && proxied && { reason: tr(PROXIED_GEYSER) }),
         installed: geyserInstalled,
         ...(geyserInstalled && inst.cfg.geyserPort && { port: inst.cfg.geyserPort }),
       },
       {
         id: 'bluemap',
         supported: !!bmDir,
-        ...(!bmDir && { reason: notJava ?? 'BlueMap běží na Paperu, Purpuru, Spigotu, Fabricu, Quiltu, Forge a NeoForge.' }),
+        ...(!bmDir && { reason: notJava ?? tr('BlueMap runs on Paper, Purpur, Spigot, Fabric, Quilt, Forge and NeoForge.') }),
         installed: bmInstalled,
         ...(bmInstalled && inst.cfg.bluemapPort && { port: inst.cfg.bluemapPort, url: `http://localhost:${inst.cfg.bluemapPort}` }),
         ...(bmInstalled && !core && { pendingStart: true }),
@@ -147,30 +148,30 @@ export class AddonService {
       }
     }
     for (let p = 19132; p < 19132 + 2000; p++) if (!used.has(p) && (await isUdpPortFree(p)) && (await isPortFree(p))) return p;
-    throw new UserError('Nenašel jsem volný port pro Geyser.');
+    throw new UserError(tr('No free port found for Geyser.'));
   }
 
   private async freeBluemapPort(self: ServerInstance): Promise<number> {
     const used = new Set(this.manager.all().filter((i) => i !== self).flatMap((i) => [i.cfg.port, i.cfg.bluemapPort ?? 0]));
     for (let p = 8100; p < 8400; p++) if (!used.has(p) && (await isPortFree(p))) return p;
-    throw new UserError('Nenašel jsem volný port pro mapu.');
+    throw new UserError(tr('No free port found for the map.'));
   }
 
   async install(id: string, addon: AddonId): Promise<AddonState[]> {
     const inst = this.manager.get(id);
-    if (inst.running) throw new UserError('Nejdřív server zastav – za běhu má Windows jary zamčené.');
+    if (inst.running) throw new UserError(tr('Stop the server first – Windows keeps the jars locked while it runs.'));
     const type = effectiveType(inst.cfg);
     if (addon === 'geyser') {
       const t = geyserTarget(type);
-      if (!t) throw new UserError('Geyser se pro tenhle server nehodí.');
-      if (inst.cfg.behindProxy) throw new UserError(PROXIED_GEYSER);
+      if (!t) throw new UserError(tr('Geyser does not fit this server.'));
+      if (inst.cfg.behindProxy) throw new UserError(tr(PROXIED_GEYSER));
       const dir = path.join(inst.dir, t.folder);
       const installed: string[] = [await geyserMcJar(this.paths, 'geyser', t.platform, dir)];
       // Floodgate lets Bedrock players in without a Java account (online-mode servers).
       if (t.platform === 'spigot' || t.platform === 'velocity') installed.push(await geyserMcJar(this.paths, 'floodgate', t.platform, dir));
       else {
         const r = await installContent(inst, this.ctx(inst), 'modrinth', FLOODGATE_MODRINTH, 'mods').catch((err: Error) => {
-          if (/už je nainstalované/.test(err.message)) return { installed: [], skipped: [] };
+          if (err.message === tr('This is already installed.')) return { installed: [], skipped: [] };
           throw err;
         });
         installed.push(...r.installed);
@@ -181,9 +182,9 @@ export class AddonService {
       await this.manager.saveConfig(id, (cfg) => {
         cfg.geyserPort = port;
       });
-      inst.pushLog('system', `Crossplay: nainstalováno ${installed.join(', ')}. Bedrock hráči se připojí na port ${port} (TCP i UDP).`);
+      inst.pushLog('system', tr('Crossplay: installed {list}. Bedrock players join on port {port} (TCP and UDP).', { list: installed.join(', '), port }));
     } else {
-      if (!bluemapConfigDir(type)) throw new UserError('BlueMap se pro tenhle server nehodí.');
+      if (!bluemapConfigDir(type)) throw new UserError(tr('BlueMap does not fit this server.'));
       const folder = type === 'paper' || type === 'purpur' || type === 'spigot' ? 'plugins' : 'mods';
       await installContent(inst, this.ctx(inst), 'modrinth', BLUEMAP, folder);
       const port = inst.cfg.bluemapPort ?? (await this.freeBluemapPort(inst));
@@ -224,13 +225,13 @@ export class AddonService {
     const dir = bluemapConfigDir(effectiveType(inst.cfg));
     const file = dir && path.join(inst.dir, dir, 'core.conf');
     const text = file ? await read(file) : null;
-    if (!file || text === null) throw new UserError('BlueMap si nastavení vytvoří při prvním startu serveru. Spusť server a pak to potvrď.');
+    if (!file || text === null) throw new UserError(tr('BlueMap creates its settings on the first server start. Start the server, then confirm.'));
     await writeFile(file, setConf(text, 'accept-download', 'true'), 'utf8');
     if (inst.status === 'running') {
       inst.sendCommand('bluemap reload');
       void this.settleBluemap(inst);
     }
-    inst.pushLog('system', 'BlueMap: stažení zdrojů hry povoleno. Mapa se vykresluje na pozadí.');
+    inst.pushLog('system', tr('BlueMap: downloading the game resources is allowed. The map renders in the background.'));
     return this.list(id);
   }
 

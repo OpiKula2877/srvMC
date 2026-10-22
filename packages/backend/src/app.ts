@@ -5,7 +5,7 @@ import fastifyStatic from '@fastify/static';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { WebSocket } from 'ws';
-import { CSRF_HEADER, SERVER_TYPES, type CreateServerRequest, type PanelUser, type ServerType, type SystemInfo, type UpdateServerRequest, type WsEvent } from '@srvmc/shared';
+import { CSRF_HEADER, getLang, isLang, LANGS, setLang, SERVER_TYPES, type Lang, type CreateServerRequest, type PanelUser, type ServerType, type SystemInfo, type UpdateServerRequest, type WsEvent } from '@srvmc/shared';
 import { allowed, canSee, LOCAL_OWNER, need } from './access.ts';
 import { AddonService } from './addons.ts';
 import { loadCurseForgeKey } from './curseforge.ts';
@@ -32,6 +32,7 @@ import { Scheduler } from './scheduler.ts';
 import type { SecretBox } from './secrets.ts';
 import { ServerStore } from './store.ts';
 import { Supervisor } from './supervisor.ts';
+import { t } from '@srvmc/shared';
 
 export const VERSION = '1.0.1';
 
@@ -61,6 +62,8 @@ export interface BackendOptions {
   downloadsDir?: string;
   /** Restarts the whole app (the desktop app relaunches itself). Without it the panel cannot offer a restart. */
   onRestart?: () => void;
+  /** Called after the owner switched the app's language (the desktop app rebuilds its tray menu). */
+  onLanguage?: () => void;
 }
 
 export interface Backend {
@@ -116,7 +119,7 @@ const updateSchema = {
 
 function provider(type: string) {
   const p = providerFor(type as ServerType);
-  if (!p) throw new UserError('Tento typ serveru zatím není podporovaný.');
+  if (!p) throw new UserError(t('This server type is not supported yet.'));
   return p;
 }
 
@@ -149,7 +152,7 @@ function registerRoutes(app: FastifyInstance, manager: ServerManager, paths: Pat
     provider(req.params.type).listVersions(req.query.snapshots === 'true'),
   );
   app.get<{ Params: { type: string }; Querystring: { version?: string } }>('/api/types/:type/builds', (req) => {
-    if (!req.query.version) throw new UserError('Chybí verze.');
+    if (!req.query.version) throw new UserError(t('The version is missing.'));
     return provider(req.params.type).listBuilds(req.query.version);
   });
   app.get<{ Querystring: { type?: string } }>('/api/ports/suggest', async (req) => ({
@@ -175,7 +178,7 @@ function registerRoutes(app: FastifyInstance, manager: ServerManager, paths: Pat
     if (action === 'stop') return manager.stop(id);
     if (action === 'restart') return manager.restart(id);
     if (action === 'kill') return manager.kill(id);
-    throw new UserError('Neznámá akce.');
+    throw new UserError(t('Unknown action.'));
   });
   app.post<{ Params: { id: string }; Body: { command: string } }>(
     '/api/servers/:id/command',
@@ -192,6 +195,10 @@ function registerRoutes(app: FastifyInstance, manager: ServerManager, paths: Pat
 export async function startBackend(opts: BackendOptions = {}): Promise<Backend> {
   const paths = opts.paths ?? makePaths();
   await ensureDirs(paths);
+  // One language for the whole app: English unless the owner picked another.
+  const settingsFile = path.join(paths.root, 'settings.json');
+  const settings = JSON.parse(await readFile(settingsFile, 'utf8').catch(() => '{}')) as { language?: unknown };
+  setLang(isLang(settings.language) ? settings.language : 'en');
   const manager = new ServerManager(paths, new ServerStore(paths.serversFile));
   await manager.init();
   const manual = new ManualDownloads(paths, opts.downloadsDir ?? process.env.SRVMC_DOWNLOADS ?? path.join(os.homedir(), 'Downloads'));
@@ -222,23 +229,23 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   // The API listens on loopback only, but any web page the user opens could still try to reach it.
   // Rejecting foreign Host headers blocks DNS rebinding; the custom header blocks cross-site form posts.
   app.addHook('onRequest', async (req, reply) => {
-    if (!allowedHosts().has(req.headers.host ?? '')) return reply.code(403).send({ error: 'Nepovolený host.' });
+    if (!allowedHosts().has(req.headers.host ?? '')) return reply.code(403).send({ error: t('Host not allowed.') });
     const origin = req.headers.origin;
-    if (origin && !allowedOrigins().has(origin)) return reply.code(403).send({ error: 'Nepovolený původ požadavku.' });
+    if (origin && !allowedOrigins().has(origin)) return reply.code(403).send({ error: t('Request origin not allowed.') });
     if (req.url.startsWith('/api/') && !['GET', 'HEAD'].includes(req.method) && req.headers[CSRF_HEADER] !== '1') {
-      return reply.code(403).send({ error: 'Chybí ochranná hlavička.' });
+      return reply.code(403).send({ error: t('The protection header is missing.') });
     }
     req.principal = principalOf(req);
     const n = need(req.method, req.url);
     if (!n) return;
-    if (!req.principal) return reply.code(401).send({ error: 'Přihlas se.' });
-    if (!allowed(req.principal, n)) return reply.code(403).send({ error: 'Na tohle nemáš oprávnění.' });
+    if (!req.principal) return reply.code(401).send({ error: t('Sign in.') });
+    if (!allowed(req.principal, n)) return reply.code(403).send({ error: t('You are not allowed to do that.') });
   });
 
   app.setErrorHandler((err: Error & { statusCode?: number; validation?: unknown }, _req, reply) => {
     const status = err.validation ? 400 : (err.statusCode ?? 500);
     if (status >= 500) app.log.error(err);
-    reply.code(status).send({ error: err.validation ? `Neplatná data: ${err.message}` : err.message });
+    reply.code(status).send({ error: err.validation ? t('Invalid data: {message}', { message: err.message }) : err.message });
   });
 
   const clients = new Map<WebSocket, PanelUser>();
@@ -288,9 +295,21 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   registerNetworkRoutes(app, network);
   registerExtraRoutes(app, { discord, stats, addons, proxy });
   registerUserRoutes(app, users, () => port, (req) => req.principal);
+  app.get('/api/auth/language', () => ({ lang: getLang() }));
+  app.put<{ Body: { lang: Lang } }>(
+    '/api/panel/language',
+    { schema: { body: { type: 'object', required: ['lang'], additionalProperties: false, properties: { lang: { type: 'string', enum: LANGS.map((l) => l.id) } } } } },
+    async (req) => {
+      setLang(req.body.lang);
+      settings.language = req.body.lang;
+      await writeFile(settingsFile, JSON.stringify(settings, null, 2), 'utf8');
+      opts.onLanguage?.();
+      return { lang: getLang() };
+    },
+  );
   app.get('/api/panel/restart', () => ({ available: !!opts.onRestart }));
   app.post('/api/panel/restart', async (_req, reply) => {
-    if (!opts.onRestart) throw new UserError('Restart umí jen desktopová aplikace.');
+    if (!opts.onRestart) throw new UserError(t('Only the desktop app can restart.'));
     const running = manager.all().filter((i) => i.running).map((i) => i.cfg.id);
     await writeFile(resumeFile, JSON.stringify(running), 'utf8');
     reply.code(204).send();

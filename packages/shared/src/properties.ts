@@ -1,4 +1,4 @@
-// What the panel knows about server.properties keys. Unknown keys still show up under "Ostatní".
+// What the panel knows about server.properties keys. Unknown keys still show up under 'Other'.
 
 export type PropertyGroup = 'hra' | 'hraci' | 'svet' | 'vykon' | 'resource' | 'ostatni';
 
@@ -17,18 +17,18 @@ export interface PropertyDef {
 }
 
 export const PROPERTY_GROUPS: { id: PropertyGroup; label: string }[] = [
-  { id: 'hra', label: 'Hra' },
-  { id: 'hraci', label: 'Hráči' },
-  { id: 'svet', label: 'Svět' },
-  { id: 'vykon', label: 'Výkon' },
+  { id: 'hra', label: 'Game' },
+  { id: 'hraci', label: 'Players' },
+  { id: 'svet', label: 'World' },
+  { id: 'vykon', label: 'Performance' },
   { id: 'resource', label: 'Resource pack' },
-  { id: 'ostatni', label: 'Ostatní' },
+  { id: 'ostatni', label: 'Other' },
 ];
 
 export const PROPERTY_DEFS: PropertyDef[] = [
   {
     key: 'gamemode',
-    label: 'Herní režim',
+    label: 'Game mode',
     group: 'hra',
     type: 'enum',
     default: 'survival',
@@ -41,7 +41,7 @@ export const PROPERTY_DEFS: PropertyDef[] = [
   },
   {
     key: 'difficulty',
-    label: 'Obtížnost',
+    label: 'Difficulty',
     group: 'hra',
     type: 'enum',
     default: 'easy',
@@ -52,47 +52,47 @@ export const PROPERTY_DEFS: PropertyDef[] = [
       { value: 'hard', label: 'Hard' },
     ],
   },
-  { key: 'force-gamemode', label: 'Vynutit herní režim při připojení', group: 'hra', type: 'bool', default: 'false' },
-  { key: 'hardcore', label: 'Hardcore', group: 'hra', type: 'bool', default: 'false', hint: 'Po smrti už hráč nemůže hrát.' },
+  { key: 'force-gamemode', label: 'Force game mode on join', group: 'hra', type: 'bool', default: 'false' },
+  { key: 'hardcore', label: 'Hardcore', group: 'hra', type: 'bool', default: 'false', hint: 'After death the player cannot play any more.' },
   { key: 'pvp', label: 'PvP', group: 'hra', type: 'bool', default: 'true' },
-  { key: 'allow-flight', label: 'Povolit létání', group: 'hra', type: 'bool', default: 'false', hint: 'Zapni pro módy s létáním, jinak je hráči vyhazováni.' },
-  { key: 'enable-command-block', label: 'Command bloky', group: 'hra', type: 'bool', default: 'false' },
-  { key: 'spawn-protection', label: 'Ochrana spawnu (bloky)', group: 'hra', type: 'int', default: '16', min: 0, max: 1000 },
+  { key: 'allow-flight', label: 'Allow flight', group: 'hra', type: 'bool', default: 'false', hint: 'Turn on for mods with flying, otherwise players get kicked.' },
+  { key: 'enable-command-block', label: 'Command blocks', group: 'hra', type: 'bool', default: 'false' },
+  { key: 'spawn-protection', label: 'Spawn protection (blocks)', group: 'hra', type: 'int', default: '16', min: 0, max: 1000 },
 
-  { key: 'max-players', label: 'Max hráčů', group: 'hraci', type: 'int', default: '20', min: 1, max: 1000 },
-  { key: 'white-list', label: 'Bílá listina', group: 'hraci', type: 'bool', default: 'false', managed: true },
-  { key: 'enforce-whitelist', label: 'Vyhodit hráče mimo bílou listinu', group: 'hraci', type: 'bool', default: 'false' },
-  { key: 'online-mode', label: 'Ověřovat účty přes Mojang', group: 'hraci', type: 'bool', default: 'true', managed: true },
-  { key: 'op-permission-level', label: 'Úroveň práv operátora', group: 'hraci', type: 'int', default: '4', min: 1, max: 4 },
-  { key: 'player-idle-timeout', label: 'Vyhodit neaktivní po (min, 0 = nikdy)', group: 'hraci', type: 'int', default: '0', min: 0, max: 1440 },
-  { key: 'hide-online-players', label: 'Skrýt jména hráčů v seznamu serverů', group: 'hraci', type: 'bool', default: 'false' },
-  { key: 'enable-status', label: 'Zobrazit server v seznamu serverů', group: 'hraci', type: 'bool', default: 'true' },
+  { key: 'max-players', label: 'Max players', group: 'hraci', type: 'int', default: '20', min: 1, max: 1000 },
+  { key: 'white-list', label: 'Whitelist', group: 'hraci', type: 'bool', default: 'false', managed: true },
+  { key: 'enforce-whitelist', label: 'Kick players not on the whitelist', group: 'hraci', type: 'bool', default: 'false' },
+  { key: 'online-mode', label: 'Check accounts with Mojang', group: 'hraci', type: 'bool', default: 'true', managed: true },
+  { key: 'op-permission-level', label: 'Operator permission level', group: 'hraci', type: 'int', default: '4', min: 1, max: 4 },
+  { key: 'player-idle-timeout', label: 'Kick idle players after (min, 0 = never)', group: 'hraci', type: 'int', default: '0', min: 0, max: 1440 },
+  { key: 'hide-online-players', label: 'Hide player names in the server list', group: 'hraci', type: 'bool', default: 'false' },
+  { key: 'enable-status', label: 'Show the server in the server list', group: 'hraci', type: 'bool', default: 'true' },
 
-  { key: 'level-name', label: 'Složka světa', group: 'svet', type: 'string', default: 'world' },
-  { key: 'level-seed', label: 'Seed', group: 'svet', type: 'string', default: '', hint: 'Prázdné = náhodný. Platí jen pro nový svět.' },
+  { key: 'level-name', label: 'World folder', group: 'svet', type: 'string', default: 'world' },
+  { key: 'level-seed', label: 'Seed', group: 'svet', type: 'string', default: '', hint: 'Empty = random. Only applies to a new world.' },
   {
     key: 'level-type',
-    label: 'Typ světa',
+    label: 'World type',
     group: 'svet',
     type: 'enum',
     default: 'minecraft:normal',
     options: [
-      { value: 'minecraft:normal', label: 'Normální' },
-      { value: 'minecraft:flat', label: 'Plochý' },
-      { value: 'minecraft:large_biomes', label: 'Velké biomy' },
-      { value: 'minecraft:amplified', label: 'Zesílený (amplified)' },
+      { value: 'minecraft:normal', label: 'Normal' },
+      { value: 'minecraft:flat', label: 'Flat' },
+      { value: 'minecraft:large_biomes', label: 'Large biomes' },
+      { value: 'minecraft:amplified', label: 'Amplified' },
     ],
   },
-  { key: 'generate-structures', label: 'Generovat stavby (vesnice, chrámy)', group: 'svet', type: 'bool', default: 'true' },
+  { key: 'generate-structures', label: 'Generate structures (villages, temples)', group: 'svet', type: 'bool', default: 'true' },
 
-  { key: 'view-distance', label: 'Dohled (chunky)', group: 'vykon', type: 'int', default: '10', min: 2, max: 32, hint: 'Menší číslo = méně zátěže.' },
-  { key: 'simulation-distance', label: 'Simulace (chunky)', group: 'vykon', type: 'int', default: '10', min: 2, max: 32 },
-  { key: 'sync-chunk-writes', label: 'Bezpečný zápis chunků', group: 'vykon', type: 'bool', default: 'true' },
+  { key: 'view-distance', label: 'View distance (chunks)', group: 'vykon', type: 'int', default: '10', min: 2, max: 32, hint: 'A smaller number means less load.' },
+  { key: 'simulation-distance', label: 'Simulation distance (chunks)', group: 'vykon', type: 'int', default: '10', min: 2, max: 32 },
+  { key: 'sync-chunk-writes', label: 'Safe chunk writes', group: 'vykon', type: 'bool', default: 'true' },
 
-  { key: 'resource-pack', label: 'URL resource packu', group: 'resource', type: 'string', default: '' },
-  { key: 'resource-pack-sha1', label: 'SHA-1 packu', group: 'resource', type: 'string', default: '' },
-  { key: 'resource-pack-prompt', label: 'Výzva k packu', group: 'resource', type: 'string', default: '' },
-  { key: 'require-resource-pack', label: 'Vyžadovat resource pack', group: 'resource', type: 'bool', default: 'false' },
+  { key: 'resource-pack', label: 'Resource pack URL', group: 'resource', type: 'string', default: '' },
+  { key: 'resource-pack-sha1', label: 'Pack SHA-1', group: 'resource', type: 'string', default: '' },
+  { key: 'resource-pack-prompt', label: 'Pack prompt', group: 'resource', type: 'string', default: '' },
+  { key: 'require-resource-pack', label: 'Require the resource pack', group: 'resource', type: 'bool', default: 'false' },
 
   { key: 'motd', label: 'MOTD', group: 'ostatni', type: 'string', default: 'A Minecraft Server', managed: true },
   { key: 'server-port', label: 'Port', group: 'ostatni', type: 'int', default: '25565', managed: true },
@@ -103,41 +103,41 @@ const opts = (...pairs: [string, string][]) => pairs.map(([value, label]) => ({ 
 
 /** Bedrock Dedicated Server keys (a different set than Java's). */
 export const BEDROCK_PROPERTY_DEFS: PropertyDef[] = [
-  { key: 'gamemode', label: 'Herní režim', group: 'hra', type: 'enum', default: 'survival', options: opts(['survival', 'Survival'], ['creative', 'Creative'], ['adventure', 'Adventure']) },
-  { key: 'force-gamemode', label: 'Vynutit herní režim při připojení', group: 'hra', type: 'bool', default: 'false' },
-  { key: 'difficulty', label: 'Obtížnost', group: 'hra', type: 'enum', default: 'easy', options: opts(['peaceful', 'Mírumilovná'], ['easy', 'Lehká'], ['normal', 'Normální'], ['hard', 'Těžká']) },
-  { key: 'allow-cheats', label: 'Povolit cheaty (příkazy)', group: 'hra', type: 'bool', default: 'false' },
-  { key: 'server-name', label: 'Název v seznamu serverů', group: 'hra', type: 'string', default: 'Dedicated Server' },
+  { key: 'gamemode', label: 'Game mode', group: 'hra', type: 'enum', default: 'survival', options: opts(['survival', 'Survival'], ['creative', 'Creative'], ['adventure', 'Adventure']) },
+  { key: 'force-gamemode', label: 'Force game mode on join', group: 'hra', type: 'bool', default: 'false' },
+  { key: 'difficulty', label: 'Difficulty', group: 'hra', type: 'enum', default: 'easy', options: opts(['peaceful', 'Peaceful'], ['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']) },
+  { key: 'allow-cheats', label: 'Allow cheats (commands)', group: 'hra', type: 'bool', default: 'false' },
+  { key: 'server-name', label: 'Name in the server list', group: 'hra', type: 'string', default: 'Dedicated Server' },
 
-  { key: 'max-players', label: 'Max. hráčů', group: 'hraci', type: 'int', default: '10', min: 1, max: 1000 },
-  { key: 'online-mode', label: 'Ověřovat účty přes Xbox Live', group: 'hraci', type: 'bool', default: 'true' },
-  { key: 'allow-list', label: 'Povolený seznam hráčů', group: 'hraci', type: 'bool', default: 'false', managed: true },
+  { key: 'max-players', label: 'Max players', group: 'hraci', type: 'int', default: '10', min: 1, max: 1000 },
+  { key: 'online-mode', label: 'Check accounts with Xbox Live', group: 'hraci', type: 'bool', default: 'true' },
+  { key: 'allow-list', label: 'Allow list', group: 'hraci', type: 'bool', default: 'false', managed: true },
   {
     key: 'default-player-permission-level',
-    label: 'Výchozí oprávnění nového hráče',
+    label: 'Default permission of a new player',
     group: 'hraci',
     type: 'enum',
     default: 'member',
-    options: opts(['visitor', 'Návštěvník'], ['member', 'Člen'], ['operator', 'Operátor']),
+    options: opts(['visitor', 'Visitor'], ['member', 'Member'], ['operator', 'Operator']),
   },
-  { key: 'player-idle-timeout', label: 'Vyhodit nečinné po (min, 0 = nikdy)', group: 'hraci', type: 'int', default: '30', min: 0, max: 1440 },
-  { key: 'chat-restriction', label: 'Omezení chatu', group: 'hraci', type: 'enum', default: 'None', options: opts(['None', 'Žádné'], ['Dropped', 'Zprávy zahazovat'], ['Disabled', 'Chat vypnutý']) },
-  { key: 'disable-player-interaction', label: 'Zakázat interakci mezi hráči', group: 'hraci', type: 'bool', default: 'false' },
+  { key: 'player-idle-timeout', label: 'Kick idle players after (min, 0 = never)', group: 'hraci', type: 'int', default: '30', min: 0, max: 1440 },
+  { key: 'chat-restriction', label: 'Chat restriction', group: 'hraci', type: 'enum', default: 'None', options: opts(['None', 'None'], ['Dropped', 'Drop messages'], ['Disabled', 'Chat off']) },
+  { key: 'disable-player-interaction', label: 'Disable interaction between players', group: 'hraci', type: 'bool', default: 'false' },
 
-  { key: 'level-seed', label: 'Seed nového světa', group: 'svet', type: 'string', default: '' },
-  { key: 'view-distance', label: 'Dohled (chunky)', group: 'svet', type: 'int', default: '32', min: 5, max: 96 },
-  { key: 'tick-distance', label: 'Simulační vzdálenost', group: 'svet', type: 'int', default: '4', min: 4, max: 12 },
-  { key: 'level-name', label: 'Aktivní svět', group: 'svet', type: 'string', default: 'Bedrock level', managed: true },
+  { key: 'level-seed', label: 'Seed of a new world', group: 'svet', type: 'string', default: '' },
+  { key: 'view-distance', label: 'View distance (chunks)', group: 'svet', type: 'int', default: '32', min: 5, max: 96 },
+  { key: 'tick-distance', label: 'Simulation distance', group: 'svet', type: 'int', default: '4', min: 4, max: 12 },
+  { key: 'level-name', label: 'Active world', group: 'svet', type: 'string', default: 'Bedrock level', managed: true },
 
-  { key: 'max-threads', label: 'Max. vláken (0 = co nejvíc)', group: 'vykon', type: 'int', default: '8', min: 0, max: 256 },
-  { key: 'enable-lan-visibility', label: 'Viditelný v síti doma', group: 'vykon', type: 'bool', default: 'true' },
-  { key: 'client-side-chunk-generation-enabled', label: 'Generování chunků u hráče', group: 'vykon', type: 'bool', default: 'true' },
+  { key: 'max-threads', label: 'Max threads (0 = as many as possible)', group: 'vykon', type: 'int', default: '8', min: 0, max: 256 },
+  { key: 'enable-lan-visibility', label: 'Visible on the home network', group: 'vykon', type: 'bool', default: 'true' },
+  { key: 'client-side-chunk-generation-enabled', label: 'Chunk generation on the player side', group: 'vykon', type: 'bool', default: 'true' },
 
-  { key: 'texturepack-required', label: 'Vyžadovat resource pack světa', group: 'resource', type: 'bool', default: 'false' },
+  { key: 'texturepack-required', label: "Require the world's resource pack", group: 'resource', type: 'bool', default: 'false' },
 
   { key: 'server-port', label: 'Port', group: 'ostatni', type: 'int', default: '19132', managed: true },
   { key: 'server-portv6', label: 'Port IPv6', group: 'ostatni', type: 'int', default: '19133', managed: true },
-  { key: 'server-udp-ports', label: 'UDP porty pro hru', group: 'ostatni', type: 'string', default: '', managed: true },
+  { key: 'server-udp-ports', label: 'UDP ports for the game', group: 'ostatni', type: 'string', default: '', managed: true },
 ];
 
 export function propertyDefsFor(edition: 'java' | 'bedrock' | 'hytale' = 'java'): PropertyDef[] {

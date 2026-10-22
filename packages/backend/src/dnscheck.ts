@@ -2,6 +2,7 @@
 import { Resolver } from 'node:dns/promises';
 import type { DnsRecord, DomainCheck, DomainConfig } from '@srvmc/shared';
 import { UserError } from './providers/types.ts';
+import { t } from '@srvmc/shared';
 
 const LABEL = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 
@@ -9,9 +10,9 @@ export function normalizeDomain(input: DomainConfig): DomainConfig {
   const clean = (s: string) => s.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\.+$/, '');
   const zone = clean(input.zone);
   const sub = clean(input.sub ?? '');
-  if (!zone.includes('.') || !zone.split('.').every((l) => LABEL.test(l))) throw new UserError('Zadej doménu, např. mojedomena.cz.');
-  if (sub && !sub.split('.').every((l) => LABEL.test(l))) throw new UserError('Subdoména smí mít jen písmena, číslice a pomlčky.');
-  if (!['ip', 'duckdns', 'playit'].includes(input.target)) throw new UserError('Neznámý cíl domény.');
+  if (!zone.includes('.') || !zone.split('.').every((l) => LABEL.test(l))) throw new UserError(t('Enter a domain, e.g. mydomain.com.'));
+  if (sub && !sub.split('.').every((l) => LABEL.test(l))) throw new UserError(t('A subdomain may only have letters, digits and dashes.'));
+  if (!['ip', 'duckdns', 'playit'].includes(input.target)) throw new UserError(t('Unknown domain target.'));
   return { zone, sub, target: input.target };
 }
 
@@ -103,9 +104,9 @@ export async function checkDomain(d: DomainConfig, expected: DnsRecord[], lookup
     records: results,
     ok,
     message: ok
-      ? `DNS ověřeno – ${host} vede na tvůj server.`
+      ? t('DNS checked – {host} points to your server.', { host })
       : results.length === 0
-        ? 'Nejdřív nastav cíl domény (DuckDNS nebo playit.gg tunel).'
-        : `Zatím nesedí: ${missing.join(', ')}. Změna DNS se projeví za 5 až 60 minut.`,
+        ? t('Set up the domain target first (DuckDNS or a playit.gg tunnel).')
+        : t('Not matching yet: {list}. DNS changes take 5 to 60 minutes.', { list: missing.join(', ') }),
   };
 }

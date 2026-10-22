@@ -3,6 +3,7 @@
 import dgram from 'node:dgram';
 import { fetchOk } from './http.ts';
 import { lanIp } from './netinfo.ts';
+import { t } from '@srvmc/shared';
 
 const SSDP_ADDR = '239.255.255.250';
 const SSDP_PORT = 1900;
@@ -155,7 +156,7 @@ export async function addMapping(gw: Gateway, m: Mapping): Promise<void> {
     await soap(gw, 'AddPortMapping', args(0));
   } catch (err) {
     // 718 ConflictInMappingEntry: another device holds the port. Other refusals may just want a lease.
-    if (err instanceof UpnpError && err.code === 718) throw new UpnpError('Port na routeru už používá jiné zařízení.', 718);
+    if (err instanceof UpnpError && err.code === 718) throw new UpnpError(t('Another device already uses the port on the router.'), 718);
     await soap(gw, 'AddPortMapping', args(7200));
   }
 }

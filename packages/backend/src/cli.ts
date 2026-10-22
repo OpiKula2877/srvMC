@@ -9,7 +9,7 @@ const backend = await startBackend({
   devOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
   webDir: webFlag > 0 ? process.argv[webFlag + 1] : process.env.SRVMC_WEB_DIR,
 });
-console.log(`srvMC API běží na ${backend.url} (data: ${makePaths(process.env.SRVMC_HOME).root})`);
+console.log(`srvMC API is running at ${backend.url} (data: ${makePaths(process.env.SRVMC_HOME).root})`);
 
 let closing = false;
 const shutdown = async () => {

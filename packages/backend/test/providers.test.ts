@@ -90,7 +90,7 @@ describe('Forge launch', () => {
     });
 
     it('fails clearly when nothing is launchable', async () => {
-      await expect(forgeLaunchArgs(dir, 'neoforge')).rejects.toThrow(/nenašel/);
+      await expect(forgeLaunchArgs(dir, 'neoforge')).rejects.toThrow(/nothing found/);
     });
   });
 });

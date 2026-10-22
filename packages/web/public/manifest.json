@@ -1,7 +1,7 @@
 {
   "name": "srvMC",
   "short_name": "srvMC",
-  "description": "Správce Minecraft serverů",
+  "description": "Minecraft server manager",
   "lang": "cs",
   "start_url": "/",
   "scope": "/",

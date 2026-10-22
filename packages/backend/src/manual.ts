@@ -9,6 +9,7 @@ import type { ManualDownload } from '@srvmc/shared';
 import { cacheDirFor, hashFile } from './download.ts';
 import type { Paths } from './paths.ts';
 import { UserError } from './providers/types.ts';
+import { t } from '@srvmc/shared';
 
 export interface ManualFile {
   title: string;
@@ -83,7 +84,7 @@ export class ManualDownloads extends EventEmitter {
     const report = () => onChange(items.map((i) => ({ ...i })));
     const cancelled = () => {
       this.cancel(serverId);
-      fail(new UserError('Ruční stahování zrušeno.'));
+      fail(new UserError(t('Manual download cancelled.')));
     };
     for (const f of files) {
       const holder: { item?: ManualDownload } = {};

@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import type { AuthInfo, PanelRole } from '@srvmc/shared';
 import { api } from './api.ts';
+import { t } from '@srvmc/shared';
 
 export type Cap = 'view' | 'power' | 'console' | 'manage' | 'admin' | 'owner';
 
@@ -14,10 +15,10 @@ const ROLE_CAPS: Record<PanelRole, Cap[]> = {
 };
 
 export const ROLE_LABEL: Record<PanelRole, string> = {
-  owner: 'Vlastník',
-  admin: 'Admin',
-  moderator: 'Moderátor',
-  starter: 'Jen zapnout',
+  owner: t('Owner'),
+  admin: t('Admin'),
+  moderator: t('Moderator'),
+  starter: t('Start only'),
 };
 
 let info: AuthInfo | null = null;

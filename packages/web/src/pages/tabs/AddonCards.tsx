@@ -3,10 +3,11 @@ import type { AddonId, AddonState, ServerInfo } from '@srvmc/shared';
 import { api } from '../../api.ts';
 import { Spinner } from '../../components/Icon.tsx';
 import { ConfirmDialog, useToast } from '../../components/Overlays.tsx';
+import { t } from '@srvmc/shared';
 
 const INFO: Record<AddonId, { title: string; tile: string }> = {
-  geyser: { title: 'Crossplay s Bedrockem', tile: '#6AA9FF' },
-  bluemap: { title: 'Mapa světa (BlueMap)', tile: '#5BD27A' },
+  geyser: { title: t('Crossplay with Bedrock'), tile: '#6AA9FF' },
+  bluemap: { title: t('World map (BlueMap)'), tile: '#5BD27A' },
 };
 
 export function AddonCards({ server }: { server: ServerInfo }) {
@@ -27,7 +28,7 @@ export function AddonCards({ server }: { server: ServerInfo }) {
       setAddons(await fn());
       toast('ok', ok);
     } catch (err) {
-      toast('error', 'Nepovedlo se', (err as Error).message);
+      toast('error', t('That did not work'), (err as Error).message);
     } finally {
       setBusy(null);
     }
@@ -37,16 +38,16 @@ export function AddonCards({ server }: { server: ServerInfo }) {
   if (shown.length === 0) return null;
 
   return (
-    <section aria-label="Jedním kliknutím" className="grid-auto" style={{ ['--min' as string]: '280px', gap: 14 }}>
+    <section aria-label={t('One click')} className="grid-auto" style={{ ['--min' as string]: '280px', gap: 14 }}>
       {shown.map((a) => {
         const info = INFO[a.id];
         let text: string;
         if (a.installed && a.reason) text = a.reason;
-        else if (!a.installed) text = a.id === 'geyser' ? 'Hráči z mobilů a konzolí se připojí na tenhle Java server.' : 'Živá 3D mapa světa v prohlížeči.';
-        else if (a.pendingStart) text = 'Nastaví se při dalším startu serveru.';
-        else if (a.id === 'geyser') text = `Bedrock hráči: port ${a.port ?? 19132} (TCP i UDP).`;
-        else if (a.needsConsent) text = 'Mapa potřebuje stáhnout textury hry od Mojangu.';
-        else text = `Mapa běží na portu ${a.port}.`;
+        else if (!a.installed) text = a.id === 'geyser' ? t('Players on phones and consoles can join this Java server.') : t('A live 3D map of the world in the browser.');
+        else if (a.pendingStart) text = t('It is set up on the next server start.');
+        else if (a.id === 'geyser') text = t('Bedrock players: port {port} (TCP and UDP).', { port: a.port ?? 19132 });
+        else if (a.needsConsent) text = t("The map needs to download the game's textures from Mojang.");
+        else text = t('The map runs on port {port}.', { port: a.port ?? '' });
         return (
           <div key={a.id} className="card" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <div style={{ width: 42, height: 42, borderRadius: 10, background: info.tile, flex: 'none' }} aria-hidden="true" />
@@ -57,20 +58,20 @@ export function AddonCards({ server }: { server: ServerInfo }) {
             {busy === a.id ? (
               <Spinner size={16} />
             ) : !a.installed ? (
-              <button type="button" className="btn primary sm" disabled={running} title={running ? 'Nejdřív zastav server' : undefined} onClick={() => void run(a.id, () => api.installAddon(server.id, a.id), `${info.title}: nainstalováno`)}>
-                Zapnout
+              <button type="button" className="btn primary sm" disabled={running} title={running ? t('Stop the server first') : undefined} onClick={() => void run(a.id, () => api.installAddon(server.id, a.id), t('{name}: installed', { name: info.title }))}>
+                {t('Turn on')}
               </button>
             ) : a.needsConsent ? (
               <button type="button" className="btn primary sm" onClick={() => setConsent(true)}>
-                Povolit
+                {t('Allow')}
               </button>
             ) : a.url && running ? (
               <a className="btn sm" href={a.url} target="_blank" rel="noreferrer">
-                Otevřít mapu
+                {t('Open map')}
               </a>
             ) : (
-              <button type="button" className="btn sm" disabled={running} title={running ? 'Nejdřív zastav server' : undefined} onClick={() => void run(a.id, () => api.removeAddon(server.id, a.id), `${info.title}: odebráno`)}>
-                Odebrat
+              <button type="button" className="btn sm" disabled={running} title={running ? t('Stop the server first') : undefined} onClick={() => void run(a.id, () => api.removeAddon(server.id, a.id), t('{name}: removed', { name: info.title }))}>
+                {t('Remove')}
               </button>
             )}
           </div>
@@ -78,21 +79,21 @@ export function AddonCards({ server }: { server: ServerInfo }) {
       })}
       {consent && (
         <ConfirmDialog
-          title="Stáhnout zdroje hry pro mapu?"
+          title={t("Download the game's resources for the map?")}
           text={
             <>
-              BlueMap stáhne od Mojangu klientskou část Minecraftu (textury a modely). Tím souhlasíš s{' '}
+              {t('BlueMap downloads the client part of Minecraft (textures and models) from Mojang. By doing so you agree to the')}{' '}
               <a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noreferrer">
                 Minecraft EULA
               </a>
               .
             </>
           }
-          confirmLabel="Souhlasím"
+          confirmLabel={t('I agree')}
           onCancel={() => setConsent(false)}
           onConfirm={() => {
             setConsent(false);
-            void run('bluemap', () => api.bluemapConsent(server.id), 'Mapa se začne vykreslovat');
+            void run('bluemap', () => api.bluemapConsent(server.id), t('The map starts rendering'));
           }}
         />
       )}

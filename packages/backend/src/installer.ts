@@ -4,6 +4,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import readline from 'node:readline';
 import { UserError } from './providers/types.ts';
+import { t } from '@srvmc/shared';
 
 const DROP = new Set(['java', 'javaw', '@user_jvm_args.txt', '%*', '"$@"', '$@', 'nogui', 'pause']);
 
@@ -49,7 +50,7 @@ export async function forgeLaunchArgs(dir: string, prefix: 'forge' | 'neoforge')
   // Forge 1.16.5 and older: no run script, just a launchable jar.
   const jars = (await readdir(dir)).filter((n) => n.startsWith(`${prefix}-`) && n.endsWith('.jar') && !n.includes('installer'));
   const jar = jars.find((n) => n.includes('shim')) ?? jars.find((n) => n.includes('universal')) ?? jars[0];
-  if (!jar) throw new UserError('Instalátor neskončil správně – nenašel jsem, čím server spustit.');
+  if (!jar) throw new UserError(t('The installer did not finish properly – nothing found to start the server with.'));
   return ['-jar', jar];
 }
 
@@ -78,7 +79,7 @@ export function runProgram(exe: string, args: string[], opts: RunOptions): Promi
     const p = spawn(exe, args, { cwd: opts.cwd, env: opts.env ?? process.env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     const timer = setTimeout(() => {
       p.kill('SIGKILL');
-      reject(new UserError('Instalátor běžel moc dlouho a byl ukončen.'));
+      reject(new UserError(t('The installer ran too long and was stopped.')));
     }, opts.timeoutMs ?? 30 * 60_000);
     for (const stream of [p.stdout, p.stderr]) {
       readline.createInterface({ input: stream, crlfDelay: Infinity }).on('line', (l) => {
@@ -92,7 +93,7 @@ export function runProgram(exe: string, args: string[], opts: RunOptions): Promi
     p.on('close', (code) => {
       clearTimeout(timer);
       if (code === 0) resolve();
-      else reject(new UserError(`Instalátor skončil s chybou (kód ${code}). Podrobnosti jsou v konzoli.`));
+      else reject(new UserError(t('The installer failed (code {code}). The details are in the console.', { code: String(code) })));
     });
   });
 }

@@ -7,6 +7,7 @@ import { useLive } from '../live.ts';
 import { href, type Route } from '../router.ts';
 import { Icon } from './Icon.tsx';
 import { ConfirmDialog } from './Overlays.tsx';
+import { t } from '@srvmc/shared';
 
 export function Sidebar({ route, system }: { route: Route; system: SystemInfo | null }) {
   const servers = useLive((s) => s.servers);
@@ -51,13 +52,13 @@ export function Sidebar({ route, system }: { route: Route; system: SystemInfo | 
   };
 
   return (
-    <nav className={`sidebar${open ? ' open' : ''}`} aria-label="Servery">
+    <nav className={`sidebar${open ? ' open' : ''}`} aria-label={t('Servers')}>
       <div className="side-top">
         <a className="brand" href={href({ page: 'overview' })}>
           <img className="brand-mark" src="/brand.png" width={32} height={32} alt="" />
           <span className="brand-name">srvMC</span>
         </a>
-        <button type="button" className="btn icon menu-btn" aria-label={open ? 'Zavřít menu' : 'Otevřít menu'} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <button type="button" className="btn icon menu-btn" aria-label={open ? t('Close menu') : t('Open menu')} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
           <Icon name={open ? 'close' : 'menu'} size={20} />
         </button>
       </div>
@@ -65,12 +66,12 @@ export function Sidebar({ route, system }: { route: Route; system: SystemInfo | 
       {can(auth, 'admin') && (
         <a className="btn primary" href={href({ page: 'new' })}>
           <Icon name="plus" strokeWidth={2.2} />
-          Nový server
+          {t('New server')}
         </a>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div className="side-label">Moje servery</div>
-        {list.length === 0 && <span className="muted small" style={{ padding: '0 8px' }}>Zatím žádný server</span>}
+        <div className="side-label">{t('My servers')}</div>
+        {list.length === 0 && <span className="muted small" style={{ padding: '0 8px' }}>{t('No servers yet')}</span>}
         {list.map((s) => (
           <a key={s.id} className={`side-link${s.id === activeId ? ' active' : ''}`} href={href({ page: 'server', id: s.id, tab: 'konzole' })}>
             <span className="dot" style={{ background: statusLook(s).dot }} />
@@ -88,13 +89,13 @@ export function Sidebar({ route, system }: { route: Route; system: SystemInfo | 
           {owner && (
             <a className={`side-link${route.page === 'users' ? ' active' : ''}`} href={href({ page: 'users' })}>
               <Icon name="users" size={16} />
-              <span className="name">Uživatelé</span>
+              <span className="name">{t('Users')}</span>
             </a>
           )}
           {owner && canRestart && (
             <button type="button" className="side-link" onClick={() => setConfirmRestart(true)}>
               <Icon name="restart" size={16} />
-              <span className="name">Restartovat aplikaci</span>
+              <span className="name">{t('Restart the app')}</span>
             </button>
           )}
           {auth.user.id !== 'local' && (
@@ -104,7 +105,7 @@ export function Sidebar({ route, system }: { route: Route; system: SystemInfo | 
                 <span className="muted small">{ROLE_LABEL[auth.user.role]}</span>
               </span>
               <button type="button" className="btn sm" onClick={() => void api.logout().finally(() => location.reload())}>
-                Odhlásit
+                {t('Sign out')}
               </button>
             </div>
           )}
@@ -112,9 +113,9 @@ export function Sidebar({ route, system }: { route: Route; system: SystemInfo | 
       )}
       {confirmRestart && (
         <ConfirmDialog
-          title="Restartovat srvMC?"
-          text="Běžící servery se bezpečně zastaví a po restartu se samy znovu spustí."
-          confirmLabel={restarting ? 'Restartuji…' : 'Restartovat'}
+          title={t('Restart srvMC?')}
+          text={t('Running servers stop safely and start again by themselves after the restart.')}
+          confirmLabel={restarting ? t('Restarting…') : t('Restart')}
           busy={restarting}
           onCancel={() => setConfirmRestart(false)}
           onConfirm={() => void restart()}
@@ -122,7 +123,7 @@ export function Sidebar({ route, system }: { route: Route; system: SystemInfo | 
       )}
       <div className="side-card" style={auth?.user ? { marginTop: 8 } : undefined}>
         <div className="muted small" style={{ fontWeight: 600 }}>
-          Tento počítač
+          {t('This computer')}
         </div>
         {system ? (
           <>
@@ -131,18 +132,18 @@ export function Sidebar({ route, system }: { route: Route; system: SystemInfo | 
               <span>{gb(system.totalMemMb)}</span>
             </div>
             <div className="kv">
-              <span className="muted">Volné místo</span>
+              <span className="muted">{t('Free space')}</span>
               <span>{system.diskFreeMb == null ? '–' : gb(system.diskFreeMb)}</span>
             </div>
             <div className="kv">
               <span className="muted">Java</span>
-              <span>{system.javaRuntimes.length ? system.javaRuntimes.join(', ') : 'stáhne se sama'}</span>
+              <span>{system.javaRuntimes.length ? system.javaRuntimes.join(', ') : t('downloads itself')}</span>
             </div>
           </>
         ) : (
-          <span className="muted">Načítám…</span>
+          <span className="muted">{t('Loading…')}</span>
         )}
-        {!connected && <span style={{ color: 'var(--amber-text)' }}>Připojuji se k jádru…</span>}
+        {!connected && <span style={{ color: 'var(--amber-text)' }}>{t('Connecting to the core…')}</span>}
       </div>
       </div>
     </nav>

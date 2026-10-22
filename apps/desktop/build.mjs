@@ -6,7 +6,7 @@ const webDist = new URL('../../packages/web/dist/', import.meta.url);
 try {
   await stat(webDist);
 } catch {
-  console.error('Chybí packages/web/dist – spusť nejdřív "npm run build -w @srvmc/web".');
+  console.error('packages/web/dist is missing – run "npm run build -w @srvmc/web" first.');
   process.exit(1);
 }
 
@@ -35,4 +35,4 @@ await build({
 });
 await cp(webDist, 'dist/web', { recursive: true });
 await cp('assets', 'dist/assets', { recursive: true, filter: (src) => !src.endsWith('icon-source.png') });
-console.log('Desktop build hotový: apps/desktop/dist');
+console.log('Desktop build ready: apps/desktop/dist');

@@ -8,6 +8,7 @@ import { installProject } from './modrinth.ts';
 import type { Paths } from './paths.ts';
 import { UserError } from './providers/index.ts';
 import { activeWorldName } from './worlds.ts';
+import { t } from '@srvmc/shared';
 
 interface Platform {
   loaders: string[];
@@ -39,7 +40,7 @@ export async function isChunkyInstalled(inst: ServerInstance): Promise<boolean> 
 
 export async function installChunky(inst: ServerInstance, paths: Paths): Promise<string[]> {
   const platform = pregenPlatform(effectiveType(inst.cfg));
-  if (!platform) throw new UserError('Vanilla server neumí pluginy ani mody. Pre-generace potřebuje Paper nebo Fabric.');
+  if (!platform) throw new UserError(t('A Vanilla server has no plugins or mods. Pre-generation needs Paper or Fabric.'));
   return installProject(paths, 'chunky', platform.loaders, inst.cfg.version, path.join(inst.dir, platform.folder));
 }
 
@@ -73,10 +74,10 @@ export async function chunkyWorld(inst: ServerInstance, dim: PregenRequest['dime
 }
 
 export async function startPregen(inst: ServerInstance, req: PregenRequest): Promise<void> {
-  if (inst.status !== 'running') throw new UserError('Pre-generace běží jen na zapnutém serveru.');
-  if (!(await isChunkyInstalled(inst))) throw new UserError('Nejdřív nainstaluj Chunky.');
+  if (inst.status !== 'running') throw new UserError(t('Pre-generation runs only on a running server.'));
+  if (!(await isChunkyInstalled(inst))) throw new UserError(t('Install Chunky first.'));
   const radius = Math.round(req.radius);
-  if (!Number.isInteger(radius) || radius < 100 || radius > 100_000) throw new UserError('Poloměr musí být 100–100 000 bloků.');
+  if (!Number.isInteger(radius) || radius < 100 || radius > 100_000) throw new UserError(t('The radius must be 100–100,000 blocks.'));
   const world = await chunkyWorld(inst, req.dimension);
   inst.sendCommand(`chunky world ${world}`);
   inst.sendCommand('chunky center 0 0');
@@ -95,7 +96,7 @@ export async function startPregen(inst: ServerInstance, req: PregenRequest): Pro
 }
 
 export function pregenCommand(inst: ServerInstance, action: 'pause' | 'continue' | 'cancel'): void {
-  if (inst.status !== 'running') throw new UserError('Server neběží.');
+  if (inst.status !== 'running') throw new UserError(t('The server is not running.'));
   inst.sendCommand(`chunky ${action}`);
   if (action === 'cancel') inst.sendCommand('chunky confirm');
 }

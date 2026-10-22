@@ -7,6 +7,7 @@ import { fetchJson } from './http.ts';
 import type { ServerInstance } from './instance.ts';
 import { readServerProperties, updateServerProperties } from './properties.ts';
 import { UserError } from './providers/types.ts';
+import { t } from '@srvmc/shared';
 
 const XUID_FILE = '.srvmc-xuids.json';
 
@@ -60,14 +61,14 @@ export async function lookupXuid(gamertag: string): Promise<{ name: string; xuid
 }
 
 function checkName(name: string): void {
-  if (!GAMERTAG_RE.test(name)) throw new UserError('Zadej Xbox jméno (gamertag) – písmena, číslice a mezery.');
+  if (!GAMERTAG_RE.test(name)) throw new UserError(t('Enter an Xbox name (gamertag) – letters, digits and spaces.'));
 }
 
 /** Gamertags may contain spaces; console commands need them quoted. */
 export const quoted = (name: string) => (name.includes(' ') ? `"${name}"` : name);
 
 function onlyAllowAndOps(kind: PlayerListKind): void {
-  if (kind === 'bans' || kind === 'ips') throw new UserError('Bedrock server zákazy nemá. Zapni povolený seznam hráčů a přidávej jen ty, kdo smí hrát.');
+  if (kind === 'bans' || kind === 'ips') throw new UserError(t('A Bedrock server has no bans. Turn on the allow list and add only those who may play.'));
 }
 
 export async function bedrockPlayersInfo(inst: ServerInstance): Promise<PlayersInfo> {
@@ -105,18 +106,18 @@ export async function bedrockAddPlayer(inst: ServerInstance, kind: PlayerListKin
   const known = (await knownXuids(inst.dir))[name.toLowerCase()];
   if (kind === 'whitelist') {
     const list = await readJson<Raw[]>(allowFile(inst.dir), []);
-    if (list.some((r) => String(r.name).toLowerCase() === name.toLowerCase())) throw new UserError(`${name} už v seznamu je.`);
+    if (list.some((r) => String(r.name).toLowerCase() === name.toLowerCase())) throw new UserError(t('{name} is already on the list.', { name }));
     list.push({ ignoresPlayerLimit: false, name: known?.name ?? name, ...(known && { xuid: known.xuid }) });
     await writeJson(allowFile(inst.dir), list);
     reload(inst, 'allowlist reload');
     return;
   }
   const found = known ?? (await lookupXuid(name));
-  if (!found) throw new UserError(`XUID hráče „${name}“ nejde zjistit. Ať se jednou připojí na server, pak ho přidej.`);
+  if (!found) throw new UserError(t('The XUID of "{name}" cannot be found. Let them join the server once, then add them.', { name }));
   await rememberXuid(inst.dir, found.name, found.xuid);
   const perms = await readJson<Raw[]>(permFile(inst.dir), []);
   const rest = perms.filter((r) => r.xuid !== found.xuid);
-  if (rest.length !== perms.length && perms.some((r) => r.xuid === found.xuid && r.permission === 'operator')) throw new UserError(`${name} už operátor je.`);
+  if (rest.length !== perms.length && perms.some((r) => r.xuid === found.xuid && r.permission === 'operator')) throw new UserError(t('{name} is already an operator.', { name }));
   rest.push({ permission: 'operator', xuid: found.xuid });
   await writeJson(permFile(inst.dir), rest);
   reload(inst, 'permission reload');
@@ -128,7 +129,7 @@ export async function bedrockRemovePlayer(inst: ServerInstance, kind: PlayerList
   if (kind === 'whitelist') {
     const list = await readJson<Raw[]>(allowFile(inst.dir), []);
     const next = list.filter((r) => String(r.name).toLowerCase() !== name.toLowerCase());
-    if (next.length === list.length) throw new UserError(`${name} v seznamu není.`);
+    if (next.length === list.length) throw new UserError(t('{name} is not on the list.', { name }));
     await writeJson(allowFile(inst.dir), next);
     reload(inst, 'allowlist reload');
     return;
@@ -137,7 +138,7 @@ export async function bedrockRemovePlayer(inst: ServerInstance, kind: PlayerList
   const xuid = /^\d+$/.test(name) ? name : (await knownXuids(inst.dir))[name.toLowerCase()]?.xuid;
   const perms = await readJson<Raw[]>(permFile(inst.dir), []);
   const next = perms.filter((r) => !(r.xuid === xuid && r.permission === 'operator'));
-  if (!xuid || next.length === perms.length) throw new UserError(`${name} operátor není.`);
+  if (!xuid || next.length === perms.length) throw new UserError(t('{name} is not an operator.', { name }));
   await writeJson(permFile(inst.dir), next);
   reload(inst, 'permission reload');
 }

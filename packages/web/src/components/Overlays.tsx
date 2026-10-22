@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from './Icon.tsx';
+import { t } from '@srvmc/shared';
 
 type ToastKind = 'ok' | 'error' | 'info';
 interface Toast {
@@ -33,14 +34,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={push}>
       {children}
       <div className="toasts" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className="toast" role="status">
-            <span className="dot" style={{ background: COLORS[t.kind] }} />
+        {toasts.map((item) => (
+          <div key={item.id} className="toast" role="status">
+            <span className="dot" style={{ background: COLORS[item.kind] }} />
             <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontWeight: 600 }}>{t.title}</span>
-              {t.text && <span className="muted" style={{ fontSize: 13 }}>{t.text}</span>}
+              <span style={{ fontWeight: 600 }}>{item.title}</span>
+              {item.text && <span className="muted" style={{ fontSize: 13 }}>{item.text}</span>}
             </span>
-            <button type="button" className="btn ghost icon sm" aria-label="Zavřít oznámení" onClick={() => dismiss(t.id)}>
+            <button type="button" className="btn ghost icon sm" aria-label={t('Close notification')} onClick={() => dismiss(item.id)}>
               <Icon name="close" size={14} strokeWidth={2.4} />
             </button>
           </div>
@@ -90,7 +91,7 @@ export function PromptDialog(props: {
         </label>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button type="button" className="btn ghost" onClick={props.onCancel}>
-            Zrušit
+            {t('Cancel')}
           </button>
           <button type="submit" className="btn primary" disabled={!value.trim()}>
             {props.confirmLabel}
@@ -128,7 +129,7 @@ export function ConfirmDialog(props: {
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button type="button" className="btn ghost" ref={cancelRef} onClick={props.onCancel}>
-            Zrušit
+            {t('Cancel')}
           </button>
           <button
             type="button"

@@ -11,6 +11,7 @@ import type { ManualDownloads, ManualFile } from './manual.ts';
 import type { Paths } from './paths.ts';
 import { UserError } from './providers/types.ts';
 import { seal, unseal, type SecretBox } from './secrets.ts';
+import { t } from '@srvmc/shared';
 
 const API = 'https://api.curseforge.com/v1';
 const MINECRAFT = 432;
@@ -45,12 +46,12 @@ export const curseForgeKeySet = () => !!key;
 export async function saveCurseForgeKey(value: string | null): Promise<void> {
   if (value) {
     const trimmed = value.trim();
-    if (!/^[\x21-\x7e]{20,200}$/.test(trimmed)) throw new UserError('Tohle nevypadá jako API klíč CurseForge.');
+    if (!/^[\x21-\x7e]{20,200}$/.test(trimmed)) throw new UserError(t('This does not look like a CurseForge API key.'));
     try {
       await fetchJson(`${API}/games/${MINECRAFT}`, { headers: { 'x-api-key': trimmed, accept: 'application/json' } });
     } catch (err) {
-      if (err instanceof HttpError && (err.status === 401 || err.status === 403)) throw new UserError('CurseForge klíč odmítl. Zkopíruj ho znovu z console.curseforge.com.');
-      throw new UserError('CurseForge teď neodpovídá, zkus to za chvíli.');
+      if (err instanceof HttpError && (err.status === 401 || err.status === 403)) throw new UserError(t('CurseForge refused the key. Copy it again from console.curseforge.com.'));
+      throw new UserError(t('CurseForge is not answering, try again in a moment.'));
     }
     key = trimmed;
   } else key = null;
@@ -58,12 +59,12 @@ export async function saveCurseForgeKey(value: string | null): Promise<void> {
 }
 
 async function cf<T>(urlPath: string, init?: RequestInit): Promise<T> {
-  if (!key) throw new UserError('Pro CurseForge je potřeba API klíč – vlož ho v záložce Mody a pluginy.');
+  if (!key) throw new UserError(t('CurseForge needs an API key – add it in the Mods and plugins tab.'));
   try {
     const res = await fetchJson<{ data: T }>(`${API}${urlPath}`, { ...init, headers: { 'x-api-key': key, accept: 'application/json', ...(init?.body ? { 'content-type': 'application/json' } : {}), ...init?.headers } });
     return res.data;
   } catch (err) {
-    if (err instanceof HttpError && err.status === 403) throw new UserError('CurseForge odmítl API klíč (neplatný, nebo vyčerpaný limit). Zkus to za chvíli nebo vlož nový.');
+    if (err instanceof HttpError && err.status === 403) throw new UserError(t('CurseForge refused the API key (invalid, or the limit is used up). Try again in a moment or add a new one.'));
     if (err instanceof HttpError && err.status === 404) throw new UserError('Na CurseForge to nebylo nalezeno.');
     throw err;
   }
@@ -255,13 +256,13 @@ export async function installCurseForge(modId: number, opts: CfInstallOptions, r
   const files = opts.kind === 'mod' ? await modFiles(modId, opts.gameVersion, loader) : await modFiles(modId);
   const file = pickFile(files, opts.gameVersion, opts.kind === 'mod' ? opts.loaders : []);
   if (!file) {
-    if (depth === 0) throw new UserError(`${mod.name} nemá na CurseForge verzi pro ${opts.gameVersion}${opts.kind === 'mod' ? ` (${opts.loaders[0]})` : ''}.`);
-    result.skipped.push(`${mod.name} (není verze pro ${opts.gameVersion})`);
+    if (depth === 0) throw new UserError(t('{name} has no CurseForge version for {version}.', { name: mod.name, version: `${opts.gameVersion}${opts.kind === 'mod' ? ` (${opts.loaders[0]})` : ''}` }));
+    result.skipped.push(t('{name} (no version for {version})', { name: mod.name, version: opts.gameVersion }));
     return result;
   }
   if (cfClientOnly(file)) {
-    if (depth === 0) throw new UserError(`${mod.name} je jen pro hráče (klienta). Server ho nepotřebuje.`);
-    result.skipped.push(`${mod.name} (jen pro klienta)`);
+    if (depth === 0) throw new UserError(t('{name} is only for players (the client). The server does not need it.', { name: mod.name }));
+    result.skipped.push(t('{name} (client only)', { name: mod.name }));
     return result;
   }
   const fileName = cfFileName(file);

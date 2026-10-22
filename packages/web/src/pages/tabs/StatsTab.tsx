@@ -4,8 +4,9 @@ import { api } from '../../api.ts';
 import { Spinner } from '../../components/Icon.tsx';
 import { useToast } from '../../components/Overlays.tsx';
 import { ago, nameColor } from '../../format.ts';
+import { locale, t } from '@srvmc/shared';
 
-const nf = new Intl.NumberFormat('cs-CZ', { maximumFractionDigits: 1 });
+const nf = new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 });
 
 function hours(ms: number): string {
   const h = ms / 3_600_000;
@@ -34,16 +35,16 @@ export function StatsTab({ server }: { server: ServerInfo }) {
   const java = server.type !== 'bedrock' && server.type !== 'bedrock-preview';
 
   useEffect(() => {
-    const load = () => void api.stats(server.id).then(setStats).catch((err: Error) => toast('error', 'Statistiky se nepodařilo načíst', err.message));
+    const load = () => void api.stats(server.id).then(setStats).catch((err: Error) => toast('error', t('Could not load the statistics'), err.message));
     load();
-    const t = setInterval(load, 60_000);
-    return () => clearInterval(t);
+    const timer = setInterval(load, 60_000);
+    return () => clearInterval(timer);
   }, [server.id, server.players.length, toast]);
 
   const sorted = useMemo(() => {
     const list = [...(stats ?? [])];
     if (sort === 'last') list.sort((a, b) => (b.lastSeen ?? 0) - (a.lastSeen ?? 0));
-    else if (sort === 'name') list.sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+    else if (sort === 'name') list.sort((a, b) => a.name.localeCompare(b.name));
     else list.sort((a, b) => b.playMs - a.playMs);
     return list;
   }, [stats, sort]);
@@ -52,8 +53,8 @@ export function StatsTab({ server }: { server: ServerInfo }) {
   if (stats.length === 0) {
     return (
       <div className="empty">
-        <span style={{ fontWeight: 600 }}>Zatím tu nikdo nehrál</span>
-        <span className="muted">Statistiky se plní, jak se hráči připojují.</span>
+        <span style={{ fontWeight: 600 }}>{t('Nobody has played here yet')}</span>
+        <span className="muted">{t('The statistics fill up as players join.')}</span>
       </div>
     );
   }
@@ -63,12 +64,12 @@ export function StatsTab({ server }: { server: ServerInfo }) {
 
   return (
     <div className="stack" style={{ gap: 16 }}>
-      <section className="grid-auto" style={{ ['--min' as string]: '180px', gap: 12 }} aria-label="Souhrn">
+      <section className="grid-auto" style={{ ['--min' as string]: '180px', gap: 12 }} aria-label={t('Summary')}>
         {[
-          ['Hráčů celkem', String(stats.length)],
-          ['Odehráno celkem', hours(total)],
-          ['Teď online', String(stats.filter((p) => p.online).length)],
-          ['Nejvíc hraje', sorted[0] && sort === 'time' ? sorted[0].name : [...stats].sort((a, b) => b.playMs - a.playMs)[0]!.name],
+          [t('Players in total'), String(stats.length)],
+          [t('Played in total'), hours(total)],
+          [t('Online now'), String(stats.filter((p) => p.online).length)],
+          [t('Plays the most'), sorted[0] && sort === 'time' ? sorted[0].name : [...stats].sort((a, b) => b.playMs - a.playMs)[0]!.name],
         ].map(([label, value]) => (
           <div key={label} className="card tight stack" style={{ gap: 6 }}>
             <span className="muted small">{label}</span>
@@ -78,13 +79,13 @@ export function StatsTab({ server }: { server: ServerInfo }) {
       </section>
 
       <div className="section-head">
-        <h2 className="h2">Hráči</h2>
-        <div className="seg" role="tablist" aria-label="Řazení">
+        <h2 className="h2">{t('Players')}</h2>
+        <div className="seg" role="tablist" aria-label={t('Sorting')}>
           {(
             [
-              ['time', 'Podle času'],
-              ['last', 'Naposledy'],
-              ['name', 'Podle jména'],
+              ['time', t('By time')],
+              ['last', t('Last seen')],
+              ['name', t('By name')],
             ] as [Sort, string][]
           ).map(([id, label]) => (
             <button key={id} type="button" role="tab" className="seg-btn" aria-selected={sort === id} onClick={() => setSort(id)}>
@@ -98,16 +99,16 @@ export function StatsTab({ server }: { server: ServerInfo }) {
         <table className="table">
           <thead>
             <tr>
-              <th>Hráč</th>
-              <th className="num">Odehráno</th>
-              <th className="num">Připojení</th>
-              <th>Naposledy</th>
+              <th>{t('Player')}</th>
+              <th className="num">{t('Played')}</th>
+              <th className="num">{t('Joins')}</th>
+              <th>{t('Last seen')}</th>
               {hasGame && (
                 <>
-                  <th className="num">Smrti</th>
-                  <th className="num">Zabitá monstra</th>
-                  <th className="num">Vytěženo bloků</th>
-                  <th className="num">Ušlo (km)</th>
+                  <th className="num">{t('Deaths')}</th>
+                  <th className="num">{t('Mobs killed')}</th>
+                  <th className="num">{t('Blocks mined')}</th>
+                  <th className="num">{t('Walked (km)')}</th>
                 </>
               )}
             </tr>
@@ -130,7 +131,7 @@ export function StatsTab({ server }: { server: ServerInfo }) {
                 </td>
                 <td className="num">{hours(p.playMs)}</td>
                 <td className="num">{p.sessions}</td>
-                <td className="muted small">{p.online ? 'teď' : p.lastSeen ? ago(p.lastSeen) : '–'}</td>
+                <td className="muted small">{p.online ? t('now') : p.lastSeen ? ago(p.lastSeen) : '–'}</td>
                 {hasGame && (
                   <>
                     <td className="num">{p.game?.deaths ?? '–'}</td>

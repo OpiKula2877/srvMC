@@ -7,6 +7,7 @@ import extractZip from 'extract-zip';
 import { fetchOk } from '../http.ts';
 import { runProgram } from '../installer.ts';
 import { UserError, type Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 const DOWNLOADER_ZIP = 'https://downloader.hytale.com/hytale-downloader.zip';
 const WEEK = 7 * 24 * 3600_000;
@@ -36,7 +37,7 @@ function checkSignature(exe: string): Promise<void> {
     const script = `$s = Get-AuthenticodeSignature -LiteralPath $env:SRVMC_FILE; "$($s.Status)|$($s.SignerCertificate.Subject)"`;
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 30_000, env: { ...process.env, SRVMC_FILE: exe } }, (err, out) => {
       const [status, subject = ''] = String(out).trim().split('|');
-      if (err || status !== 'Valid' || !/Hypixel Studios/i.test(subject)) reject(new UserError('Stažený hytale-downloader nemá platný podpis Hypixel Studios. Nespustím ho.'));
+      if (err || status !== 'Valid' || !/Hypixel Studios/i.test(subject)) reject(new UserError(t('The downloaded hytale-downloader has no valid Hypixel Studios signature. srvMC will not run it.')));
       else resolve();
     });
   });
@@ -85,14 +86,14 @@ export const hytale: Provider = {
         const zip = path.join(tools, `game-${Date.now()}.zip`);
         const login: { link?: string; code?: string } = {};
         try {
-          ctx.progress('Spouštím hytale-downloader', null);
+          ctx.progress(t('Starting hytale-downloader'), null);
           await runProgram(exe, ['-download-path', zip, '-skip-update-check', ...(patchline === 'release' ? [] : ['-patchline', patchline])], {
             cwd: tools,
             timeoutMs: 30 * 60_000,
             onLine: (line) => {
               ctx.log(`[hytale-downloader] ${line}`);
               if (parseDeviceLogin(line, login) && login.link) {
-                ctx.progress(`Přihlas se k účtu Hytale${login.code ? ` – kód ${login.code}` : ''}. Pak stahování začne samo.`, null, login.link);
+                ctx.progress(login.code ? t('Sign in to a Hytale account – code {code}. Then the download starts by itself.', { code: login.code }) : t('Sign in to a Hytale account. Then the download starts by itself.'), null, login.link);
               } else if (/download|%/i.test(line)) {
                 const pct = /(\d{1,3}(?:\.\d+)?)%/.exec(line)?.[1];
                 ctx.progress('Stahuji soubory Hytale serveru', pct ? Math.min(100, Math.round(Number(pct))) : null);
@@ -104,9 +105,9 @@ export const hytale: Provider = {
         } finally {
           await rm(zip, { force: true });
         }
-        if (!(await stat(path.join(ctx.dir, 'Server', 'HytaleServer.jar')).catch(() => null))) throw new UserError('Ve stažených souborech chybí Server/HytaleServer.jar.');
-        if (!(await stat(path.join(ctx.dir, 'Assets.zip')).catch(() => null))) throw new UserError('Ve stažených souborech chybí Assets.zip.');
-        ctx.log('Po prvním startu se server musí přihlásit k účtu Hytale – srvMC k tomu ukáže odkaz.');
+        if (!(await stat(path.join(ctx.dir, 'Server', 'HytaleServer.jar')).catch(() => null))) throw new UserError(t('Server/HytaleServer.jar is missing from the download.'));
+        if (!(await stat(path.join(ctx.dir, 'Assets.zip')).catch(() => null))) throw new UserError(t('Assets.zip is missing from the download.'));
+        ctx.log(t('After the first start the server has to sign in to a Hytale account – srvMC shows a link for it.'));
         return ['-jar', path.posix.join('Server', 'HytaleServer.jar'), '--assets', 'Assets.zip'];
       },
     };

@@ -23,6 +23,7 @@ import { Dropdown } from "../../components/Dropdown.tsx";
 import { Icon, Spinner } from "../../components/Icon.tsx";
 import { ConfirmDialog, useToast } from "../../components/Overlays.tsx";
 import { bytes, nameColor } from "../../format.ts";
+import { locale, t } from "@srvmc/shared";
 
 const SOURCE_LABEL: Record<ContentSource, string> = {
   modrinth: "Modrinth",
@@ -41,7 +42,7 @@ const LOADER_LABEL: Record<string, string> = {
   arclight: "Arclight",
 };
 
-const compact = new Intl.NumberFormat("cs", {
+const compact = new Intl.NumberFormat(locale(), {
   notation: "compact",
   maximumFractionDigits: 1,
 });
@@ -105,25 +106,25 @@ function Result({
 }) {
   const badge = hit.installed
     ? {
-        text: "Nainstalováno",
+        text: t('Already installed'),
         bg: "var(--green-soft)",
         fg: "var(--green-text)",
       }
     : hit.clientOnly
       ? {
-          text: "Jen pro klienta",
+          text: t('Client only'),
           bg: "var(--red-soft)",
           fg: "var(--red-text)",
         }
       : !hit.installable
         ? {
-            text: "Jen z webu autora",
+            text: t("Only from the author's website"),
             bg: "var(--amber-soft)",
             fg: "var(--amber-text)",
           }
         : hit.manual
           ? {
-              text: "Stáhneš ručně z CurseForge",
+              text: t('Manual download from CurseForge'),
               bg: "var(--amber-soft)",
               fg: "var(--amber-text)",
             }
@@ -172,8 +173,8 @@ function Result({
             {hit.title}
           </a>
           <span className="muted small">
-            {hit.author && `od ${hit.author} · `}
-            {compact.format(hit.downloads)} stažení
+            {hit.author && `${t('by {author}', { author: hit.author })} · `}
+            {t('{n} downloads', { n: compact.format(hit.downloads) })}
           </span>
         </div>
         {hit.description && (
@@ -204,7 +205,7 @@ function Result({
           disabled
         >
           <Icon name="check" size={16} />
-          Hotovo
+          {t('Done')}
         </button>
       ) : hit.installable ? (
         <button
@@ -214,7 +215,7 @@ function Result({
           disabled={busy}
           onClick={onInstall}
         >
-          Nainstalovat
+          {t('Install')}
         </button>
       ) : hit.clientOnly ? (
         <button
@@ -223,7 +224,7 @@ function Result({
           style={{ minWidth: 132 }}
           disabled
         >
-          Nejde na server
+          {t('Not for servers')}
         </button>
       ) : (
         <a
@@ -233,7 +234,7 @@ function Result({
           target="_blank"
           rel="noreferrer"
         >
-          Otevřít web
+          {t('Open website')}
         </a>
       )}
     </li>
@@ -314,26 +315,26 @@ function InstalledRow({
             color: "var(--amber-text)",
           }}
           disabled={busy || locked}
-          title={locked ? "Nejdřív zastav server" : undefined}
+          title={locked ? t('Stop the server first') : undefined}
           onClick={onUpdate}
         >
-          Aktualizovat
+          {t('Update')}
         </button>
       )}
       <input
         type="checkbox"
         className="toggle"
-        aria-label={`${item.enabled ? "Vypnout" : "Zapnout"} ${item.name}`}
+        aria-label={item.enabled ? t("Turn off {name}", { name: item.name }) : t("Turn on {name}", { name: item.name })}
         checked={item.enabled}
         disabled={busy || locked}
-        title={locked ? "Nejdřív zastav server" : undefined}
+        title={locked ? t('Stop the server first') : undefined}
         onChange={(e) => onToggle(e.target.checked)}
       />
       <button
         type="button"
         className="btn icon sm"
         style={{ width: 36, minHeight: 36, color: "var(--red-text)" }}
-        aria-label={`Smazat ${item.name}`}
+        aria-label={t("Delete {name}", { name: item.name })}
         disabled={busy || locked}
         onClick={onRemove}
       >
@@ -371,12 +372,12 @@ export function ModsTab({ server }: { server: ServerInfo }) {
     server.status !== "stopped" &&
     server.status !== "crashed" &&
     server.status !== "error";
-  const target = targets?.find((t) => t.folder === folder);
+  const target = targets?.find((tg) => tg.folder === folder);
   const loader =
     server.type === "modpack"
       ? (server.modpack?.loader ?? "modpack")
       : server.type;
-  const noun = target?.kind === "mod" ? "mody" : "pluginy";
+  
 
   useEffect(() => {
     api
@@ -390,7 +391,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
       .catch((err: Error) =>
         toast(
           "error",
-          "Nepodařilo se načíst, co server podporuje",
+          t('Could not load what the server supports'),
           err.message,
         ),
       );
@@ -404,7 +405,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
       const withUpdates = await api.contentUpdates(server.id).catch(() => null);
       if (withUpdates) setItems(withUpdates);
     } catch (err) {
-      toast("error", "Seznam se nepodařilo načíst", (err as Error).message);
+      toast("error", t('Could not load the list'), (err as Error).message);
     } finally {
       setChecking(false);
     }
@@ -465,7 +466,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
         setMore(page.length >= 20);
       } catch (err) {
         if (seq === searchSeq.current)
-          toast("error", "Hledání selhalo", (err as Error).message);
+          toast("error", t('Search failed'), (err as Error).message);
       } finally {
         if (seq === searchSeq.current) setSearching(false);
       }
@@ -495,14 +496,14 @@ export function ModsTab({ server }: { server: ServerInfo }) {
       });
       toast(
         "ok",
-        `Nainstalováno: ${hit.title}`,
+        t("Installed: {name}", { name: hit.title }),
         [
           r.manual?.length &&
-            `Ručně stáhni: ${r.manual.map((m) => m.title).join(", ")}`,
+            t("Download by hand: {list}", { list: r.manual.map((m) => m.title).join(", ") }),
           r.installed.length > 1 &&
-            `Se závislostmi: ${r.installed.slice(1).join(", ")}`,
-          r.skipped.length && `Přeskočeno: ${r.skipped.join(", ")}`,
-          running && "Projeví se po restartu serveru.",
+            t("With dependencies: {list}", { list: r.installed.slice(1).join(", ") }),
+          r.skipped.length && t("Skipped: {list}", { list: r.skipped.join(", ") }),
+          running && t('Takes effect after the server restarts.'),
         ]
           .filter(Boolean)
           .join(" · ") || undefined,
@@ -520,7 +521,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
     } catch (err) {
       toast(
         "error",
-        `${hit.title} se nepodařilo nainstalovat`,
+        t("Could not install {name}", { name: hit.title }),
         (err as Error).message,
       );
     } finally {
@@ -548,7 +549,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
   const uploadJar = async (file: File | undefined) => {
     if (!file || !target) return;
     if (!/\.jar$/i.test(file.name))
-      return toast("error", "Nahrát jde jen soubor .jar");
+      return toast("error", t('Only .jar files can be uploaded'));
     setUpload({ name: file.name, pct: 0 });
     try {
       const r = await api.uploadJar(
@@ -560,12 +561,12 @@ export function ModsTab({ server }: { server: ServerInfo }) {
       );
       toast(
         "ok",
-        `Nahráno: ${r.name}${r.version ? ` ${r.version}` : ""}`,
-        running ? "Projeví se po restartu serveru." : undefined,
+        t("Uploaded: {name}", { name: `${r.name}${r.version ? ` ${r.version}` : ""}` }),
+        running ? t('Takes effect after the server restarts.') : undefined,
       );
       void loadInstalled();
     } catch (err) {
-      toast("error", "Jar se nepodařilo nahrát", (err as Error).message);
+      toast("error", t('Could not upload the jar'), (err as Error).message);
     } finally {
       setUpload(null);
     }
@@ -584,21 +585,20 @@ export function ModsTab({ server }: { server: ServerInfo }) {
         {editionOf(server.type) === "java" ? (
           <>
             <span style={{ fontWeight: 600 }}>
-              Vanilla server neumí mody ani pluginy
+              {t('A Vanilla server cannot run mods or plugins')}
             </span>
             <span className="muted">
-              Pro pluginy vytvoř server Paper nebo Purpur, pro mody Fabric,
-              Forge nebo NeoForge.
+              {t("For plugins create a Paper or Purpur server, for mods Fabric, Forge or NeoForge.")}
             </span>
           </>
         ) : (
           <>
             <span style={{ fontWeight: 600 }}>
               {editionOf(server.type) === "bedrock"
-                ? "Add-ony pro Bedrock zatím neumím"
-                : "Mody pro Hytale zatím neumím"}
+                ? t('Bedrock add-ons are not supported yet')
+                : t('Hytale mods are not supported yet')}
             </span>
-            <span className="muted">Můžeš je nahrát ručně v Souborech.</span>
+            <span className="muted">{t('You can upload them by hand in Files.')}</span>
           </>
         )}
       </div>
@@ -619,20 +619,20 @@ export function ModsTab({ server }: { server: ServerInfo }) {
         >
           <div className="section-head">
             <h2 id="h-search" className="h2">
-              Hledat {noun}
+              {target?.kind === "mod" ? t("Search mods") : t("Search plugins")}
             </h2>
             {targets.length > 1 && (
-              <div className="seg" role="tablist" aria-label="Co hledat">
-                {targets.map((t) => (
+              <div className="seg" role="tablist" aria-label={t('What to search')}>
+                {targets.map((tg) => (
                   <button
-                    key={t.folder}
+                    key={tg.folder}
                     type="button"
                     role="tab"
                     className="seg-btn"
-                    aria-selected={t.folder === folder}
-                    onClick={() => setFolder(t.folder)}
+                    aria-selected={tg.folder === folder}
+                    onClick={() => setFolder(tg.folder)}
                   >
-                    {t.kind === "mod" ? "Mody" : "Pluginy"}
+                    {tg.kind === "mod" ? t("Mods") : t("Plugins")}
                   </button>
                 ))}
               </div>
@@ -656,14 +656,14 @@ export function ModsTab({ server }: { server: ServerInfo }) {
               }}
             >
               <Icon name="search" size={18} />
-              <span className="sr-only">Hledat</span>
+              <span className="sr-only">{t('Search')}</span>
               <input
                 value={query}
                 maxLength={100}
                 placeholder={
                   target?.kind === "mod"
-                    ? "např. lithium, create…"
-                    : "např. luckperms, essentials…"
+                    ? t('e.g. lithium, create…')
+                    : t('e.g. luckperms, essentials…')
                 }
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -672,7 +672,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
             {target && target.sources.length > 1 && (
               <div style={{ flex: "1 1 180px" }}>
                 <Dropdown
-                  label="Zdroj"
+                  label={t('Source')}
                   value={source}
                   options={target.sources.map((s) => ({
                     value: s,
@@ -708,7 +708,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
             {source === "modrinth" && target?.kind === "mod" && (
               <div style={{ minWidth: 240 }}>
                 <Toggle
-                  label="Skrýt mody jen pro klienta"
+                  label={t('Hide client-only mods')}
                   checked={hideClient}
                   onChange={setHideClient}
                 />
@@ -736,7 +736,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
           ) : hits.length === 0 ? (
             <div className="empty" style={{ padding: 32 }}>
               <span className="muted">
-                Nic jsem nenašel{query ? ` pro „${query}“` : ""}.
+                {query ? t("Nothing found for \"{query}\".", { query }) : t("Nothing found.")}
               </span>
             </div>
           ) : (
@@ -765,7 +765,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
               className="banner info"
               style={{ display: "flex", alignItems: "center", gap: 10 }}
             >
-              <Spinner size={16} /> Stahuji a kontroluji závislosti…
+              <Spinner size={16} /> {t("Downloading and checking dependencies…")}
             </div>
           )}
           {hits && more && !needsKey && (
@@ -776,7 +776,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
               disabled={searching}
               onClick={() => void search(hits.length)}
             >
-              Načíst další
+              {t('Load more')}
             </button>
           )}
         </section>
@@ -785,7 +785,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
           <div className="card stack" style={{ gap: 12 }}>
             <div className="section-head">
               <h2 id="h-inst" className="h2">
-                Nainstalované
+                {t('Installed')}
               </h2>
               {checking ? (
                 <Spinner size={16} />
@@ -797,11 +797,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
                     color: "var(--amber-text)",
                   }}
                 >
-                  {updates === 1
-                    ? "1 aktualizace"
-                    : updates < 5
-                      ? `${updates} aktualizace`
-                      : `${updates} aktualizací`}
+                  {updates === 1 ? t("1 update") : t("{n} updates", { n: updates })}
                 </span>
               ) : (
                 shown && <span className="chip">{shown.length}</span>
@@ -809,7 +805,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
             </div>
             {running && (
               <div className="banner info">
-                Zapínat, aktualizovat a mazat jde po zastavení serveru.
+                {t('Turning on, updating and deleting work once the server is stopped.')}
               </div>
             )}
             {updates > 1 && (
@@ -819,19 +815,19 @@ export function ModsTab({ server }: { server: ServerInfo }) {
                 disabled={busy || running}
                 onClick={() =>
                   void act(
-                    "Aktualizace selhala",
+                    t('Updating failed'),
                     () => api.updateContent(server.id),
-                    "Vše aktualizováno",
+                    t('Everything updated'),
                   )
                 }
               >
-                Aktualizovat vše
+                {t('Update all')}
               </button>
             )}
             {shown === null ? (
               <Spinner />
             ) : shown.length === 0 ? (
-              <span className="muted small">Zatím nic.</span>
+              <span className="muted small">{t('Nothing yet.')}</span>
             ) : (
               <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
                 {shown.map((i) => (
@@ -841,19 +837,19 @@ export function ModsTab({ server }: { server: ServerInfo }) {
                     locked={running}
                     busy={busy}
                     onToggle={(v) =>
-                      void act("Změna selhala", () =>
+                      void act(t('The change failed'), () =>
                         api.setContentEnabled(server.id, i.folder, i.file, v),
                       )
                     }
                     onUpdate={() =>
                       void act(
-                        "Aktualizace selhala",
+                        t('Updating failed'),
                         () =>
                           api.updateContent(server.id, {
                             folder: i.folder,
                             file: i.file,
                           }),
-                        `${i.name} aktualizován`,
+                        t("{name} updated", { name: i.name }),
                       )
                     }
                     onRemove={() => setRemove(i)}
@@ -876,13 +872,13 @@ export function ModsTab({ server }: { server: ServerInfo }) {
             {upload ? (
               <div className="stack" style={{ width: "100%", gap: 8 }}>
                 <span>
-                  Nahrávám {upload.name} · {upload.pct} %
+                  {t("Uploading {name} · {pct} %", { name: upload.name, pct: upload.pct })}
                 </span>
                 <Progress pct={upload.pct} />
               </div>
             ) : (
               <>
-                <span style={{ fontWeight: 600 }}>Nahrát .jar ručně</span>
+                <span style={{ fontWeight: 600 }}>{t('Upload a .jar by hand')}</span>
                 <input
                   ref={fileRef}
                   type="file"
@@ -895,7 +891,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
                   className="btn"
                   onClick={() => fileRef.current?.click()}
                 >
-                  Vybrat soubor
+                  {t('Choose a file')}
                 </button>
               </>
             )}
@@ -904,18 +900,18 @@ export function ModsTab({ server }: { server: ServerInfo }) {
 
         {remove && (
           <ConfirmDialog
-            title={`Smazat ${remove.name}?`}
-            text="Jar se přesune do koše srvMC. Jeho nastavení zůstane na serveru."
-            confirmLabel="Přesunout do koše"
+            title={t("Delete {name}?", { name: remove.name })}
+            text={t("The jar moves to srvMC's trash. Its settings stay on the server.")}
+            confirmLabel={t('Move to trash')}
             danger
             onCancel={() => setRemove(null)}
             onConfirm={() => {
               const r = remove;
               setRemove(null);
               void act(
-                "Mazání selhalo",
+                t('Deleting failed'),
                 () => api.removeContent(server.id, r.folder, r.file),
-                `${r.name} přesunut do koše`,
+                t("{name} moved to trash", { name: r.name }),
               );
             }}
           />

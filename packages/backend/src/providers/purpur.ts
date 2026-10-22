@@ -1,6 +1,7 @@
 import { cached, fetchJson } from '../http.ts';
 import { javaMajorFor } from '../mojang.ts';
 import { compareVersions, UserError, type Provider } from './types.ts';
+import { t } from '@srvmc/shared';
 
 const API = 'https://api.purpurmc.org/v2/purpur';
 
@@ -34,9 +35,9 @@ export const purpur: Provider = {
   async plan(version, build) {
     const info = await versionInfo(version);
     const id = build ?? info.builds.latest;
-    if (!info.builds.all.includes(id)) throw new UserError(`Build ${id} pro ${version} neexistuje.`);
+    if (!info.builds.all.includes(id)) throw new UserError(t('{name} does not exist.', { name: `Build ${id} (${version})` }));
     const meta = await fetchJson<PurpurBuild>(`${API}/${encodeURIComponent(version)}/${id}`);
-    if (meta.result !== 'SUCCESS') throw new UserError(`Build #${id} se nepovedl, vyber jiný.`);
+    if (meta.result !== 'SUCCESS') throw new UserError(t('Build #{id} failed, pick another one.', { id }));
     return {
       files: [{ url: `${API}/${encodeURIComponent(version)}/${id}/download`, md5: meta.md5, fileName: `purpur-${version}-${id}.jar`, target: 'purpur.jar' }],
       javaMajor: await javaMajorFor(version),

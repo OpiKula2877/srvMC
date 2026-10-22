@@ -125,8 +125,8 @@ describe('Bedrock players', () => {
     expect(JSON.parse(await readFile(path.join(dir, 'permissions.json'), 'utf8'))).toEqual([{ permission: 'operator', xuid: '2535412345678901' }]);
     const info = await bedrockPlayersInfo(i);
     expect(info).toMatchObject({ edition: 'bedrock', whitelist: [{ name: 'Big Steve' }], ops: [{ name: 'Big Steve', uuid: '2535412345678901' }], bans: [], ips: [] });
-    await expect(bedrockAddPlayer(i, 'bans', { name: 'Griefer' })).rejects.toThrow(/zákazy nemá/);
-    await expect(bedrockAddPlayer(i, 'whitelist', { name: 'big steve' })).rejects.toThrow(/už v seznamu/);
+    await expect(bedrockAddPlayer(i, 'bans', { name: 'Griefer' })).rejects.toThrow(/has no bans/);
+    await expect(bedrockAddPlayer(i, 'whitelist', { name: 'big steve' })).rejects.toThrow(/already on the list/);
     await expect(bedrockAddPlayer(i, 'whitelist', { name: 'bad;name' })).rejects.toThrow(/gamertag/);
     await bedrockRemovePlayer(i, 'ops', 'Big Steve');
     await bedrockRemovePlayer(i, 'whitelist', 'BIG STEVE');
