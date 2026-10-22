@@ -2,25 +2,7 @@
 
 An Aternos-style Minecraft server manager that runs on your own PC (Windows 10/11). Create, start and manage servers in a clean panel. Server files and the right Java download on their own.
 
-![Server overview](docs/screenshots/overview.png)
 
-![Graphs of the last 7 hours](docs/screenshots/graphs.png)
-
-![Console](docs/screenshots/console.png)
-
-![Players](docs/screenshots/players.png)
-
-![MOTD editor with a live preview](docs/screenshots/motd.png)
-
-![Mods and plugins](docs/screenshots/mods.png)
-
-![Player statistics](docs/screenshots/statistics.png)
-
-![Panel users and roles](docs/screenshots/users.png)
-
-![New server](docs/screenshots/new-server.png)
-
-<img src="docs/screenshots/phone.png" alt="The panel on a phone" width="300">
 
 ## Download
 
@@ -86,3 +68,25 @@ npm run build:demo -w @srvmc/web
 ```bash
 npx electron scripts/screenshots.mjs
 ```
+
+## Screenshots
+
+![Server overview](docs/screenshots/overview.png)
+
+![Graphs of the last 7 hours](docs/screenshots/graphs.png)
+
+![Console](docs/screenshots/console.png)
+
+![Players](docs/screenshots/players.png)
+
+![MOTD editor with a live preview](docs/screenshots/motd.png)
+
+![Mods and plugins](docs/screenshots/mods.png)
+
+![Player statistics](docs/screenshots/statistics.png)
+
+![Panel users and roles](docs/screenshots/users.png)
+
+![New server](docs/screenshots/new-server.png)
+
+<img src="docs/screenshots/phone.png" alt="The panel on a phone" width="300">
