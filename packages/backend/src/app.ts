@@ -35,7 +35,7 @@ import { ServerStore } from './store.ts';
 import { Supervisor } from './supervisor.ts';
 import { t } from '@srvmc/shared';
 
-export const VERSION = '1.0.1';
+export const VERSION = '1.1.0';
 
 declare module 'fastify' {
   interface FastifyRequest {
