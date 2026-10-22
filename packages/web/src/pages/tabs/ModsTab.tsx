@@ -11,11 +11,14 @@ import {
   type ContentSource,
   type ContentTarget,
   type InstalledContent,
+  type ManualDownload,
   type ServerInfo,
 } from "@srvmc/shared";
 import { api } from "../../api.ts";
 import { Progress, Toggle } from "../../components/Controls.tsx";
 import { AddonCards } from "./AddonCards.tsx";
+import { CurseForgeKey } from "./CurseForgeKey.tsx";
+import { ManualList } from "../../components/ManualList.tsx";
 import { Dropdown } from "../../components/Dropdown.tsx";
 import { Icon, Spinner } from "../../components/Icon.tsx";
 import { ConfirmDialog, useToast } from "../../components/Overlays.tsx";
@@ -25,6 +28,7 @@ const SOURCE_LABEL: Record<ContentSource, string> = {
   modrinth: "Modrinth",
   hangar: "Hangar",
   spigot: "SpigotMC",
+  curseforge: "CurseForge",
 };
 const LOADER_LABEL: Record<string, string> = {
   paper: "Paper",
@@ -117,7 +121,13 @@ function Result({
             bg: "var(--amber-soft)",
             fg: "var(--amber-text)",
           }
-        : null;
+        : hit.manual
+          ? {
+              text: "Stáhneš ručně z CurseForge",
+              bg: "var(--amber-soft)",
+              fg: "var(--amber-text)",
+            }
+          : null;
   return (
     <li
       className="card"
@@ -354,6 +364,8 @@ export function ModsTab({ server }: { server: ServerInfo }) {
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const searchSeq = useRef(0);
+  const [cfKey, setCfKey] = useState<boolean | null>(null);
+  const [manual, setManual] = useState<ManualDownload[]>([]);
 
   const running =
     server.status !== "stopped" &&
@@ -402,9 +414,42 @@ export function ModsTab({ server }: { server: ServerInfo }) {
     void loadInstalled();
   }, [loadInstalled]);
 
+  useEffect(() => {
+    api
+      .curseForge()
+      .then((s) => setCfKey(s.keySet))
+      .catch(() => setCfKey(false));
+  }, []);
+
+  // Files the user downloads by hand: watched until srvMC has taken them all from Downloads.
+  const loadManual = useCallback(
+    () =>
+      api
+        .manualDownloads(server.id)
+        .then(setManual)
+        .catch(() => undefined),
+    [server.id],
+  );
+  useEffect(() => {
+    void loadManual();
+  }, [loadManual]);
+  const waiting = manual.length;
+  useEffect(() => {
+    if (!waiting) return;
+    const t = setInterval(() => void loadManual(), 2000);
+    return () => clearInterval(t);
+  }, [waiting, loadManual]);
+  const prevWaiting = useRef(0);
+  useEffect(() => {
+    if (waiting < prevWaiting.current) void loadInstalled();
+    prevWaiting.current = waiting;
+  }, [waiting, loadInstalled]);
+
+  const needsKey = source === "curseforge" && cfKey === false;
+
   const search = useCallback(
     async (offset: number) => {
-      if (!target) return;
+      if (!target || (source === "curseforge" && !cfKey)) return;
       const seq = ++searchSeq.current;
       setSearching(true);
       try {
@@ -425,7 +470,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
         if (seq === searchSeq.current) setSearching(false);
       }
     },
-    [server.id, target, source, query, hideClient, toast],
+    [server.id, target, source, query, hideClient, cfKey, toast],
   );
 
   // Typing waits a moment before searching; other filter changes search at once.
@@ -452,6 +497,8 @@ export function ModsTab({ server }: { server: ServerInfo }) {
         "ok",
         `Nainstalováno: ${hit.title}`,
         [
+          r.manual?.length &&
+            `Ručně stáhni: ${r.manual.map((m) => m.title).join(", ")}`,
           r.installed.length > 1 &&
             `Se závislostmi: ${r.installed.slice(1).join(", ")}`,
           r.skipped.length && `Přeskočeno: ${r.skipped.join(", ")}`,
@@ -469,6 +516,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
           ) ?? null,
       );
       void loadInstalled();
+      if (r.manual?.length) void loadManual();
     } catch (err) {
       toast(
         "error",
@@ -668,7 +716,22 @@ export function ModsTab({ server }: { server: ServerInfo }) {
             )}
           </div>
 
-          {hits === null ? (
+          {manual.length > 0 && (
+            <ManualList
+              items={manual}
+              onCancel={() =>
+                void api.cancelManual(server.id).then(() => loadManual())
+              }
+            />
+          )}
+
+          {needsKey ? (
+            <CurseForgeKey
+              onSaved={() => {
+                setCfKey(true);
+              }}
+            />
+          ) : hits === null ? (
             <Spinner />
           ) : hits.length === 0 ? (
             <div className="empty" style={{ padding: 32 }}>
@@ -705,7 +768,7 @@ export function ModsTab({ server }: { server: ServerInfo }) {
               <Spinner size={16} /> Stahuji a kontroluji závislosti…
             </div>
           )}
-          {hits && more && (
+          {hits && more && !needsKey && (
             <button
               type="button"
               className="btn"

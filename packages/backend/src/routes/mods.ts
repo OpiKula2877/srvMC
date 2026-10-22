@@ -4,7 +4,7 @@ import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
-import type { AuthMode, ContentHit, ContentSource } from '@srvmc/shared';
+import type { AuthMode, ContentHit, ContentSource, ModpackSource } from '@srvmc/shared';
 import { getAuthState, setAuthMode } from '../auth.ts';
 import { checkUpdates, checkUploadedJar, contentTargets, installContent, listInstalled, modrinthLoaders, removeContent, setEnabled, targetFor, updateContent, type ContentContext } from '../content.ts';
 import { checkDiskRoom } from '../disk.ts';
@@ -13,18 +13,20 @@ import { readJarMeta } from '../jarmeta.ts';
 import type { ServerManager } from '../manager.ts';
 import { searchModrinth } from '../modrinth.ts';
 import type { Paths } from '../paths.ts';
-import { modpackVersions, searchModpacks } from '../providers/modpack.ts';
+import { curseForgeKeySet, saveCurseForgeKey, searchCurseForge } from '../curseforge.ts';
+import type { ManualDownloads } from '../manual.ts';
+import { packVersions, searchPacks } from '../providers/modpack.ts';
 import { UserError } from '../providers/index.ts';
 import { searchHangar, searchSpiget } from '../sources.ts';
 
-const SOURCES = ['modrinth', 'hangar', 'spigot'] as const;
+const SOURCES = ['modrinth', 'hangar', 'spigot', 'curseforge'] as const;
 const MAX_JAR = 200 * 1024 * 1024;
 
 const offsetOf = (v?: string) => Math.max(0, Math.min(10_000, Number(v) || 0));
 
-export function registerModRoutes(app: FastifyInstance, manager: ServerManager, paths: Paths): void {
+export function registerModRoutes(app: FastifyInstance, manager: ServerManager, paths: Paths, manual: ManualDownloads): void {
   const inst = (id: string) => manager.get(id);
-  const ctxFor = (id: string): ContentContext => ({ paths, trashDir: path.join(paths.trash, id) });
+  const ctxFor = (id: string): ContentContext => ({ paths, trashDir: path.join(paths.trash, id), manual });
   const afterChange = async (id: string) => {
     await manager.refreshPregen(inst(id));
     manager.emit('files-changed', id);
@@ -53,6 +55,8 @@ export function registerModRoutes(app: FastifyInstance, manager: ServerManager, 
       let hits: ContentHit[];
       if (source === 'modrinth') {
         hits = await searchModrinth({ query, loaders: modrinthLoaders(i.cfg, target.kind), gameVersion: i.cfg.version, kind: target.kind, hideClientOnly: req.query.hideClient !== '0', offset });
+      } else if (source === 'curseforge') {
+        hits = await searchCurseForge(query, target.kind, modrinthLoaders(i.cfg, target.kind), i.cfg.version, offset);
       } else if (source === 'hangar') {
         hits = await searchHangar(query, i.cfg.version, offset);
       } else {
@@ -152,13 +156,37 @@ export function registerModRoutes(app: FastifyInstance, manager: ServerManager, 
     },
   );
 
+  // Files waiting for the user to download them in the browser.
+  app.get<{ Params: { id: string } }>('/api/servers/:id/manual', (req) => manual.list(inst(req.params.id).cfg.id));
+  app.delete<{ Params: { id: string; item: string } }>('/api/servers/:id/manual/:item', (req, reply) => {
+    manual.cancel(inst(req.params.id).cfg.id, req.params.item === 'all' ? undefined : req.params.item);
+    reply.code(204);
+  });
+
+  // The CurseForge API key (the user's own, from console.curseforge.com).
+  app.get('/api/curseforge', () => ({ keySet: curseForgeKeySet() }));
+  app.put<{ Body: { key: string } }>(
+    '/api/curseforge',
+    { schema: { body: { type: 'object', required: ['key'], additionalProperties: false, properties: { key: { type: 'string', minLength: 1, maxLength: 200 } } } } },
+    async (req) => {
+      await saveCurseForgeKey(req.body.key);
+      return { keySet: true };
+    },
+  );
+  app.delete('/api/curseforge', async (_req, reply) => {
+    await saveCurseForgeKey(null);
+    reply.code(204);
+  });
+
   // Modpacks for the new-server wizard.
-  app.get<{ Querystring: { q?: string; offset?: string } }>('/api/modpacks/search', { schema: { querystring: { type: 'object', properties: { q: { type: 'string', maxLength: 100 }, offset: { type: 'string' } } } } }, (req) =>
-    searchModpacks(req.query.q?.trim() ?? '', offsetOf(req.query.offset)),
+  app.get<{ Querystring: { q?: string; offset?: string; source?: ModpackSource } }>(
+    '/api/modpacks/search',
+    { schema: { querystring: { type: 'object', properties: { q: { type: 'string', maxLength: 100 }, offset: { type: 'string' }, source: { type: 'string', enum: ['modrinth', 'curseforge', 'technic'] } } } } },
+    (req) => searchPacks(req.query.source ?? 'modrinth', req.query.q?.trim() ?? '', offsetOf(req.query.offset)),
   );
   app.get<{ Params: { project: string } }>('/api/modpacks/:project/versions', (req) => {
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(req.params.project)) throw new UserError('Neplatný modpack.');
-    return modpackVersions(req.params.project);
+    if (!/^(?:cf:\d{1,12}|technic:[A-Za-z0-9._-]{1,80}|[A-Za-z0-9_-]{1,64})$/.test(req.params.project)) throw new UserError('Neplatný modpack.');
+    return packVersions(req.params.project);
   });
 
   // Login mode

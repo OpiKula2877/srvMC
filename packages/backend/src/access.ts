@@ -28,7 +28,7 @@ export function need(method: string, rawUrl: string): Need | null {
   if (url.startsWith('/api/auth/')) return null;
   const get = method === 'GET' || method === 'HEAD';
   if (url.startsWith('/api/users') || url.startsWith('/api/panel')) return { cap: 'owner' };
-  if (url.startsWith('/api/network')) return { cap: get ? 'view' : 'admin' };
+  if (url.startsWith('/api/network') || url.startsWith('/api/curseforge')) return { cap: get ? 'view' : 'admin' };
   const m = /^\/api\/servers\/([^/]+)(?:\/(.*))?$/.exec(url);
   if (!m) {
     if (url === '/api/servers' && !get) return { cap: 'admin' };

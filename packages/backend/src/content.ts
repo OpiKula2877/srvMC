@@ -5,9 +5,11 @@ import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/p
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { ContentKind, ContentSource, ContentTarget, InstalledContent, InstallResult, ServerConfig, ServerType } from '@srvmc/shared';
+import { installCurseForge } from './curseforge.ts';
 import { validName } from './files.ts';
 import type { ServerInstance } from './instance.ts';
 import { readJarMeta, type JarMeta } from './jarmeta.ts';
+import type { ManualDownloads } from './manual.ts';
 import { getProjects, identifyHashes, installModrinth, latestForHashes } from './modrinth.ts';
 import type { Paths } from './paths.ts';
 import { UserError } from './providers/types.ts';
@@ -28,18 +30,18 @@ export function contentTargets(cfg: Pick<ServerConfig, 'type' | 'modpack' | 'bui
   switch (effectiveType(cfg)) {
     case 'paper':
     case 'purpur':
-      return [{ kind: 'plugin', folder: 'plugins', sources: ['modrinth', 'hangar', 'spigot'] }];
+      return [{ kind: 'plugin', folder: 'plugins', sources: ['modrinth', 'hangar', 'spigot', 'curseforge'] }];
     case 'spigot':
-      return [{ kind: 'plugin', folder: 'plugins', sources: ['modrinth', 'spigot'] }];
+      return [{ kind: 'plugin', folder: 'plugins', sources: ['modrinth', 'spigot', 'curseforge'] }];
     case 'fabric':
     case 'quilt':
     case 'forge':
     case 'neoforge':
-      return [{ kind: 'mod', folder: 'mods', sources: ['modrinth'] }];
+      return [{ kind: 'mod', folder: 'mods', sources: ['modrinth', 'curseforge'] }];
     case 'arclight':
       return [
-        { kind: 'mod', folder: 'mods', sources: ['modrinth'] },
-        { kind: 'plugin', folder: 'plugins', sources: ['modrinth', 'spigot'] },
+        { kind: 'mod', folder: 'mods', sources: ['modrinth', 'curseforge'] },
+        { kind: 'plugin', folder: 'plugins', sources: ['modrinth', 'spigot', 'curseforge'] },
       ];
     case 'velocity':
       return [{ kind: 'plugin', folder: 'plugins', sources: ['modrinth'] }];
@@ -199,6 +201,8 @@ async function trashJar(inst: ServerInstance, trashDir: string, folder: string, 
 export interface ContentContext {
   paths: Paths;
   trashDir: string;
+  /** Picks up files the user downloads by hand (CurseForge mods without third-party downloads). */
+  manual?: ManualDownloads;
 }
 
 /** Installs a project from a source, with dependencies; replaces an older file of the same project. */
@@ -227,13 +231,33 @@ export async function installContent(inst: ServerInstance, ctx: ContentContext, 
   let result: InstallResult;
   if (source === 'modrinth') {
     result = await installModrinth(id, { paths: ctx.paths, dir, loaders: modrinthLoaders(inst.cfg, target.kind), gameVersion: inst.cfg.version, present, onInstalled });
+  } else if (source === 'curseforge') {
+    if (!/^\d+$/.test(id) || !ctx.manual) throw new UserError('Neplatný projekt CurseForge.');
+    result = await installCurseForge(Number(id), {
+      paths: ctx.paths,
+      dir,
+      serverId: inst.cfg.id,
+      manual: ctx.manual,
+      loaders: target.kind === 'mod' ? modrinthLoaders(inst.cfg, 'mod') : [],
+      gameVersion: inst.cfg.version,
+      kind: target.kind,
+      present,
+      // Files the user downloads later land after this request: each records itself.
+      onInstalled: async (f) => {
+        const r = await loadRegistry(inst.dir);
+        Object.assign(reg, r);
+        await onInstalled(f);
+        await saveRegistry(inst.dir, reg);
+      },
+    });
   } else if (source === 'hangar') {
     result = await installHangar(id, { paths: ctx.paths, dir, gameVersion: inst.cfg.version, present, onInstalled });
   } else {
     result = await installSpiget(id, { paths: ctx.paths, dir, gameVersion: inst.cfg.version, present, onInstalled });
   }
   await saveRegistry(inst.dir, reg);
-  inst.pushLog('system', `Nainstalováno: ${result.installed.join(', ')}${inst.running ? ' – projeví se po restartu.' : ''}`);
+  if (result.installed.length) inst.pushLog('system', `Nainstalováno: ${result.installed.join(', ')}${inst.running ? ' – projeví se po restartu.' : ''}`);
+  if (result.manual?.length) inst.pushLog('system', `Čeká na ruční stažení z CurseForge: ${result.manual.map((m) => m.title).join(', ')}`);
   return result;
 }
 

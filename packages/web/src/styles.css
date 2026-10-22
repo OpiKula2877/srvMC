@@ -297,7 +297,7 @@ button:disabled { cursor: not-allowed; }
 .savebar .grow { flex: 1; min-width: 200px; color: #c7ddf7; }
 
 /* Server list entry as Minecraft draws it: darkened dirt background, pixel font with drop shadows. */
-.mc-entry { padding: 10px 12px; background: #1c1712 url('/mc-dirt.png') repeat; background-size: 64px 64px; image-rendering: pixelated; display: flex; gap: 12px; align-items: flex-start; font-family: var(--pixel); font-size: 24px; line-height: 1; letter-spacing: 0.02em; }
+.mc-entry { padding: 10px 12px; background: #1c1712 url('/mc-dirt.png') repeat; background-size: 48px 48px; image-rendering: pixelated; display: flex; gap: 12px; align-items: flex-start; font-family: var(--pixel); font-size: 24px; line-height: 1; letter-spacing: 0.02em; }
 .mc-entry .icon { width: 64px; height: 64px; flex: none; image-rendering: pixelated; display: grid; place-items: center; background: #3b3b3b; color: #a0a0a0; font-size: 44px; text-shadow: 3px 3px 0 #282828; }
 .mc-entry .icon img { display: block; image-rendering: pixelated; }
 .mc-entry .lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-top: 2px; }

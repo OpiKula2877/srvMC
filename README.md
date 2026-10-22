@@ -15,8 +15,8 @@ Instalace obsahuje jen panel. Serverové soubory a správná Java se stáhnou a�
 | Forge | maven.minecraftforge.net – installer `--installServer` |
 | NeoForge | maven.neoforged.net – installer `--installServer` |
 | Arclight | GitHub releases IzzelAliz/Arclight (Forge, NeoForge i Fabric varianta) |
-| Modpacky | Modrinth `.mrpack` – loader podle modpacku, jen soubory pro server |
-| Mody, pluginy | Modrinth, Hangar (PaperMC), SpigotMC přes Spiget |
+| Modpacky | Modrinth `.mrpack`, CurseForge (přednostně server pack), Technic (server pack, klientský balík nebo Solder) |
+| Mody, pluginy | Modrinth, CurseForge, Hangar (PaperMC), SpigotMC přes Spiget |
 | Bedrock, Bedrock Preview | oficiální odkazy Mojangu (net-secondary.web.minecraft-services.net), kontrola MD5 z hlavičky |
 | Hytale (experimentální) | oficiální hytale-downloader (podpis Hypixel Studios se ověřuje) |
 | Java | Eclipse Temurin přes api.adoptium.net |
@@ -74,6 +74,7 @@ Vše je v `%USERPROFILE%\srvMC` (jinou složku nastavíš proměnnou `SRVMC_HOME
 - `trash\<id>\` – smazané soubory a světy (jde je ručně vrátit)
 - `metrics\<id>\` – historie zátěže po minutách (jeden soubor na den, drží se 31 dní)
 - `network.json` – DuckDNS a playit.gg; token a klíč jsou v desktopové aplikaci zašifrované klíčem uživatele Windows (Electron safeStorage)
+- `curseforge.json` – tvůj API klíč CurseForge (v desktopové aplikaci zašifrovaný)
 - `users.json` – účty panelu (hesla jen jako scrypt hash), přihlášení (jen hash tokenu) a přepínač přístupu z LAN
 - `servers.json` – seznam serverů a jejich nastavení
 
@@ -98,7 +99,7 @@ apps/desktop       Electron: okno, ikona v oznamovací oblasti, balí jádro i p
 - Servery se spouštějí bez shellu, s polem argumentů. Vlastní JVM argumenty musí začínat `-`.
 - Program playit dostává tajný klíč v proměnné prostředí, ne v příkazové řádce. Stahuje se jen pevná verze s kontrolou SHA-256.
 
-## Stav (fáze 1–9)
+## Stav (verze 1.0.0)
 
 Fáze 1: vytvoření serveru (Vanilla, Paper, Fabric), automatická Java, start, stop, restart a násilné ukončení, živá konzole s historií příkazů, grafy CPU a RAM, hráči online, nastavení RAM, portu, JVM a časového pásma, autostart, mazání serveru. Když zavřeš okno, servery běží dál v oznamovací oblasti.
 
@@ -158,7 +159,13 @@ Fáze 9:
 - **Velocity** – proxy jako typ serveru (Velocity 4.x běží na Javě 25, 3.x na Javě 21). `velocity.toml` vznikne z výchozí šablony v jaru s portem, MOTD a modern forwardingem (`forwarding.secret`). Záložka **Servery za proxy**: výběr serverů a pořadí, ve kterém je proxy zkouší. Paper a Purpur dostanou `proxies.velocity` v `config/paper-global.yml`, Fabric a Quilt mod FabricProxy-Lite. Server za proxy má `online-mode=false`, adresu `127.0.0.1` a vypnuté přihlašování heslem – účty ověřuje proxy. Běžící proxy si změny načte sama (`velocity reload`).
 - **Víc uživatelů panelu** – účty s rolemi Vlastník, Admin, Moderátor (konzole, hráči, zapnout a vypnout) a Jen zapnout, každý jen u vybraných serverů. První účet je vlastník. Dokud žádný účet neexistuje, panel na tomhle počítači funguje bez přihlášení. Přístup z jiných zařízení doma zapne vlastník v **Uživatelé** (projeví se po restartu aplikace).
 
-CurseForge přijde, až bude kam zadat API klíč.
+Verze 1.0.0 – CurseForge a Technic:
+
+- **CurseForge** – mody (Fabric, Quilt, Forge, NeoForge), Bukkit pluginy a modpacky. CurseForge pouští jen aplikace s API klíčem: vytvoříš si ho zdarma na [console.curseforge.com](https://console.curseforge.com/) a vložíš do panelu (při prvním výběru zdroje CurseForge). Mody se instalují i se závislostmi, mody jen pro hráče server odmítne.
+- **Ruční stažení** – některé mody mají autoři stahování mimo CurseForge zakázané. Panel ukáže seznam s tlačítkem **Stáhnout**, které otevře stránku souboru (např. `curseforge.com/minecraft/mc-mods/create/download/7963363`). Prohlížeč soubor uloží do Stažených souborů a srvMC si ho tam sám najde podle velikosti a SHA-1 (i když ho prohlížeč přejmenuje), přesune do cache a nainstaluje. Instalace modpacku na takové soubory počká.
+- **Server pack přednostně** – má-li modpack na CurseForge nebo Technicu server pack, použije se ten. Když server pack jde rovnou spustit (má Forge jar nebo `run.bat` s knihovnami), srvMC ho spustí tak, jak je. Jinak srvMC nainstaluje loader sám a z packu vezme mody a nastavení. Bez server packu se vezmou klientské soubory: mody ze seznamu modpacku, `overrides` bez věcí jen pro hráče (resource packy, shadery, `options.txt`) a mody jen pro klienta se odloží do koše (podle údajů v jaru, štítku Client na CurseForge, Modrinthu podle hashe a seznamu známých klientských modů).
+- **Technic** – hledání přes api.technicpack.net. Verzi Minecraftu a Forge pozná srvMC z balíku (`bin/version.json`, `bin/modpack.jar`, název Forge jaru, `minecraft_server.<verze>.jar`), protože údaj na Technicu bývá zastaralý.
+- Náhled serveru v seznamu má pozadí z dlaždice hlíny jako ve hře.
 
 ## Ikona
 

@@ -354,7 +354,7 @@ export interface HistoryPoint {
 }
 
 export interface ModpackInfo {
-  source: 'modrinth';
+  source: ModpackSource;
   projectId: string;
   versionId: string;
   title: string;
@@ -373,6 +373,8 @@ export interface InstallProgress {
   text: string;
   /** A page the user has to open (e.g. to sign in), shown as a button. */
   link?: string;
+  /** Files the user has to download in the browser before the install goes on. */
+  manual?: ManualDownload[];
 }
 
 export type TaskKind = 'backup' | 'restore' | 'import' | 'export' | 'content';
@@ -599,7 +601,7 @@ export const DEFAULT_BACKUP_KEEP = 7;
 // ---- Mods, plugins, modpacks ----
 
 export type ContentKind = 'mod' | 'plugin';
-export type ContentSource = 'modrinth' | 'hangar' | 'spigot';
+export type ContentSource = 'modrinth' | 'hangar' | 'spigot' | 'curseforge';
 
 /** Where content goes on a server type: plugins/ for Bukkit-family, mods/ for mod loaders. */
 export interface ContentTarget {
@@ -621,6 +623,8 @@ export interface ContentHit {
   clientOnly?: boolean;
   /** Can srvMC download it, or only the author's website can (premium / external). */
   installable: boolean;
+  /** The author allows downloads only on the source's own website: the user downloads it, srvMC picks it up. */
+  manual?: boolean;
   installed?: boolean;
 }
 
@@ -641,9 +645,35 @@ export interface InstallResult {
   installed: string[];
   /** Dependencies srvMC could not fetch (external sites, client-only). */
   skipped: string[];
+  /** Files the user downloads in the browser; srvMC takes them from the Downloads folder. */
+  manual?: ManualDownload[];
+}
+
+/** A file only its website may hand out: the user opens the page, the browser saves it, srvMC picks it up. */
+export interface ManualDownload {
+  id: string;
+  title: string;
+  fileName: string;
+  /** The page with the download button. */
+  url: string;
+  size: number;
+  done: boolean;
+}
+
+export type ModpackSource = 'modrinth' | 'curseforge' | 'technic';
+export const MODPACK_SOURCES: { id: ModpackSource; label: string }[] = [
+  { id: 'modrinth', label: 'Modrinth' },
+  { id: 'curseforge', label: 'CurseForge' },
+  { id: 'technic', label: 'Technic' },
+];
+
+export interface CurseForgeState {
+  /** An API key is saved (needed for everything on CurseForge). */
+  keySet: boolean;
 }
 
 export interface ModpackHit {
+  /** Modrinth project id, "cf:<id>" for CurseForge or "technic:<slug>". It is the server's "version". */
   id: string;
   title: string;
   author: string;
@@ -659,6 +689,8 @@ export interface ModpackVersion {
   versionNumber: string;
   gameVersions: string[];
   loaders: string[];
+  /** The pack has a separate server pack (used instead of the client files). */
+  serverPack?: boolean;
 }
 
 export type AuthMode = 'online' | 'hybrid' | 'offline';

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { editionOf, SERVER_TYPES, serverTypeInfo, type BuildInfo, type GameVersion, type ModpackHit, type ModpackVersion, type ServerType, type SystemInfo } from '@srvmc/shared';
+import { editionOf, SERVER_TYPES, serverTypeInfo, type BuildInfo, type GameVersion, MODPACK_SOURCES, type ModpackHit, type ModpackSource, type ModpackVersion, type ServerType, type SystemInfo } from '@srvmc/shared';
 import { api } from '../api.ts';
+import { CurseForgeKey } from './tabs/CurseForgeKey.tsx';
 import { RamPicker, Toggle } from '../components/Controls.tsx';
 import { Dropdown } from '../components/Dropdown.tsx';
 import { Icon, Spinner } from '../components/Icon.tsx';
@@ -19,7 +20,7 @@ const SOURCES: Partial<Record<ServerType, string>> = {
   forge: 'maven.minecraftforge.net – Forge installer',
   neoforge: 'maven.neoforged.net – NeoForge installer',
   arclight: 'GitHub IzzelAliz/Arclight',
-  modpack: 'modrinth.com',
+  modpack: 'Modrinth, CurseForge, Technic',
   bedrock: 'minecraft.net (oficiální Bedrock Dedicated Server)',
   'bedrock-preview': 'minecraft.net (Bedrock Preview)',
   hytale: 'hytale-downloader od Hypixel Studios',
@@ -28,27 +29,55 @@ const SOURCES: Partial<Record<ServerType, string>> = {
 const PACK_LOADERS: Record<string, string> = { fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge' };
 const compact = new Intl.NumberFormat('cs', { notation: 'compact', maximumFractionDigits: 1 });
 
+function SourceTabs({ source, onChange }: { source: ModpackSource; onChange: (s: ModpackSource) => void }) {
+  return (
+    <div className="seg" role="tablist" aria-label="Odkud modpack">
+      {MODPACK_SOURCES.map((s) => (
+        <button key={s.id} type="button" role="tab" className="seg-btn" aria-selected={source === s.id} onClick={() => onChange(s.id)}>
+          {s.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ModpackPicker({ pack, onPick, versionId, onVersion }: { pack: ModpackHit | null; onPick: (p: ModpackHit) => void; versionId?: string; onVersion: (id: string | undefined) => void }) {
   const toast = useToast();
   const [query, setQuery] = useState('');
   const [packs, setPacks] = useState<ModpackHit[] | null>(null);
   const [versions, setVersions] = useState<ModpackVersion[] | null>(null);
+  const [source, setSource] = useState<ModpackSource>('modrinth');
+  const [cfKey, setCfKey] = useState<boolean | null>(null);
+  const needsKey = source === 'curseforge' && cfKey === false;
 
   useEffect(() => {
+    api
+      .curseForge()
+      .then((s) => setCfKey(s.keySet))
+      .catch(() => setCfKey(false));
+  }, []);
+
+  useEffect(() => {
+    if (needsKey || (source === 'curseforge' && cfKey === null)) return;
     let live = true;
+    setPacks(null);
     const t = setTimeout(
       () =>
         void api
-          .searchModpacks(query.trim(), 0)
+          .searchModpacks(query.trim(), 0, source)
           .then((list) => live && setPacks(list))
-          .catch((err: Error) => live && toast('error', 'Hledání modpacků selhalo', err.message)),
+          .catch((err: Error) => {
+            if (!live) return;
+            setPacks([]);
+            toast('error', 'Hledání modpacků selhalo', err.message);
+          }),
       query ? 350 : 0,
     );
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [query, toast]);
+  }, [query, source, needsKey, cfKey, toast]);
 
   useEffect(() => {
     if (!pack) return;
@@ -59,7 +88,8 @@ function ModpackPicker({ pack, onPick, versionId, onVersion }: { pack: ModpackHi
       .modpackVersions(pack.id)
       .then((list) => {
         if (!live) return;
-        const usable = list.filter((v) => v.loaders.some((l) => PACK_LOADERS[l]));
+        // Technic does not say the loader up front; srvMC finds it in the pack.
+        const usable = list.filter((v) => v.loaders.length === 0 || v.loaders.some((l) => PACK_LOADERS[l]));
         setVersions(usable);
         onVersion(usable[0]?.id);
       })
@@ -71,11 +101,21 @@ function ModpackPicker({ pack, onPick, versionId, onVersion }: { pack: ModpackHi
 
   const versionOptions = (versions ?? []).map((v) => ({
     value: v.id,
-    label: `${v.versionNumber} · ${v.gameVersions.join(', ')} · ${v.loaders.map((l) => PACK_LOADERS[l]).filter(Boolean).join(', ')}`,
+    label: [v.versionNumber, v.gameVersions.join(', '), v.loaders.map((l) => PACK_LOADERS[l]).filter(Boolean).join(', '), v.serverPack && 'server pack'].filter(Boolean).join(' · '),
   }));
+
+  if (needsKey) {
+    return (
+      <>
+        <SourceTabs source={source} onChange={setSource} />
+        <CurseForgeKey onSaved={() => setCfKey(true)} />
+      </>
+    );
+  }
 
   return (
     <>
+      <SourceTabs source={source} onChange={setSource} />
       <label className="searchbox" style={{ minHeight: 44 }}>
         <Icon name="search" size={18} />
         <span className="sr-only">Hledat modpack</span>
@@ -253,7 +293,7 @@ export function NewServer({ system }: { system: SystemInfo | null }) {
           {isPack ? (
             <section className="card stack" aria-labelledby="h-verze" style={{ gap: 16 }}>
               <h2 id="h-verze" className="h2">
-                2. Modpack z Modrinthu
+                2. Modpack
               </h2>
               <ModpackPicker pack={pack} onPick={setPack} versionId={packVersion} onVersion={setPackVersion} />
             </section>

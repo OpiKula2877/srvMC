@@ -97,7 +97,8 @@ async function boot(): Promise<void> {
     : undefined;
   // The app's own window is always the owner: it proves it with a token only this process knows.
   const localToken = randomBytes(24).toString('hex');
-  const options = { webDir: path.join(here, 'web'), autoStartServers: true, secretBox, localToken };
+  // Mods the user downloads by hand land where the browser saves files; srvMC picks them up there.
+  const options = { webDir: path.join(here, 'web'), autoStartServers: true, secretBox, localToken, downloadsDir: app.getPath('downloads') };
   try {
     backend = await startBackend({ ...options, port: PREFERRED_PORT });
   } catch (err) {

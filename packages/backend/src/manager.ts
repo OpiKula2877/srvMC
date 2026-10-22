@@ -11,6 +11,7 @@ import { platformArgs, runJava } from './installer.ts';
 import { levelOf, reapOrphan, ServerInstance } from './instance.ts';
 import { ensureJava } from './java.ts';
 import { buildJvmArgs, splitJvmArgs } from './jvm.ts';
+import type { ManualDownloads } from './manual.ts';
 import { isPortFree, isUdpPortFree } from './net.ts';
 import type { Paths } from './paths.ts';
 import { updateServerProperties } from './properties.ts';
@@ -35,6 +36,8 @@ const mb = (bytes: number) => (bytes / MB).toFixed(1).replace('.', ',');
 export class ServerManager extends EventEmitter {
   private readonly instances = new Map<string, ServerInstance>();
   private readonly startGuards: ((inst: ServerInstance) => Promise<void>)[] = [];
+  /** Set by the backend: picks up files the user downloads by hand. */
+  manual?: ManualDownloads;
 
   constructor(
     private readonly paths: Paths,
@@ -217,7 +220,12 @@ export class ServerManager extends EventEmitter {
     const provider = providerFor(cfg.type)!;
     try {
       inst.setInstall({ step: 'plan', pct: null, text: 'Zjišťuji, co je potřeba stáhnout' });
-      const plan = await provider.plan(cfg.version, cfg.build, { paths: this.paths });
+      const plan = await provider.plan(cfg.version, cfg.build, {
+        paths: this.paths,
+        serverId: cfg.id,
+        manual: this.manual,
+        progress: (text, pct, manual) => inst.setInstall({ step: manual?.length ? 'manual' : 'plan', pct, text, ...(manual?.length && { manual }) }),
+      });
       const what = plan.modpack ? `modpack ${plan.modpack.title} ${plan.modpack.versionNumber} (${plan.modpack.loader} ${plan.displayVersion})` : `${cfg.type} ${cfg.version} (build ${plan.build})`;
       inst.pushLog('system', `Instaluji ${what}${plan.native ? '' : `, Java ${plan.javaMajor}`}`);
 
@@ -239,13 +247,15 @@ export class ServerManager extends EventEmitter {
       if (plan.install) {
         launchArgs = await plan.install({
           dir: inst.dir,
+          serverId: cfg.id,
+          manual: this.manual,
           port: cfg.port,
           name: cfg.name,
           java,
           javaMajor: plan.javaMajor,
           paths: this.paths,
           log: (text) => inst.pushLog('system', text),
-          progress: (text, pct, link) => inst.setInstall({ step: 'installer', pct, text, ...(link && { link }) }),
+          progress: (text, pct, link, manual) => inst.setInstall({ step: manual?.length ? 'manual' : 'installer', pct, text, ...(link && { link }), ...(manual?.length && { manual }) }),
           ensureJdk: () => ensureJava(this.paths, plan.javaMajor, (text, pct) => inst.setInstall({ step: 'java', pct, text }), 'jdk'),
           run: (args, opts) =>
             runJava(opts?.java ?? java, args, {

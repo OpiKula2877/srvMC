@@ -1,16 +1,18 @@
-// Modrinth modpacks (.mrpack): the pack's loader is installed first, then its server-side files and overrides.
+// Modpacks. Modrinth (.mrpack): the pack's loader is installed first, then its server-side files and
+// overrides. CurseForge ("cf:<id>") and Technic ("technic:<slug>") live in packsources.ts.
 import { createWriteStream } from 'node:fs';
 import { copyFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import yauzl from 'yauzl';
-import type { ModpackHit, ModpackInfo, ModpackVersion, ServerType } from '@srvmc/shared';
+import type { ModpackHit, ModpackInfo, ModpackSource, ModpackVersion, ServerType } from '@srvmc/shared';
 import { downloadToCache } from '../download.ts';
 import { fetchJson } from '../http.ts';
 import { readJarEntries } from '../jarmeta.ts';
 import { getProject, primaryFile, type MrVersion } from '../modrinth.ts';
 import { fabric } from './fabric.ts';
 import { forge, neoforge } from './forge.ts';
+import { curseForgePacks, technicPacks } from './packsources.ts';
 import { quilt } from './quilt.ts';
 import { UserError, type InstallContext, type Provider } from './types.ts';
 
@@ -65,6 +67,19 @@ export async function modpackVersions(projectId: string): Promise<ModpackVersion
     .map((v) => ({ id: v.id, name: v.name ?? v.version_number, versionNumber: v.version_number, gameVersions: v.game_versions ?? [], loaders: v.loaders ?? [] }));
 }
 
+/** Versions of a pack from any source, by the id the wizard got from the search. */
+export function packVersions(id: string): Promise<ModpackVersion[]> {
+  if (id.startsWith('cf:')) return curseForgePacks.versions(id.slice(3));
+  if (id.startsWith('technic:')) return technicPacks.versions(id.slice(8));
+  return modpackVersions(id);
+}
+
+export function searchPacks(source: ModpackSource, query: string, offset: number): Promise<ModpackHit[]> {
+  if (source === 'curseforge') return curseForgePacks.search(query, offset);
+  if (source === 'technic') return offset ? Promise.resolve([]) : technicPacks.search(query);
+  return searchModpacks(query, offset);
+}
+
 async function extractOverrides(zipFile: string, dir: string): Promise<number> {
   // server-overrides win over overrides, so they are written second.
   let count = 0;
@@ -106,7 +121,7 @@ export const modpack: Provider = {
   },
 
   async listBuilds(projectId) {
-    return (await modpackVersions(projectId)).map((v) => ({
+    return (await packVersions(projectId)).map((v) => ({
       id: v.id,
       label: `${v.versionNumber} · Minecraft ${v.gameVersions.join(', ')}`,
       channel: 'stable',
@@ -114,6 +129,8 @@ export const modpack: Provider = {
   },
 
   async plan(projectId, versionId, env) {
+    if (projectId.startsWith('cf:')) return curseForgePacks.plan(projectId.slice(3), versionId, env!);
+    if (projectId.startsWith('technic:')) return technicPacks.plan(projectId.slice(8), env!);
     if (!versionId) throw new UserError('Vyber verzi modpacku.');
     const [project, version] = await Promise.all([getProject(projectId), fetchJson<MrVersion>(`${API}/version/${encodeURIComponent(versionId)}`)]);
     if (version.project_id !== project.id) throw new UserError('Verze nepatří k tomuto modpacku.');

@@ -8,6 +8,7 @@ import type { WebSocket } from 'ws';
 import { CSRF_HEADER, SERVER_TYPES, type CreateServerRequest, type PanelUser, type ServerType, type SystemInfo, type UpdateServerRequest, type WsEvent } from '@srvmc/shared';
 import { allowed, canSee, LOCAL_OWNER, need } from './access.ts';
 import { AddonService } from './addons.ts';
+import { loadCurseForgeKey } from './curseforge.ts';
 import { DiscordService } from './discord.ts';
 import { PlayerStatsService } from './playerstats.ts';
 import { ProxyService } from './proxy.ts';
@@ -16,6 +17,7 @@ import { lanAddresses, readCookie, registerUserRoutes, SESSION_COOKIE } from './
 import { UserStore } from './users.ts';
 import { installedRuntimes } from './java.ts';
 import { ServerManager } from './manager.ts';
+import { ManualDownloads } from './manual.ts';
 import { ensureDirs, makePaths, type Paths } from './paths.ts';
 import { providerFor, UserError } from './providers/index.ts';
 import { BackupService } from './backups.ts';
@@ -31,7 +33,7 @@ import type { SecretBox } from './secrets.ts';
 import { ServerStore } from './store.ts';
 import { Supervisor } from './supervisor.ts';
 
-export const VERSION = '0.9.0';
+export const VERSION = '1.0.0';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -55,6 +57,8 @@ export interface BackendOptions {
   secretBox?: SecretBox;
   /** The desktop window sends this in x-srvmc-local and acts as the owner without signing in. */
   localToken?: string;
+  /** Where the browser saves downloads (files the user fetches by hand are picked up there). */
+  downloadsDir?: string;
 }
 
 export interface Backend {
@@ -74,7 +78,7 @@ const createSchema = {
     properties: {
       name: { type: 'string', maxLength: 64 },
       type: { type: 'string', enum: SERVER_TYPE_IDS },
-      version: { type: 'string', minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9._+-]+$' },
+      version: { type: 'string', minLength: 1, maxLength: 64, pattern: '^(?:(?:cf|technic):)?[A-Za-z0-9._+-]+$' },
       build: { type: 'string', maxLength: 64, pattern: '^[A-Za-z0-9._+-]*$' },
       port: { type: 'integer' },
       ramMaxMb: { type: 'integer' },
@@ -188,6 +192,9 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   await ensureDirs(paths);
   const manager = new ServerManager(paths, new ServerStore(paths.serversFile));
   await manager.init();
+  const manual = new ManualDownloads(paths, opts.downloadsDir ?? process.env.SRVMC_DOWNLOADS ?? path.join(os.homedir(), 'Downloads'));
+  manager.manual = manual;
+  await loadCurseForgeKey(paths, opts.secretBox);
   const users = new UserStore(path.join(paths.root, 'users.json'));
   await users.load();
 
@@ -273,7 +280,7 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   });
   registerRoutes(app, manager, paths);
   registerContentRoutes(app, manager, paths);
-  registerModRoutes(app, manager, paths);
+  registerModRoutes(app, manager, paths, manual);
   registerWorldRoutes(app, manager, backups, paths);
   registerMonitorRoutes(app, manager, history, scheduler);
   registerNetworkRoutes(app, network);

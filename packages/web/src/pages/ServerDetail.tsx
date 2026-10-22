@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { editionOf, type Edition, type ServerInfo, type SystemInfo } from '@srvmc/shared';
 import { can, useAuth, type Cap } from '../auth.ts';
+import { ManualList } from '../components/ManualList.tsx';
 import { DiscordCard } from './tabs/DiscordCard.tsx';
 import { ProxyTab } from './tabs/ProxyTab.tsx';
 import { StatsTab } from './tabs/StatsTab.tsx';
@@ -491,6 +492,7 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
               Otevřít přihlášení
             </a>
           )}
+          {server.install.manual && <ManualList items={server.install.manual} onCancel={() => void api.cancelManual(server.id)} />}
         </div>
       )}
       {server.notice && (

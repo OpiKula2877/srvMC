@@ -67,8 +67,8 @@ describe('jar metadata', () => {
 describe('content targets', () => {
   it('maps each server type to its folders and sources', () => {
     expect(contentTargets(cfg('vanilla'))).toEqual([]);
-    expect(contentTargets(cfg('paper'))).toEqual([{ kind: 'plugin', folder: 'plugins', sources: ['modrinth', 'hangar', 'spigot'] }]);
-    expect(contentTargets(cfg('fabric'))[0]!.folder).toBe('mods');
+    expect(contentTargets(cfg('paper'))).toEqual([{ kind: 'plugin', folder: 'plugins', sources: ['modrinth', 'hangar', 'spigot', 'curseforge'] }]);
+    expect(contentTargets(cfg('fabric'))[0]).toEqual({ kind: 'mod', folder: 'mods', sources: ['modrinth', 'curseforge'] });
     expect(contentTargets(cfg('arclight')).map((t) => t.folder)).toEqual(['mods', 'plugins']);
   });
 

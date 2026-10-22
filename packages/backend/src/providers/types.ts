@@ -1,5 +1,6 @@
-import type { BuildInfo, GameVersion, ModpackInfo, ServerType } from '@srvmc/shared';
+import type { BuildInfo, GameVersion, ManualDownload, ModpackInfo, ServerType } from '@srvmc/shared';
 import type { DownloadSpec } from '../download.ts';
+import type { ManualDownloads } from '../manual.ts';
 import type { Paths } from '../paths.ts';
 
 /** A file the installer downloads (through the cache) and copies to `target` inside the server folder. */
@@ -10,6 +11,9 @@ export interface PlannedFile extends DownloadSpec {
 /** What an installer step gets: Java ready, files downloaded, a way to run Java and report progress. */
 export interface InstallContext {
   dir: string;
+  serverId: string;
+  /** Picks up files the user downloads by hand (CurseForge files without third-party downloads). */
+  manual?: ManualDownloads;
   /** The server's port and name, for installers that write their own config. */
   port: number;
   name: string;
@@ -18,7 +22,7 @@ export interface InstallContext {
   paths: Paths;
   log(text: string): void;
   /** `link`: a page the user has to open (sign-in), shown as a button next to the progress. */
-  progress(text: string, pct: number | null, link?: string): void;
+  progress(text: string, pct: number | null, link?: string, manual?: ManualDownload[]): void;
   /** Runs Java with `args` (output goes to the server console). Rejects on a non-zero exit code. */
   run(args: string[], opts?: { cwd?: string; timeoutMs?: number; onLine?: (line: string) => void; java?: string }): Promise<void>;
   /** Path to a full JDK of `javaMajor` (with javac), downloaded on first use. */
@@ -42,6 +46,10 @@ export interface InstallPlan {
 
 export interface PlanEnv {
   paths: Paths;
+  serverId?: string;
+  manual?: ManualDownloads;
+  /** Progress while planning (modpacks download their pack file already then). */
+  progress?: (text: string, pct: number | null, manual?: ManualDownload[]) => void;
 }
 
 export interface Provider {
