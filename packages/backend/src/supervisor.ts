@@ -181,6 +181,7 @@ export class Supervisor {
       if (now - since >= after * MINUTE) {
         this.emptySince.delete(id);
         inst.pushLog('system', `Nikdo nehraje ${after} min, uspávám server.${inst.cfg.wakeOnJoin ? ' Probudí se, až se někdo připojí.' : ''}`);
+        inst.emit('sleep');
         void this.manager.stop(id).catch(() => undefined);
       }
     }

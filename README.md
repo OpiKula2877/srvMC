@@ -66,6 +66,7 @@ Vše je v `%USERPROFILE%\srvMC` (jinou složku nastavíš proměnnou `SRVMC_HOME
 - `trash\<id>\` – smazané soubory a světy (jde je ručně vrátit)
 - `metrics\<id>\` – historie zátěže po minutách (jeden soubor na den, drží se 31 dní)
 - `network.json` – DuckDNS a playit.gg; token a klíč jsou v desktopové aplikaci zašifrované klíčem uživatele Windows (Electron safeStorage)
+- `users.json` – účty panelu (hesla jen jako scrypt hash), přihlášení (jen hash tokenu) a přepínač přístupu z LAN
 - `servers.json` – seznam serverů a jejich nastavení
 
 ## Struktura
@@ -80,13 +81,16 @@ apps/desktop       Electron: okno, ikona v oznamovací oblasti, balí jádro i p
 
 ## Bezpečnost
 
-- API poslouchá jen na `127.0.0.1`.
+- API poslouchá jen na `127.0.0.1`. Na síť doma (`0.0.0.0`) jen když to vlastník zapne – a to jde jen s účty.
+- Role a přístup k serverům kontroluje jádro u každého požadavku i u živých zpráv přes WebSocket, ne jen panel.
+- Hesla: scrypt (N = 2¹⁵), přihlášení v cookie `HttpOnly`, `SameSite=Strict`, 10 pokusů za 15 minut. Desktopová aplikace se přihlašuje sama tajným tokenem, který zná jen její okno.
+- Discord webhook je uložený zašifrovaně a panel ho po uložení už nevrací.
 - Požadavky s cizí hlavičkou `Host` nebo `Origin` dostanou 403 (ochrana proti DNS rebindingu a jiným webům).
 - Každá změna přes API musí nést hlavičku `x-srvmc: 1`.
 - Servery se spouštějí bez shellu, s polem argumentů. Vlastní JVM argumenty musí začínat `-`.
 - Program playit dostává tajný klíč v proměnné prostředí, ne v příkazové řádce. Stahuje se jen pevná verze s kontrolou SHA-256.
 
-## Stav (fáze 1–8)
+## Stav (fáze 1–9)
 
 Fáze 1: vytvoření serveru (Vanilla, Paper, Fabric), automatická Java, start, stop, restart a násilné ukončení, živá konzole s historií příkazů, grafy CPU a RAM, hráči online, nastavení RAM, portu, JVM a časového pásma, autostart, mazání serveru. Když zavřeš okno, servery běží dál v oznamovací oblasti.
 
@@ -137,7 +141,16 @@ Fáze 8 – Bedrock, Bedrock Preview a Hytale:
 - Bedrock od verze 26 používá jen přenos **NetherNet**: TCP handshake na portu serveru a hru přes UDP. srvMC připne UDP porty na blok port…port+19 (`server-udp-ports`), aby šly přesměrovat; UPnP otevře TCP port i UDP blok. Probouzení při připojení, kontrola portu zvenku a playit.gg zatím pro nový Bedrock nejdou. Prázdný povolený seznam, který Mojang zapíná, srvMC při instalaci vypne (jako bílou listinu u Javy).
 - **Hytale** (Early Access, experimentální) – hytale-downloader se přihlásí k účtu Hytale přes kód (odkaz se ukáže v panelu), stáhne `Server/HytaleServer.jar` a `Assets.zip`, server běží na Javě 25 s `--bind 0.0.0.0:<port>` (UDP, QUIC). Po prvním startu srvMC pošle `auth login device`, ukáže odkaz k přihlášení a po úspěchu uloží přihlášení (`auth persistence Encrypted`). Nastavení je v `config.json`, svět ve složce `universe`. Hráče, mody a kontrolu portu zatím panel u Hytale neřeší.
 
-Další fáze: Discord, Geyser, statistiky hráčů, víc uživatelů panelu, BlueMap a Velocity (viz plán). CurseForge přijde, až bude kam zadat API klíč.
+Fáze 9:
+
+- **Discord** – oznámení do kanálu přes webhook: zapnutí, vypnutí, pád, připojení a odpojení hráče, uspání. Tlačítko pro zkušební zprávu, fronta s ohledem na limity Discordu, zprávy nikoho neoznačí (@everyone ani jména).
+- **Statistiky hráčů** – z připojení a odpojení v konzoli (a ze starých logů, když server neběží): čas hraní, počet připojení, první a poslední návštěva, kdo je online. U Javy hlava skinu a herní statistiky ze souborů `stats` (vytěžené bloky, zabití, smrti, ušlé kilometry).
+- **Crossplay s Bedrockem** – Geyser + Floodgate jedním klikem na Paperu, Purpuru, Spigotu, Fabricu (i s Fabric API), NeoForge a Velocity. Geyser jede přes **NetherNet**, protože Bedrock 26.60 (27. 10. 2026) se jinak nepřipojí: srvMC mu dá vlastní port (od 19132) argumenty `-DgeyserTransport=nethernet -DgeyserUdpPort=<port>`, config Geyseru nemění. Port potřebuje TCP (hledání serveru) i UDP (hra), UPnP otevře obojí. Server za proxy má Geyser na proxy.
+- **Mapa BlueMap** – jedním klikem, vlastní port mapy (od 8100) a odkaz v panelu. Stažení textur hry od Mojangu potvrdíš v panelu (Minecraft EULA).
+- **Velocity** – proxy jako typ serveru (Velocity 4.x běží na Javě 25, 3.x na Javě 21). `velocity.toml` vznikne z výchozí šablony v jaru s portem, MOTD a modern forwardingem (`forwarding.secret`). Záložka **Servery za proxy**: výběr serverů a pořadí, ve kterém je proxy zkouší. Paper a Purpur dostanou `proxies.velocity` v `config/paper-global.yml`, Fabric a Quilt mod FabricProxy-Lite. Server za proxy má `online-mode=false`, adresu `127.0.0.1` a vypnuté přihlašování heslem – účty ověřuje proxy. Běžící proxy si změny načte sama (`velocity reload`).
+- **Víc uživatelů panelu** – účty s rolemi Vlastník, Admin, Moderátor (konzole, hráči, zapnout a vypnout) a Jen zapnout, každý jen u vybraných serverů. První účet je vlastník. Dokud žádný účet neexistuje, panel na tomhle počítači funguje bez přihlášení. Přístup z jiných zařízení doma zapne vlastník v **Uživatelé** (projeví se po restartu aplikace).
+
+CurseForge přijde, až bude kam zadat API klíč.
 
 ## Ikona
 

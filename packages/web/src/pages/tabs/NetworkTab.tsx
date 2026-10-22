@@ -137,6 +137,7 @@ export function NetworkTab({ server }: { server: ServerInfo }) {
 
   return (
     <div className="stack" style={{ gap: 20 }}>
+      {server.behindProxy && <div className="banner info">Server je za proxy a přímo se k němu připojit nejde. Hráčům dej adresu proxy – tunel, port a doménu nastav u ní.</div>}
       <section aria-label="Stav sítě" className="grid-auto" style={{ ['--min' as string]: '200px', gap: 12 }}>
         <Tile label="Adresa v síti doma" value={net.lanIp ?? '–'} />
         <Tile label="Veřejná IP" value={net.publicIp ?? '–'} />
@@ -162,6 +163,12 @@ export function NetworkTab({ server }: { server: ServerInfo }) {
         <div className="grid-auto" style={{ ['--min' as string]: '290px', gap: 14 }}>
           <Method title="Jen doma (LAN)" tag="bez nastavení">
             {net.lanIp ? <CopyAddress value={withPort(net.lanIp)} /> : <span className="muted">Počítač teď není v síti.</span>}
+            {net.lanIp && srv.geyserPort && (
+              <>
+                <span className="muted small">Bedrock hráči (Geyser, UDP):</span>
+                <CopyAddress value={`${net.lanIp}:${srv.geyserPort}`} />
+              </>
+            )}
           </Method>
 
           <Method title="Zdarma přes playit.gg" tag={tunnel && !tunnel.pending ? 'aktivní' : net.cgnat ? 'doporučeno' : 'bez routeru'} active={!!tunnel && !tunnel.pending && playit.status === 'running'}>
@@ -217,6 +224,7 @@ export function NetworkTab({ server }: { server: ServerInfo }) {
 
           <Method title="Vlastní IP a otevřený port" tag="nejrychlejší ping" active={srv.upnp.mapped || !!check?.open}>
             {net.publicIp && <CopyAddress value={withPort(net.publicIp)} />}
+            {net.publicIp && srv.geyserPort && <CopyAddress value={`${net.publicIp}:${srv.geyserPort}`} />}
             {net.cgnat && <div className="banner error">Poskytovatel sdílí veřejnou IP s dalšími (CGNAT). Otevřený port tady nepomůže – použij playit.gg.</div>}
             {srv.upnp.enabled ? (
               <>
@@ -249,6 +257,12 @@ export function NetworkTab({ server }: { server: ServerInfo }) {
                       <>
                         {' '}
                         a druhé: UDP, porty <span className="mono">{udp}</span>
+                      </>
+                    )}
+                    {srv.geyserPort && (
+                      <>
+                        {' '}
+                        a pro Bedrock hráče TCP i UDP <span className="mono">{srv.geyserPort}</span>
                       </>
                     )} → <span className="mono">{net.lanIp ?? 'IP tohoto počítače'}</span>, port <span className="mono">{port}</span>.
                   </>,

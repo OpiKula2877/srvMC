@@ -17,14 +17,16 @@ import { WakeListener } from './wake.ts';
 
 const MINUTE = 60_000;
 
-/** Router rules a server needs: its port (TCP, or UDP for Hytale), plus Bedrock's UDP block. */
-export function mappingsFor(type: ServerConfig['type'], port: number, name: string): Mapping[] {
-  const description = `srvMC ${name}`.slice(0, 60);
-  const out: Mapping[] = [{ port, protocol: portProtocol(type), description }];
-  if (editionOf(type) === 'bedrock') {
-    const [from, to] = bedrockUdpRange(port);
+/** Router rules a server needs: its port (TCP, or UDP for Hytale), Bedrock's UDP block, Geyser's UDP port. */
+export function mappingsFor(cfg: Pick<ServerConfig, 'type' | 'port' | 'name' | 'geyserPort'>): Mapping[] {
+  const description = `srvMC ${cfg.name}`.slice(0, 60);
+  const out: Mapping[] = [{ port: cfg.port, protocol: portProtocol(cfg.type), description }];
+  if (editionOf(cfg.type) === 'bedrock') {
+    const [from, to] = bedrockUdpRange(cfg.port);
     for (let p = from; p <= to; p++) out.push({ port: p, protocol: 'UDP', description });
   }
+  // Geyser over NetherNet: Bedrock players find the server over TCP and play over UDP.
+  if (cfg.geyserPort) out.push({ port: cfg.geyserPort, protocol: 'TCP', description: `${description} Bedrock` }, { port: cfg.geyserPort, protocol: 'UDP', description: `${description} Bedrock` });
   return out;
 }
 
@@ -151,6 +153,7 @@ export class NetworkService {
       protocol: portProtocol(cfg.type),
       edition: editionOf(cfg.type),
       ...(editionOf(cfg.type) === 'bedrock' && { udpRange: bedrockUdpRange(cfg.port) }),
+      ...(cfg.geyserPort && { geyserPort: cfg.geyserPort }),
       upnp: { enabled: !!cfg.upnp, mapped: !!up?.mapped && up.port === cfg.port, ...(up?.error && { error: up.error }) },
       playit,
       domain: cfg.domain,
@@ -191,7 +194,7 @@ export class NetworkService {
     const id = inst.cfg.id;
     const current = this.upnp.get(id);
     const want = inst.cfg.upnp ? inst.cfg.port : null;
-    const wanted = want === null ? [] : mappingsFor(inst.cfg.type, want, inst.cfg.name);
+    const wanted = want === null ? [] : mappingsFor(inst.cfg);
     if (!current && want === null) return;
     const gw = await this.gatewayCached();
     if (!gw) {

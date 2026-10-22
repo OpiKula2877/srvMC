@@ -50,6 +50,14 @@ const LEAVE_RE = /\]: ([A-Za-z0-9_.]{1,16}) left the game/;
 // Bedrock: "[2026-10-21 12:00:00:123 INFO] Player connected: Big Steve, xuid: 2535…"
 const BEDROCK_JOIN_RE = /Player connected: (.+?), xuid: (\d*)/;
 const BEDROCK_LEAVE_RE = /Player disconnected: (.+?), xuid/;
+// Velocity: "[connected player] Steve (/127.0.0.1:52634) has connected"
+const PROXY_JOIN_RE = /\[connected player\] ([A-Za-z0-9_.]{1,16}) \([^)]*\) has connected/;
+const PROXY_LEAVE_RE = /\[connected player\] ([A-Za-z0-9_.]{1,16}) \([^)]*\) has disconnected/;
+
+/** The console command that shuts a server down: Velocity calls it "end". */
+export function stopCommand(type: ServerConfig['type']): string {
+  return type === 'velocity' ? 'end' : 'stop';
+}
 /** Hytale does not document a "ready" line; when none of these shows, a running process counts after this long. */
 const HYTALE_READY_AFTER = 90_000;
 const ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]/g;
@@ -67,9 +75,9 @@ export function parsePlayerEvent(text: string, edition: Edition = 'java'): { joi
     const l = BEDROCK_LEAVE_RE.exec(text);
     return l ? { leave: l[1] } : {};
   }
-  const j = JOIN_RE.exec(text);
+  const j = JOIN_RE.exec(text) ?? PROXY_JOIN_RE.exec(text);
   if (j) return { join: j[1] };
-  const l = LEAVE_RE.exec(text);
+  const l = LEAVE_RE.exec(text) ?? PROXY_LEAVE_RE.exec(text);
   if (l) return { leave: l[1] };
   return {};
 }
@@ -236,9 +244,11 @@ export class ServerInstance extends EventEmitter {
     if (ev.join) {
       this.players.add(ev.join);
       if (ev.xuid) this.emit('xuid', ev.join, ev.xuid);
+      this.emit('player', 'join', ev.join);
       this.emit('status');
     } else if (ev.leave) {
       this.players.delete(ev.leave);
+      this.emit('player', 'leave', ev.leave);
       this.emit('status');
     }
   }
@@ -305,7 +315,7 @@ export class ServerInstance extends EventEmitter {
     if (!stdin?.writable) throw new UserError('Server neběží.');
     const clean = command.replace(/[\r\n]+/g, ' ').trim().replace(/^\//, '');
     if (!clean) return;
-    if (clean === 'stop') this.stopRequested = true;
+    if (clean === stopCommand(this.cfg.type) || clean === 'stop') this.stopRequested = true;
     this.pushLog('cmd', `> ${clean}`);
     stdin.write(`${clean}\n`);
   }
@@ -360,7 +370,7 @@ export class ServerInstance extends EventEmitter {
     this.stopRequested = true;
     this.setStatus('stopping');
     try {
-      this.sendCommand('stop');
+      this.sendCommand(stopCommand(this.cfg.type));
     } catch {
       // stdin already closed; fall through to the kill below
     }

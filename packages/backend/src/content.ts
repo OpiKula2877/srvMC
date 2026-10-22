@@ -41,6 +41,8 @@ export function contentTargets(cfg: Pick<ServerConfig, 'type' | 'modpack' | 'bui
         { kind: 'mod', folder: 'mods', sources: ['modrinth'] },
         { kind: 'plugin', folder: 'plugins', sources: ['modrinth', 'spigot'] },
       ];
+    case 'velocity':
+      return [{ kind: 'plugin', folder: 'plugins', sources: ['modrinth'] }];
     default:
       return [];
   }
@@ -50,6 +52,7 @@ export function contentTargets(cfg: Pick<ServerConfig, 'type' | 'modpack' | 'bui
 export function modrinthLoaders(cfg: Pick<ServerConfig, 'type' | 'modpack' | 'build'>, kind: ContentKind): string[] {
   const type = effectiveType(cfg);
   if (kind === 'plugin') {
+    if (type === 'velocity') return ['velocity'];
     if (type === 'purpur') return ['purpur', 'paper', 'spigot', 'bukkit'];
     if (type === 'spigot' || type === 'arclight') return ['spigot', 'bukkit'];
     return ['paper', 'spigot', 'bukkit'];

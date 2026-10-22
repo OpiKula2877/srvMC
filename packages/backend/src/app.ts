@@ -3,9 +3,17 @@ import os from 'node:os';
 import path from 'node:path';
 import fastifyStatic from '@fastify/static';
 import websocket from '@fastify/websocket';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { WebSocket } from 'ws';
-import { CSRF_HEADER, SERVER_TYPES, type CreateServerRequest, type ServerType, type SystemInfo, type UpdateServerRequest, type WsEvent } from '@srvmc/shared';
+import { CSRF_HEADER, SERVER_TYPES, type CreateServerRequest, type PanelUser, type ServerType, type SystemInfo, type UpdateServerRequest, type WsEvent } from '@srvmc/shared';
+import { allowed, canSee, LOCAL_OWNER, need } from './access.ts';
+import { AddonService } from './addons.ts';
+import { DiscordService } from './discord.ts';
+import { PlayerStatsService } from './playerstats.ts';
+import { ProxyService } from './proxy.ts';
+import { registerExtraRoutes } from './routes/extras.ts';
+import { lanAddresses, readCookie, registerUserRoutes, SESSION_COOKIE } from './routes/users.ts';
+import { UserStore } from './users.ts';
 import { installedRuntimes } from './java.ts';
 import { ServerManager } from './manager.ts';
 import { ensureDirs, makePaths, type Paths } from './paths.ts';
@@ -23,7 +31,15 @@ import type { SecretBox } from './secrets.ts';
 import { ServerStore } from './store.ts';
 import { Supervisor } from './supervisor.ts';
 
-export const VERSION = '0.8.0';
+export const VERSION = '0.9.0';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    principal: PanelUser | null;
+  }
+}
+
+const isLoopback = (addr: string | undefined) => addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
 
 export interface BackendOptions {
   /** Port to listen on. 0 picks a free one. Default 8420. */
@@ -37,6 +53,8 @@ export interface BackendOptions {
   logger?: boolean;
   /** Seals stored tokens and keys (the desktop app passes Electron safeStorage). */
   secretBox?: SecretBox;
+  /** The desktop window sends this in x-srvmc-local and acts as the owner without signing in. */
+  localToken?: string;
 }
 
 export interface Backend {
@@ -117,6 +135,8 @@ async function systemInfo(paths: Paths): Promise<SystemInfo> {
 }
 
 function registerRoutes(app: FastifyInstance, manager: ServerManager, paths: Paths): void {
+  // Moderators and starters only get the servers listed on their account.
+  const visible = (req: FastifyRequest) => manager.list().filter((s) => req.principal && canSee(req.principal, s.id));
   app.get('/api/system', () => systemInfo(paths));
   app.get('/api/types', () => SERVER_TYPES);
   app.get<{ Params: { type: string }; Querystring: { snapshots?: string } }>('/api/types/:type/versions', (req) =>
@@ -130,7 +150,7 @@ function registerRoutes(app: FastifyInstance, manager: ServerManager, paths: Pat
     port: await manager.suggestPort(SERVER_TYPE_IDS.includes(req.query.type as ServerType) ? (req.query.type as ServerType) : 'vanilla'),
   }));
 
-  app.get('/api/servers', () => manager.list());
+  app.get('/api/servers', (req) => visible(req));
   app.post<{ Body: CreateServerRequest }>('/api/servers', { schema: createSchema }, async (req, reply) => {
     reply.code(201);
     return manager.create(req.body);
@@ -168,14 +188,27 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   await ensureDirs(paths);
   const manager = new ServerManager(paths, new ServerStore(paths.serversFile));
   await manager.init();
+  const users = new UserStore(path.join(paths.root, 'users.json'));
+  await users.load();
 
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 1024 * 1024 });
   await app.register(websocket);
 
   let port = opts.port ?? 8420;
   const devOrigins = opts.devOrigins ?? [];
-  const allowedOrigins = () => new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...devOrigins]);
+  // With access from the home network on, the panel also answers on this computer's LAN addresses.
+  const lan = users.lan;
+  const allowedOrigins = () =>
+    new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...devOrigins, ...(lan ? lanAddresses().map((a) => `http://${a}:${port}`) : [])]);
   const allowedHosts = () => new Set([...allowedOrigins()].map((o) => new URL(o).host));
+
+  /** Who is asking: the desktop window, the only user (no accounts, this computer), or a signed-in account. */
+  const principalOf = (req: FastifyRequest): PanelUser | null => {
+    if (opts.localToken && req.headers['x-srvmc-local'] === opts.localToken) return LOCAL_OWNER;
+    if (!users.hasUsers) return isLoopback(req.socket.remoteAddress) ? LOCAL_OWNER : null;
+    return users.session(readCookie(req, SESSION_COOKIE));
+  };
+  app.decorateRequest('principal', null);
 
   // The API listens on loopback only, but any web page the user opens could still try to reach it.
   // Rejecting foreign Host headers blocks DNS rebinding; the custom header blocks cross-site form posts.
@@ -186,6 +219,11 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
     if (req.url.startsWith('/api/') && !['GET', 'HEAD'].includes(req.method) && req.headers[CSRF_HEADER] !== '1') {
       return reply.code(403).send({ error: 'Chybí ochranná hlavička.' });
     }
+    req.principal = principalOf(req);
+    const n = need(req.method, req.url);
+    if (!n) return;
+    if (!req.principal) return reply.code(401).send({ error: 'Přihlas se.' });
+    if (!allowed(req.principal, n)) return reply.code(403).send({ error: 'Na tohle nemáš oprávnění.' });
   });
 
   app.setErrorHandler((err: Error & { statusCode?: number; validation?: unknown }, _req, reply) => {
@@ -194,18 +232,25 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
     reply.code(status).send({ error: err.validation ? `Neplatná data: ${err.message}` : err.message });
   });
 
-  const clients = new Set<WebSocket>();
+  const clients = new Map<WebSocket, PanelUser>();
   const broadcast = (event: WsEvent) => {
     const data = JSON.stringify(event);
-    for (const ws of clients) if (ws.readyState === ws.OPEN) ws.send(data);
+    const serverId = event.type === 'server' ? event.server.id : event.id;
+    for (const [ws, user] of clients) {
+      if (ws.readyState !== ws.OPEN || !canSee(user, serverId)) continue;
+      // The console stream is for moderators and up.
+      if (event.type === 'log' && !allowed(user, { cap: 'console' })) continue;
+      ws.send(data);
+    }
   };
   manager.on('server', (server) => broadcast({ type: 'server', server }));
   manager.on('deleted', (id: string) => broadcast({ type: 'deleted', id }));
   manager.on('log', (id: string, lines) => broadcast({ type: 'log', id, lines }));
   manager.on('metrics', (id: string, point) => broadcast({ type: 'metrics', id, point }));
 
-  app.get('/api/ws', { websocket: true }, (socket) => {
-    clients.add(socket);
+  app.get('/api/ws', { websocket: true }, (socket, req) => {
+    if (!req.principal) return socket.close();
+    clients.set(socket, req.principal);
     socket.on('close', () => clients.delete(socket));
   });
 
@@ -218,12 +263,22 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   const supervisor = new Supervisor(manager, history);
   const scheduler = new Scheduler(manager, backups);
   const network = new NetworkService(manager, paths, VERSION, opts.secretBox);
+  const discord = new DiscordService(manager, opts.secretBox);
+  const stats = new PlayerStatsService(manager);
+  const addons = new AddonService(manager, paths);
+  const proxy = new ProxyService(manager, paths);
+  manager.on('deleted', (id: string) => {
+    void users.forgetServer(id);
+    void proxy.forget(id);
+  });
   registerRoutes(app, manager, paths);
   registerContentRoutes(app, manager, paths);
   registerModRoutes(app, manager, paths);
   registerWorldRoutes(app, manager, backups, paths);
   registerMonitorRoutes(app, manager, history, scheduler);
   registerNetworkRoutes(app, network);
+  registerExtraRoutes(app, { discord, stats, addons, proxy });
+  registerUserRoutes(app, users, () => port, (req) => req.principal);
 
   if (opts.webDir) {
     await app.register(fastifyStatic, {
@@ -243,7 +298,7 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
     });
   }
 
-  await app.listen({ port, host: '127.0.0.1' });
+  await app.listen({ port, host: lan ? '0.0.0.0' : '127.0.0.1' });
   const address = app.server.address();
   if (address && typeof address === 'object') port = address.port;
 
@@ -263,7 +318,7 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
       await network.stop();
       await supervisor.stop();
       await manager.stopAll();
-      for (const ws of clients) ws.close();
+      for (const ws of clients.keys()) ws.close();
       await app.close();
     },
   };

@@ -106,8 +106,16 @@ async function setJarEnabled(inst: ServerInstance, folder: string, file: string,
   if (from !== to && (await exists(from))) await rename(from, to);
 }
 
+/** Behind a proxy the proxy checks accounts; a password plugin would ask everyone to register. Returns whether any was on. */
+export async function switchOffAuthPlugins(inst: ServerInstance): Promise<boolean> {
+  const on = (await authJars(inst)).filter((j) => j.enabled);
+  for (const jar of on) await setJarEnabled(inst, jar.folder, jar.file, false);
+  return on.length > 0;
+}
+
 export async function setAuthMode(inst: ServerInstance, ctx: ContentContext, mode: AuthMode): Promise<AuthState> {
   if (inst.running) throw new UserError('Nejdřív server zastav – přihlašování se mění jen u vypnutého serveru.');
+  if (inst.cfg.behindProxy) throw new UserError('Server je za proxy – účty hráčů ověřuje proxy.');
   const stack = authStack(inst.cfg);
   if (mode === 'hybrid' && !stack) {
     throw new UserError(contentTargets(inst.cfg).length ? 'Pro tenhle typ serveru zatím neumím přihlašování heslem. Jde to na Paper, Purpur, Spigot, Fabric a Quilt.' : 'Vanilla server neumí pluginy, takže ani přihlašování heslem.');

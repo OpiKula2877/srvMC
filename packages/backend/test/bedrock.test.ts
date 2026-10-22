@@ -176,10 +176,14 @@ describe('Bedrock ports (NetherNet)', () => {
   });
 
   it('forwards TCP plus the UDP block for Bedrock, one rule otherwise', () => {
-    const bedrock = mappingsFor('bedrock', 19132, 'B');
+    const bedrock = mappingsFor({ type: 'bedrock', port: 19132, name: 'B' });
     expect(bedrock[0]).toEqual({ port: 19132, protocol: 'TCP', description: 'srvMC B' });
     expect(bedrock.filter((m) => m.protocol === 'UDP').map((m) => m.port)).toEqual(Array.from({ length: 20 }, (_, i) => 19132 + i));
-    expect(mappingsFor('paper', 25565, 'P')).toEqual([{ port: 25565, protocol: 'TCP', description: 'srvMC P' }]);
-    expect(mappingsFor('hytale', 5520, 'H')).toEqual([{ port: 5520, protocol: 'UDP', description: 'srvMC H' }]);
+    expect(mappingsFor({ type: 'paper', port: 25565, name: 'P' })).toEqual([{ port: 25565, protocol: 'TCP', description: 'srvMC P' }]);
+    expect(mappingsFor({ type: 'hytale', port: 5520, name: 'H' })).toEqual([{ port: 5520, protocol: 'UDP', description: 'srvMC H' }]);
+    expect(mappingsFor({ type: 'paper', port: 25565, name: 'P', geyserPort: 19132 }).slice(1)).toEqual([
+      { port: 19132, protocol: 'TCP', description: 'srvMC P Bedrock' },
+      { port: 19132, protocol: 'UDP', description: 'srvMC P Bedrock' },
+    ]);
   });
 });

@@ -115,6 +115,9 @@ export class ServerManager extends EventEmitter {
       tps: inst.tps,
       lastCrash: inst.lastCrash,
       notice: inst.notice,
+      // The webhook URL is a credential: the panel only learns whether one is set.
+      discord: inst.cfg.discord && { webhook: '', events: inst.cfg.discord.events },
+      discordSet: !!inst.cfg.discord,
     };
   }
 
@@ -236,6 +239,8 @@ export class ServerManager extends EventEmitter {
       if (plan.install) {
         launchArgs = await plan.install({
           dir: inst.dir,
+          port: cfg.port,
+          name: cfg.name,
           java,
           javaMajor: plan.javaMajor,
           paths: this.paths,
@@ -257,7 +262,8 @@ export class ServerManager extends EventEmitter {
 
       const edition = editionOf(cfg.type);
       inst.setInstall({ step: 'config', pct: null, text: 'Připravuji nastavení serveru' });
-      if (edition === 'java') {
+      // Velocity has no EULA and no server.properties; it keeps everything in velocity.toml.
+      if (edition === 'java' && cfg.type !== 'velocity') {
         await writeFile(path.join(inst.dir, 'eula.txt'), `# Souhlas s https://aka.ms/MinecraftEULA udělen v srvMC ${new Date().toISOString()}\neula=true\n`);
         await this.writeProperties(inst, { 'server-port': String(cfg.port), 'query.port': String(cfg.port), motd: cfg.name });
       } else if (edition === 'bedrock') {
@@ -314,7 +320,8 @@ export class ServerManager extends EventEmitter {
         inst.setInstall(undefined);
         await this.refreshPregen(inst);
         // Hytale takes its port on the command line and does not know Minecraft's "nogui".
-        const tail = editionOf(cfg.type) === 'hytale' ? ['--bind', `0.0.0.0:${cfg.port}`] : ['nogui'];
+        // Velocity's argument parser refuses Minecraft's "nogui".
+        const tail = editionOf(cfg.type) === 'hytale' ? ['--bind', `0.0.0.0:${cfg.port}`] : cfg.type === 'velocity' ? [] : ['nogui'];
         inst.start(java, [...buildJvmArgs(cfg), ...platformArgs(launch), ...tail]);
       }
     } finally {
@@ -390,7 +397,7 @@ export class ServerManager extends EventEmitter {
       cfg.port = patch.port;
       const edition = editionOf(cfg.type);
       // Hytale gets its port on the command line at every start.
-      if (cfg.installed && edition !== 'hytale') {
+      if (cfg.installed && edition !== 'hytale' && cfg.type !== 'velocity') {
         await this.writeProperties(
           inst,
           edition === 'bedrock' ? bedrockPortProps(cfg.port) : { 'server-port': String(cfg.port), 'query.port': String(cfg.port) },

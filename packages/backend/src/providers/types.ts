@@ -10,6 +10,9 @@ export interface PlannedFile extends DownloadSpec {
 /** What an installer step gets: Java ready, files downloaded, a way to run Java and report progress. */
 export interface InstallContext {
   dir: string;
+  /** The server's port and name, for installers that write their own config. */
+  port: number;
+  name: string;
   java: string;
   javaMajor: number;
   paths: Paths;

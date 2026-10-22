@@ -23,6 +23,12 @@ describe('JVM arguments', () => {
     expect(args).not.toContain('-XX:+UseG1GC');
   });
 
+  it('starts Geyser on NetherNet with its port, before the user arguments', () => {
+    const args = buildJvmArgs({ ramMinMb: 1024, ramMaxMb: 2048, jvmFlags: 'default', extraJvmArgs: '-DgeyserTransport=both', geyserPort: 19133 });
+    expect(args.slice(-3)).toEqual(['-DgeyserTransport=nethernet', '-DgeyserUdpPort=19133', '-DgeyserTransport=both']);
+    expect(buildJvmArgs({ ramMinMb: 1024, ramMaxMb: 2048, jvmFlags: 'default', extraJvmArgs: '' }).some((a) => a.startsWith('-Dgeyser'))).toBe(false);
+  });
+
   it('splits extra arguments with quotes', () => {
     expect(splitJvmArgs('-Duser.timezone=Europe/Prague "-Dname=a b"')).toEqual(['-Duser.timezone=Europe/Prague', '-Dname=a b']);
   });

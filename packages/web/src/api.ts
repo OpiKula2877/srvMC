@@ -1,6 +1,14 @@
 import {
   CSRF_HEADER,
   type AddPlayerRequest,
+  type AddonId,
+  type AddonState,
+  type AuthInfo,
+  type DiscordEvent,
+  type PanelRole,
+  type PanelUser,
+  type PlayerStat,
+  type ProxyState,
   type AuthMode,
   type AuthState,
   type BackupInfo,
@@ -59,6 +67,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   if (body !== undefined) headers['content-type'] = 'application/json';
   const res = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   if (res.status === 204) return undefined as T;
+  if (res.status === 401 && !url.startsWith('/api/auth/')) window.dispatchEvent(new Event('srvmc-unauthorized'));
   const data = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new ApiError(data.error ?? `Chyba ${res.status}`, res.status);
   return data as T;
@@ -169,6 +178,27 @@ export const api = {
   setDomain: (id: string, domain: DomainConfig) => request<ServerNetwork>('PUT', `/api/servers/${id}/network/domain`, domain),
   removeDomain: (id: string) => request<ServerNetwork>('DELETE', `/api/servers/${id}/network/domain`),
   checkDomain: (id: string) => request<DomainCheck>('POST', `/api/servers/${id}/network/domain/check`),
+
+  me: () => request<AuthInfo>('GET', '/api/auth/me'),
+  login: (name: string, password: string) => request<AuthInfo>('POST', '/api/auth/login', { name, password }),
+  logout: () => request<{ ok: true }>('POST', '/api/auth/logout'),
+  changePassword: (current: string, next: string) => request<{ ok: true }>('POST', '/api/auth/password', { current, next }),
+  users: () => request<PanelUser[]>('GET', '/api/users'),
+  createUser: (body: { name: string; password: string; role: PanelRole; servers?: 'all' | string[] }) => request<PanelUser>('POST', '/api/users', body),
+  updateUser: (id: string, body: { name?: string; password?: string; role?: PanelRole; servers?: 'all' | string[] }) => request<PanelUser>('PATCH', `/api/users/${id}`, body),
+  deleteUser: (id: string) => request<void>('DELETE', `/api/users/${id}`),
+  setLan: (enabled: boolean) => request<AuthInfo & { restartNeeded: boolean }>('PUT', '/api/panel/lan', { enabled }),
+
+  setDiscord: (id: string, body: { webhook?: string; events: DiscordEvent[] }) => request<void>('PUT', `/api/servers/${id}/discord`, body),
+  removeDiscord: (id: string) => request<void>('DELETE', `/api/servers/${id}/discord`),
+  testDiscord: (id: string) => request<void>('POST', `/api/servers/${id}/discord/test`),
+  stats: (id: string) => request<PlayerStat[]>('GET', `/api/servers/${id}/stats`),
+  addons: (id: string) => request<AddonState[]>('GET', `/api/servers/${id}/addons`),
+  installAddon: (id: string, addon: AddonId) => request<AddonState[]>('POST', `/api/servers/${id}/addons/${addon}`),
+  removeAddon: (id: string, addon: AddonId) => request<AddonState[]>('DELETE', `/api/servers/${id}/addons/${addon}`),
+  bluemapConsent: (id: string) => request<AddonState[]>('POST', `/api/servers/${id}/addons/bluemap/consent`),
+  proxy: (id: string) => request<ProxyState>('GET', `/api/servers/${id}/proxy`),
+  saveProxy: (id: string, servers: { id: string; alias?: string }[]) => request<ProxyState>('PUT', `/api/servers/${id}/proxy`, { servers }),
 
   auth: (id: string) => request<AuthState>('GET', `/api/servers/${id}/auth`),
   setAuth: (id: string, mode: AuthMode) => request<AuthState>('PUT', `/api/servers/${id}/auth`, { mode }),

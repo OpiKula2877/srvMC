@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, dialog, Menu, nativeImage, safeStorage, shell, Tray } from 'electron';
+import { randomBytes } from 'node:crypto';
+import { app, BrowserWindow, dialog, Menu, nativeImage, safeStorage, session, shell, Tray } from 'electron';
 import { startBackend, type Backend } from '@srvmc/backend';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -94,7 +95,9 @@ async function boot(): Promise<void> {
         decrypt: (sealed: string) => safeStorage.decryptString(Buffer.from(sealed, 'base64')),
       }
     : undefined;
-  const options = { webDir: path.join(here, 'web'), autoStartServers: true, secretBox };
+  // The app's own window is always the owner: it proves it with a token only this process knows.
+  const localToken = randomBytes(24).toString('hex');
+  const options = { webDir: path.join(here, 'web'), autoStartServers: true, secretBox, localToken };
   try {
     backend = await startBackend({ ...options, port: PREFERRED_PORT });
   } catch (err) {
@@ -105,6 +108,10 @@ async function boot(): Promise<void> {
     }
     backend = await startBackend({ ...options, port: 0 });
   }
+  const origin = `127.0.0.1:${backend.port}`;
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: [`http://${origin}/*`, `ws://${origin}/*`] }, (details, done) => {
+    done({ requestHeaders: { ...details.requestHeaders, 'x-srvmc-local': localToken } });
+  });
   createTray();
   createWindow();
 }

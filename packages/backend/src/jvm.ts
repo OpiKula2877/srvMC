@@ -30,6 +30,8 @@ export interface JvmOptions {
   jvmFlags: JvmFlagsPreset;
   extraJvmArgs: string;
   timezone?: string;
+  /** Geyser's Bedrock port; Geyser reads these start arguments ahead of its config. */
+  geyserPort?: number;
 }
 
 /** Splits user JVM arguments on whitespace, keeping quoted parts together. Every argument must be a JVM option. */
@@ -55,6 +57,8 @@ export function buildJvmArgs(o: JvmOptions): string[] {
   }
   args.push(...ENCODING);
   if (o.timezone) args.push(`-Duser.timezone=${o.timezone}`);
+  // Bedrock 26.60+ only joins over NetherNet: signaling on TCP and gameplay on UDP, both on this port.
+  if (o.geyserPort) args.push('-DgeyserTransport=nethernet', `-DgeyserUdpPort=${o.geyserPort}`);
   args.push(...splitJvmArgs(o.extraJvmArgs));
   return args;
 }

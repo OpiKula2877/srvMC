@@ -41,7 +41,7 @@ export const SERVER_TYPES: ServerTypeInfo[] = [
   { id: 'modpack', name: 'Modpack', tag: 'Modrinth', color: '#5BD27A', defaultPort: 25565, available: true },
   { id: 'bedrock', name: 'Bedrock', tag: 'Mobil · konzole · Win10', color: '#6AA9FF', defaultPort: 19132, available: true },
   { id: 'bedrock-preview', name: 'Bedrock Preview', tag: 'Testovací Bedrock', color: '#9CC6FF', defaultPort: 19132, available: true },
-  { id: 'velocity', name: 'Velocity', tag: 'Proxy · síť serverů', color: '#4FB5A5', defaultPort: 25577, available: false, phase: 9 },
+  { id: 'velocity', name: 'Velocity', tag: 'Proxy · síť serverů', color: '#4FB5A5', defaultPort: 25577, available: true },
   { id: 'hytale', name: 'Hytale', tag: 'Experimentální', color: '#F07A6A', defaultPort: 5520, available: true },
 ];
 
@@ -129,6 +129,88 @@ export interface ServerConfig {
   upnp?: boolean;
   /** The player-facing domain the user set up for this server. */
   domain?: DomainConfig;
+  /** Discord channel webhook (sealed) and the events posted there. */
+  discord?: { webhook: string; events: DiscordEvent[] };
+  /** UDP port Geyser listens on for Bedrock players (crossplay). */
+  geyserPort?: number;
+  /** Port of BlueMap's web map. */
+  bluemapPort?: number;
+  /** Velocity: the servers behind this proxy, in the order players are sent to them. */
+  proxy?: { servers: { id: string; alias: string }[] };
+  /** A backend: the Velocity server it sits behind. */
+  behindProxy?: string;
+}
+
+export const DISCORD_EVENTS = ['start', 'stop', 'crash', 'join', 'leave', 'sleep'] as const;
+export type DiscordEvent = (typeof DISCORD_EVENTS)[number];
+
+export interface PlayerStat {
+  name: string;
+  uuid?: string;
+  online: boolean;
+  firstSeen?: number;
+  lastSeen?: number;
+  /** Time on the server counted by srvMC (from the console and old logs). */
+  playMs: number;
+  sessions: number;
+  /** Minecraft's own statistics (Java). */
+  game?: { playTicks?: number; deaths?: number; mobKills?: number; playerKills?: number; blocksMined?: number; distanceKm?: number };
+}
+
+export type AddonId = 'geyser' | 'bluemap';
+
+export interface AddonState {
+  id: AddonId;
+  supported: boolean;
+  /** Why it does not fit this server. */
+  reason?: string;
+  installed: boolean;
+  port?: number;
+  /** Where to open it (BlueMap's map). */
+  url?: string;
+  /** BlueMap needs the owner to agree to downloading Mojang's game resources. */
+  needsConsent?: boolean;
+  /** The add-on still has to create its config on the next start. */
+  pendingStart?: boolean;
+}
+
+export interface ProxyBackend {
+  id: string;
+  name: string;
+  type: ServerType;
+  port: number;
+  alias?: string;
+  linked: boolean;
+  supported: boolean;
+  reason?: string;
+  /** Linked to another proxy. */
+  elsewhere?: string;
+}
+
+export interface ProxyState {
+  backends: ProxyBackend[];
+  /** Velocity has not written velocity.toml yet (it does on the first start). */
+  pendingStart: boolean;
+}
+
+export type PanelRole = 'owner' | 'admin' | 'moderator' | 'starter';
+
+export interface PanelUser {
+  id: string;
+  name: string;
+  role: PanelRole;
+  /** Servers the user may see; owners and admins always see all. */
+  servers: 'all' | string[];
+  createdAt: number;
+}
+
+export interface AuthInfo {
+  user: PanelUser | null;
+  /** Accounts exist: everyone except the desktop window signs in. */
+  authRequired: boolean;
+  /** The desktop app's own window (always the owner). */
+  local: boolean;
+  lan: { enabled: boolean; addresses: string[] };
 }
 
 export type DomainTarget = 'ip' | 'duckdns' | 'playit';
@@ -204,6 +286,8 @@ export interface ServerNetwork {
   edition: Edition;
   /** Bedrock: the UDP ports for gameplay that also need forwarding. */
   udpRange?: [number, number];
+  /** Geyser's UDP port: Bedrock players join this Java server there. */
+  geyserPort?: number;
   upnp: { enabled: boolean; mapped: boolean; error?: string };
   /** playit.gg address of the tunnel to this server's port. */
   playit: PlayitTunnel | null;
@@ -318,6 +402,8 @@ export interface ServerInfo extends ServerConfig {
   lastCrash?: CrashInfo;
   /** Something the user has to do now, e.g. sign the Hytale server in at a link. */
   notice?: { text: string; link?: string };
+  /** A Discord webhook is saved (the URL itself never leaves the core). */
+  discordSet?: boolean;
 }
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'cmd' | 'system';

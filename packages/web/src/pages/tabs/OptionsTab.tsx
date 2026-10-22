@@ -209,38 +209,48 @@ function AuthCard({
         </h2>
         {(state === null || pending) && <Spinner size={16} />}
       </div>
-      {!stopped && (
-        <div className="banner info">Mění se u vypnutého serveru.</div>
-      )}
-      {AUTH_CHOICES.map((c) => {
-        const unsupported =
-          c.mode === "hybrid" && state !== null && !state.hybridSupported;
-        return (
-          <button
-            key={c.mode}
-            type="button"
-            className={`choice${c.danger ? " danger" : ""}`}
-            aria-pressed={state?.mode === c.mode}
-            disabled={state === null || !!pending || !stopped || unsupported}
-            title={
-              unsupported
-                ? "Jde na Paper, Purpur, Spigot, Fabric a Quilt"
-                : undefined
-            }
-            onClick={() => void choose(c.mode)}
-          >
-            <span className="title">
-              <span className="radio" />
-              {c.label}
-            </span>
-          </button>
-        );
-      })}
-      {state?.mode === "offline" && (
-        <div className="banner error">
-          Bez ověřování si někdo může vzít jméno operátora. Zapni bílou listinu
-          a dávej OP opatrně.
+      {server.behindProxy ? (
+        <div className="banner info">
+          Hráči se připojují přes proxy a ta ověřuje jejich účty.
         </div>
+      ) : (
+        <>
+          {!stopped && (
+            <div className="banner info">Mění se u vypnutého serveru.</div>
+          )}
+          {AUTH_CHOICES.map((c) => {
+            const unsupported =
+              c.mode === "hybrid" && state !== null && !state.hybridSupported;
+            return (
+              <button
+                key={c.mode}
+                type="button"
+                className={`choice${c.danger ? " danger" : ""}`}
+                aria-pressed={state?.mode === c.mode}
+                disabled={
+                  state === null || !!pending || !stopped || unsupported
+                }
+                title={
+                  unsupported
+                    ? "Jde na Paper, Purpur, Spigot, Fabric a Quilt"
+                    : undefined
+                }
+                onClick={() => void choose(c.mode)}
+              >
+                <span className="title">
+                  <span className="radio" />
+                  {c.label}
+                </span>
+              </button>
+            );
+          })}
+          {state?.mode === "offline" && (
+            <div className="banner error">
+              Bez ověřování si někdo může vzít jméno operátora. Zapni bílou
+              listinu a dávej OP opatrně.
+            </div>
+          )}
+        </>
       )}
     </section>
   );

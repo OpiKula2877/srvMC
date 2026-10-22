@@ -1,5 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { editionOf, type Edition, type ServerInfo, type SystemInfo } from '@srvmc/shared';
+import { can, useAuth, type Cap } from '../auth.ts';
+import { DiscordCard } from './tabs/DiscordCard.tsx';
+import { ProxyTab } from './tabs/ProxyTab.tsx';
+import { StatsTab } from './tabs/StatsTab.tsx';
 import { api } from '../api.ts';
 import { Progress, RamPicker, Sparkline, StatusPill, Toggle } from '../components/Controls.tsx';
 import { Dropdown } from '../components/Dropdown.tsx';
@@ -34,18 +38,21 @@ const SLEEP_OPTIONS = [
   { value: '120', label: 'Po 2 hodinách' },
 ];
 
-const TABS: { id: string; label: string; phase?: number }[] = [
-  { id: 'konzole', label: 'Konzole' },
-  { id: 'nastaveni', label: 'Nastavení' },
-  { id: 'hraci', label: 'Hráči' },
-  { id: 'moznosti', label: 'Možnosti' },
-  { id: 'zaznamy', label: 'Záznamy' },
-  { id: 'soubory', label: 'Soubory' },
-  { id: 'svety', label: 'Světy' },
-  { id: 'mody', label: 'Mody a pluginy' },
-  { id: 'grafy', label: 'Grafy' },
-  { id: 'planovac', label: 'Plánovač' },
-  { id: 'sit', label: 'Síť a doména' },
+// Each tab needs a capability; some only make sense for a kind of server.
+const TABS: { id: string; label: string; cap: Cap; phase?: number; only?: (s: ServerInfo) => boolean }[] = [
+  { id: 'konzole', label: 'Konzole', cap: 'view' },
+  { id: 'nastaveni', label: 'Nastavení', cap: 'manage' },
+  { id: 'proxy', label: 'Servery za proxy', cap: 'manage', only: (s) => s.type === 'velocity' },
+  { id: 'hraci', label: 'Hráči', cap: 'console', only: (s) => s.type !== 'velocity' },
+  { id: 'moznosti', label: 'Možnosti', cap: 'manage', only: (s) => s.type !== 'velocity' },
+  { id: 'zaznamy', label: 'Záznamy', cap: 'console' },
+  { id: 'soubory', label: 'Soubory', cap: 'manage' },
+  { id: 'svety', label: 'Světy', cap: 'manage', only: (s) => s.type !== 'velocity' },
+  { id: 'mody', label: 'Mody a pluginy', cap: 'manage' },
+  { id: 'grafy', label: 'Grafy', cap: 'view' },
+  { id: 'statistiky', label: 'Statistiky', cap: 'console', only: (s) => s.type !== 'hytale' },
+  { id: 'planovac', label: 'Plánovač', cap: 'manage' },
+  { id: 'sit', label: 'Síť a doména', cap: 'manage' },
 ];
 
 const QUICK: Record<Edition, string[]> = {
@@ -354,12 +361,14 @@ function Settings({ server, system }: { server: ServerInfo; system: SystemInfo |
           </div>
         )}
       </section>
+      <DiscordCard key={server.id} server={server} />
     </div>
   );
 }
 
 export function ServerDetail({ id, tab, file, system }: { id: string; tab: string; file?: string; system: SystemInfo | null }) {
   const toast = useToast();
+  const auth = useAuth();
   const server = useLive((s) => s.servers[id]);
   const loaded = useLive((s) => s.loaded);
   const [busy, setBusy] = useState(false);
@@ -407,6 +416,7 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
   };
 
   const s = server.status;
+  const tabs = TABS.filter((t) => can(auth, t.cap) && (!t.only || t.only(server)));
 
   return (
     <main className="main">
@@ -436,9 +446,11 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
                 <Icon name="play" size={16} />
                 Spustit
               </button>
-              <button type="button" className="btn icon" aria-label="Smazat server" disabled={busy} onClick={() => setConfirmDelete(true)}>
-                <Icon name="trash" size={17} />
-              </button>
+              {can(auth, 'admin') && (
+                <button type="button" className="btn icon" aria-label="Smazat server" disabled={busy} onClick={() => setConfirmDelete(true)}>
+                  <Icon name="trash" size={17} />
+                </button>
+              )}
             </>
           )}
           {s === 'error' && !server.install && (
@@ -513,7 +525,7 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
       )}
 
       <nav className="tabs" aria-label="Sekce serveru">
-        {TABS.map((t) =>
+        {tabs.map((t) =>
           t.phase ? (
             <button key={t.id} type="button" className="tab" disabled title={`Přijde ve fázi ${t.phase}`}>
               {t.label}
@@ -537,9 +549,17 @@ export function ServerDetail({ id, tab, file, system }: { id: string; tab: strin
       {tab === 'grafy' && <GraphsTab key={server.id} server={server} />}
       {tab === 'planovac' && <ScheduleTab key={server.id} server={server} />}
       {tab === 'sit' && <NetworkTab key={server.id} server={server} />}
-      {!['nastaveni', 'hraci', 'moznosti', 'zaznamy', 'soubory', 'svety', 'mody', 'grafy', 'planovac', 'sit'].includes(tab) && (
+      {tab === 'statistiky' && <StatsTab key={server.id} server={server} />}
+      {tab === 'proxy' && <ProxyTab key={server.id} server={server} />}
+      {!tabs.some((t) => t.id === tab && t.id !== 'konzole') && (
         <div className="row">
-          <Console server={server} />
+          {can(auth, 'console') ? (
+            <Console server={server} />
+          ) : (
+            <section className="col-main card">
+              <span className="muted">Konzoli a příkazy vidí moderátor a výš. Server můžeš zapnout a vypnout nahoře.</span>
+            </section>
+          )}
           <Metrics server={server} />
         </div>
       )}

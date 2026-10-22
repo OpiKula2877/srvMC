@@ -11,6 +11,7 @@ import { quilt } from './quilt.ts';
 import { spigot } from './spigot.ts';
 import type { Provider } from './types.ts';
 import { vanilla } from './vanilla.ts';
+import { velocity } from './velocity.ts';
 
 export const providers: Partial<Record<ServerType, Provider>> = {
   vanilla,
@@ -26,6 +27,7 @@ export const providers: Partial<Record<ServerType, Provider>> = {
   bedrock,
   'bedrock-preview': bedrockPreview,
   hytale,
+  velocity,
 };
 
 export function providerFor(type: ServerType): Provider | undefined {
