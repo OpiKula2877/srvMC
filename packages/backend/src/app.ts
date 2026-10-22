@@ -33,7 +33,7 @@ import type { SecretBox } from './secrets.ts';
 import { ServerStore } from './store.ts';
 import { Supervisor } from './supervisor.ts';
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.0.1';
 
 declare module 'fastify' {
   interface FastifyRequest {

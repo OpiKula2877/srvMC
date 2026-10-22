@@ -1,4 +1,4 @@
-export const USER_AGENT = 'srvMC/1.0.0 (self-hosted Minecraft server manager)';
+export const USER_AGENT = 'srvMC/1.0.1 (self-hosted Minecraft server manager)';
 
 export class HttpError extends Error {
   constructor(
