@@ -53,6 +53,14 @@ npm test
 npm run typecheck
 ```
 
+Instalátor pro Windows (`apps/desktop/release/srvMC-Setup-<verze>.exe`, NSIS, instaluje do Program Files, data nechává v `%USERPROFILE%\srvMC`):
+
+```bash
+npm run installer
+```
+
+Hotové instalátory jsou v GitHub Releases. Nejsou podepsané certifikátem, takže se Windows SmartScreen může zeptat (Další informace → Přesto spustit). Zabalenou aplikaci jde vyzkoušet bez instalace a vedle nainstalované: `apps/desktop/release/win-unpacked/srvMC.exe` s proměnnými `SRVMC_PORT` a `SRVMC_HOME`.
+
 npm 12 ve výchozím stavu blokuje instalační skripty. `electron` a `esbuild` jsou povolené v `allowScripts` v `package.json`. Když Electron hlásí „failed to install correctly“, stáhni ho ručně: `node node_modules/electron/install.js`.
 
 ## Kde jsou data
