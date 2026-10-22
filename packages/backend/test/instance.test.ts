@@ -12,6 +12,8 @@ describe('console parsing', () => {
     expect(parsePlayerEvent('[14:05:40 INFO]: Steve_CZ joined the game')).toEqual({ join: 'Steve_CZ' });
     expect(parsePlayerEvent('[14:05:40] [Server thread/INFO]: Alex left the game')).toEqual({ leave: 'Alex' });
     expect(parsePlayerEvent('[14:12:33 INFO]: <Alex> Steve joined the game')).toEqual({});
+    expect(parsePlayerEvent('[17:53:13] [Server thread/INFO]: System chat: OpiKula joined the game')).toEqual({ join: 'OpiKula' });
+    expect(parsePlayerEvent('[17:38:12] [Server thread/INFO]: System chat: OpiKula left the game')).toEqual({ leave: 'OpiKula' });
     expect(parsePlayerEvent('[12:56:10] [Server thread/INFO] [minecraft/MinecraftServer]: Notch joined the game')).toEqual({ join: 'Notch' });
     expect(isDoneLine('[12:56:01] [Server thread/INFO] [minecraft/DedicatedServer]: Done (21.304s)! For help, type "help"')).toBe(true);
   });

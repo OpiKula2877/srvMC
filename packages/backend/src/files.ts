@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import { gunzipSync } from 'node:zlib';
 import extractZip from 'extract-zip';
+import { collectFiles, type ZipItem } from './zip.ts';
 import { MAX_TEXT_FILE, type DirListing, type FileContent, type FileEntry, type LogFileInfo } from '@srvmc/shared';
 import { UserError } from './providers/index.ts';
 import { t } from '@srvmc/shared';
@@ -186,6 +187,22 @@ export async function openForDownload(root: string, rel: string): Promise<{ stre
   return { stream: createReadStream(file), name: path.basename(file), size: s.size };
 }
 
+/**
+ * What goes into a zip of picked files and folders. Entries are named from the folder they were
+ * picked in, so a folder "config" unpacks as "config/...".
+ */
+export async function zipSelection(root: string, rels: string[]): Promise<{ items: ZipItem[]; name: string }> {
+  const abs = await Promise.all(rels.map((r) => resolveSafe(root, r)));
+  const rootAbs = path.resolve(root);
+  const base = path.dirname(abs[0]!);
+  const picked = abs.map((a) => path.relative(base, a).split(path.sep).join('/'));
+  if (picked.some((p) => !p || p.startsWith('..'))) throw new UserError(t('Pick files from one folder.'));
+  const items = await collectFiles(base, picked, (rel) => /(^|\/)session\.lock$/.test(rel));
+  if (items.length === 0) throw new UserError(t('There is nothing to download.'));
+  const label = abs.length === 1 ? path.basename(abs[0]!) : base === rootAbs ? 'files' : path.basename(base);
+  return { items, name: `${label}.zip` };
+}
+
 // ---- Logs ----
 
 const LOG_NAME_RE = /^[\w.-]+$/;
@@ -213,10 +230,18 @@ export function logPath(root: string, kind: LogFileInfo['kind'], name: string): 
   return path.join(root, LOG_DIRS[kind], name);
 }
 
+/** Deletes one log or crash report; the log the running server writes to stays. */
+export async function deleteLog(inst: { dir: string; running: boolean }, kind: LogFileInfo['kind'], name: string): Promise<void> {
+  const file = logPath(inst.dir, kind, name);
+  if (!(await stat(file).catch(() => null))?.isFile()) throw new UserError(t('The log does not exist.'));
+  if (inst.running && kind === 'log' && name === 'latest.log') throw new UserError(t('The server writes to this log right now. Stop it first.'));
+  await rm(file);
+}
+
 export async function readLog(root: string, kind: LogFileInfo['kind'], name: string): Promise<{ text: string; truncated: boolean }> {
   const file = logPath(root, kind, name);
   const s = await stat(file).catch(() => null);
-  if (!s?.isFile()) throw new UserError('Log neexistuje.');
+  if (!s?.isFile()) throw new UserError(t('The log does not exist.'));
   let buf: Buffer;
   if (name.endsWith('.gz')) {
     buf = gunzipSync(await readFile(file), { maxOutputLength: 64 * 1024 * 1024 });

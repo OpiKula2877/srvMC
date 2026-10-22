@@ -46,8 +46,9 @@ const LOG_LIMIT = 2000;
 const METRIC_LIMIT = 300;
 
 const DONE_RE = /Done \([\d.,]+s\)!/;
-const JOIN_RE = /\]: ([A-Za-z0-9_.]{1,16}) joined the game/;
-const LEAVE_RE = /\]: ([A-Za-z0-9_.]{1,16}) left the game/;
+// 26.x prefixes these with "System chat: ".
+export const JOIN_RE = /\]: (?:System chat: )?([A-Za-z0-9_.]{1,16}) joined the game/;
+export const LEAVE_RE = /\]: (?:System chat: )?([A-Za-z0-9_.]{1,16}) left the game/;
 // Bedrock: "[2026-10-21 12:00:00:123 INFO] Player connected: Big Steve, xuid: 2535…"
 const BEDROCK_JOIN_RE = /Player connected: (.+?), xuid: (\d*)/;
 const BEDROCK_LEAVE_RE = /Player disconnected: (.+?), xuid/;
@@ -120,6 +121,8 @@ export class ServerInstance extends EventEmitter {
   private stopRequested = false;
   /** While set, console lines matching `re` are answers to a probe and stay out of the log. */
   private quiet?: { re: RegExp; until: number; onLine: (text: string) => void };
+  /** Answers to commands srvMC sends for itself (the login limbo), kept out of the console. */
+  private hidden: { re: RegExp; until: number; onLine?: (text: string) => boolean }[] = [];
   private pending: LogLine[] = [];
   private flushTimer?: NodeJS.Timeout;
 
@@ -235,6 +238,16 @@ export class ServerInstance extends EventEmitter {
       this.quiet.onLine(text);
       return;
     }
+    if (this.hidden.length) {
+      const now = Date.now();
+      this.hidden = this.hidden.filter((h) => h.until > now);
+      const h = this.hidden.find((x) => x.re.test(text));
+      if (h) {
+        // A one-shot answer is used up by the first line it takes.
+        if (h.onLine?.(text)) this.hidden.splice(this.hidden.indexOf(h), 1);
+        return;
+      }
+    }
     const level = levelOf(text);
     this.pushLog(fromStderr && level === 'info' ? 'warn' : level, text);
 
@@ -294,6 +307,7 @@ export class ServerInstance extends EventEmitter {
     this.players.clear();
     this.startedAt = undefined;
     this.quiet = undefined;
+    this.hidden = [];
     this.tps = undefined;
     this.tpsAt = undefined;
     const crashed = !this.stopRequested && code !== 0;
@@ -319,6 +333,33 @@ export class ServerInstance extends EventEmitter {
     if (clean === stopCommand(this.cfg.type) || clean === 'stop') this.stopRequested = true;
     this.pushLog('cmd', `> ${clean}`);
     stdin.write(`${clean}\n`);
+  }
+
+  /** Sends a command for srvMC itself: it is not shown, nor are answer lines matching `hide` for a few seconds. */
+  sendHidden(command: string, hide?: RegExp, timeoutMs = 3000): void {
+    const stdin = this.proc?.stdin;
+    if (!stdin?.writable) return;
+    if (hide) this.hidden.push({ re: hide, until: Date.now() + timeoutMs });
+    stdin.write(`${command.replace(/[\r\n]+/g, ' ')}\n`);
+  }
+
+  /** Like sendHidden, and resolves with the first answer line matching `answer` (null on timeout). */
+  askHidden(command: string, answer: RegExp, timeoutMs = 3000): Promise<string | null> {
+    const stdin = this.proc?.stdin;
+    if (!stdin?.writable) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), timeoutMs);
+      this.hidden.push({
+        re: answer,
+        until: Date.now() + timeoutMs,
+        onLine: (text) => {
+          clearTimeout(timer);
+          resolve(text);
+          return true;
+        },
+      });
+      stdin.write(`${command.replace(/[\r\n]+/g, ' ')}\n`);
+    });
   }
 
   /**

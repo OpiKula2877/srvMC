@@ -2,10 +2,11 @@
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AuthMode, AuthState, ServerConfig } from '@srvmc/shared';
-import { contentTargets, effectiveType, installContent, listInstalled, type ContentContext } from './content.ts';
+import { effectiveType, listInstalled, type ContentContext } from './content.ts';
 import type { ServerInstance } from './instance.ts';
 import { readServerProperties, updateServerProperties } from './properties.ts';
 import { UserError } from './providers/types.ts';
+import { loginSupported } from './login/service.ts';
 import { t } from '@srvmc/shared';
 
 interface AuthStack {
@@ -68,14 +69,6 @@ export function setYamlValue(text: string, section: string, key: string, value: 
   return lines.join(eol);
 }
 
-/** Turns on AuthMe's premium bypass. Before the first start AuthMe has no config yet; it fills in the rest itself. */
-async function enableAuthMePremium(dir: string): Promise<void> {
-  const file = path.join(dir, 'plugins', 'AuthMe', 'config.yml');
-  const text = await readFile(file, 'utf8').catch(() => '');
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, setYamlValue(text, 'settings', 'enablePremium', 'true'), 'utf8');
-}
-
 const exists = (p: string) => access(p).then(
   () => true,
   () => false,
@@ -92,16 +85,14 @@ async function authJars(inst: ServerInstance): Promise<{ projectId: string; fold
 }
 
 export async function getAuthState(inst: ServerInstance): Promise<AuthState> {
-  const stack = authStack(inst.cfg);
+  const supported = loginSupported(inst.cfg);
   const props = await readServerProperties(inst.dir);
-  if (props.values.get('online-mode') !== 'false') return { mode: 'online', hybridSupported: !!stack };
-  const jars = await authJars(inst);
-  const hybrid = !!stack && stack.projects.every((id) => jars.some((j) => j.projectId === id && j.enabled));
-  return { mode: hybrid ? 'hybrid' : 'offline', hybridSupported: !!stack };
+  if (props.values.get('online-mode') !== 'false') return { mode: 'online', hybridSupported: supported };
+  return { mode: supported && inst.cfg.srvmcLogin ? 'hybrid' : 'offline', hybridSupported: supported };
 }
 
 async function setJarEnabled(inst: ServerInstance, folder: string, file: string, enabled: boolean): Promise<void> {
-  const base = file.replace(/\.disabled$/, '');
+  const base = file.replace(/.disabled$/, '');
   const from = path.join(inst.dir, folder, file);
   const to = path.join(inst.dir, folder, enabled ? base : `${base}.disabled`);
   if (from !== to && (await exists(from))) await rename(from, to);
@@ -111,29 +102,22 @@ async function setJarEnabled(inst: ServerInstance, folder: string, file: string,
 export async function switchOffAuthPlugins(inst: ServerInstance): Promise<boolean> {
   const on = (await authJars(inst)).filter((j) => j.enabled);
   for (const jar of on) await setJarEnabled(inst, jar.folder, jar.file, false);
-  return on.length > 0;
+  const wasLogin = !!inst.cfg.srvmcLogin;
+  if (wasLogin) {
+    inst.cfg.srvmcLogin = false;
+    inst.emit('persist');
+  }
+  return on.length > 0 || wasLogin;
 }
 
-export async function setAuthMode(inst: ServerInstance, ctx: ContentContext, mode: AuthMode): Promise<AuthState> {
+export async function setAuthMode(inst: ServerInstance, _ctx: ContentContext, mode: AuthMode): Promise<AuthState> {
   if (inst.running) throw new UserError(t('Stop the server first – the login mode changes only while it is stopped.'));
   if (inst.cfg.behindProxy) throw new UserError(t('The server is behind a proxy – the proxy checks player accounts.'));
-  const stack = authStack(inst.cfg);
-  if (mode === 'hybrid' && !stack) {
-    throw new UserError(contentTargets(inst.cfg).length ? t('Password login is not available for this server type yet. It works on Paper, Purpur, Spigot, Fabric and Quilt.') : t('A Vanilla server has no plugins, so no password login either.'));
-  }
-
-  const jars = await authJars(inst);
-  if (mode === 'hybrid') {
-    for (const id of stack!.projects) {
-      const jar = jars.find((j) => j.projectId === id);
-      if (jar) await setJarEnabled(inst, jar.folder, jar.file, true);
-      else await installContent(inst, ctx, 'modrinth', id, stack!.folder);
-    }
-    if (stack!.projects.includes(AUTHME)) await enableAuthMePremium(inst.dir);
-  } else {
-    // A leftover auth plugin would ask everyone for a password, so it is switched off (kept for later).
-    for (const jar of jars) await setJarEnabled(inst, jar.folder, jar.file, false);
-  }
+  if (mode === 'hybrid' && !loginSupported(inst.cfg)) throw new UserError(t('Password login works on Java servers only.'));
+  // srvMC Login replaces the older auth plugins (AuthMe, EasyAuth); one left on would ask for a second password.
+  for (const jar of await authJars(inst)) if (jar.enabled) await setJarEnabled(inst, jar.folder, jar.file, false);
+  inst.cfg.srvmcLogin = mode === 'hybrid' || undefined;
+  inst.emit('persist');
   // Unpaid clients cannot sign chat messages, so a server that lets them in must not demand signatures.
   const online = mode === 'online' ? 'true' : 'false';
   await updateServerProperties(inst.dir, { 'online-mode': online, 'enforce-secure-profile': online });

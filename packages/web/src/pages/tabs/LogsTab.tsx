@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { LogFileInfo, ServerInfo } from '@srvmc/shared';
 import { api } from '../../api.ts';
 import { Icon, Spinner } from '../../components/Icon.tsx';
-import { useToast } from '../../components/Overlays.tsx';
+import { ConfirmDialog, useToast } from '../../components/Overlays.tsx';
 import { bytes, dateTime } from '../../format.ts';
 import { locale, t } from '@srvmc/shared';
 
@@ -22,6 +22,23 @@ export function LogsTab({ server }: { server: ServerInfo }) {
   const [truncated, setTruncated] = useState(false);
   const [query, setQuery] = useState('');
   const [problemsOnly, setProblemsOnly] = useState(false);
+  const [deleting, setDeleting] = useState<LogFileInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const remove = async (l: LogFileInfo) => {
+    setBusy(true);
+    try {
+      await api.deleteLog(server.id, l.kind, l.name);
+      toast('ok', t('Log {name} deleted', { name: l.name }));
+      setDeleting(null);
+      if (current?.name === l.name && current.kind === l.kind) setCurrent(null);
+      await refresh();
+    } catch (err) {
+      toast('error', t('Could not delete the log'), (err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const refresh = () =>
     api
@@ -97,6 +114,12 @@ export function LogsTab({ server }: { server: ServerInfo }) {
                 {t('Download')}
               </a>
             )}
+            {current && !(server.status !== 'stopped' && current.kind === 'log' && current.name === 'latest.log') && (
+              <button type="button" className="btn sm danger" style={{ minHeight: 40 }} onClick={() => setDeleting(current)}>
+                <Icon name="trash" size={15} />
+                {t('Delete')}
+              </button>
+            )}
           </div>
         </div>
         {(truncated || matched.length > RENDER_LIMIT) && (
@@ -113,6 +136,17 @@ export function LogsTab({ server }: { server: ServerInfo }) {
             ))}
         </div>
       </section>
+      {deleting && (
+        <ConfirmDialog
+          title={t('Delete the log {name}?', { name: deleting.name })}
+          text={t('The file is deleted for good.')}
+          confirmLabel={t('Delete')}
+          danger
+          busy={busy}
+          onConfirm={() => void remove(deleting)}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
     </div>
   );
 }

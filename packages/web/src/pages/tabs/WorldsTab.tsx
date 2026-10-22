@@ -5,6 +5,7 @@ import { MenuButton, Progress, Slider, Toggle } from '../../components/Controls.
 import { Dropdown } from '../../components/Dropdown.tsx';
 import { Icon, Spinner } from '../../components/Icon.tsx';
 import { ConfirmDialog, useToast } from '../../components/Overlays.tsx';
+import { DatapacksCard } from './DatapacksCard.tsx';
 import { ago, bytes, dateTime, nameColor } from '../../format.ts';
 import { href } from '../../router.ts';
 import { locale, t } from '@srvmc/shared';
@@ -532,6 +533,8 @@ export function WorldsTab({ server }: { server: ServerInfo }) {
 
         <PregenCard server={server} />
       </div>
+
+      {edition === 'java' && <DatapacksCard server={server} />}
 
       <BackupsPanel server={server} />
 

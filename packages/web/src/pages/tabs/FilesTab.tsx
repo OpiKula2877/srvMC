@@ -239,6 +239,21 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
         </nav>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           {selected.size > 0 && (
+            <a
+              className="btn sm"
+              style={{ minHeight: 40 }}
+              href={
+                selected.size === 1 && entries.find((e) => selected.has(e.name))?.type === 'file'
+                  ? api.fileDownloadUrl(server.id, join(dir, [...selected][0]!))
+                  : api.filesZipUrl(server.id, [...selected].map((n) => join(dir, n)))
+              }
+              download
+            >
+              <Icon name="download" size={15} />
+              {t('Download selected ({n})', { n: selected.size })}
+            </a>
+          )}
+          {selected.size > 0 && (
             <button type="button" className="btn sm danger" style={{ minHeight: 40 }} disabled={running} onClick={() => setDeleting([...selected].map((n) => join(dir, n)))}>
               <Icon name="trash" size={15} />
               {t('Delete selected ({n})', { n: selected.size })}
@@ -350,14 +365,18 @@ export function FilesTab({ server, openFile }: { server: ServerInfo; openFile?: 
                       <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                         {e.type === 'file' && (
                           <a className="btn icon sm" href={api.fileDownloadUrl(server.id, path)} aria-label={t('Download {name}', { name: e.name })} download>
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <path d="M12 3v12M7 10l5 5 5-5M4 21h16" />
-                            </svg>
+                            <Icon name="download" size={15} />
                           </a>
                         )}
                         <MenuButton
                           label={t('Actions for {name}', { name: e.name })}
                           items={[
+                            {
+                              label: e.type === 'dir' ? t('Download as zip') : t('Download'),
+                              onClick: () => {
+                                window.location.href = e.type === 'dir' ? api.filesZipUrl(server.id, [path]) : api.fileDownloadUrl(server.id, path);
+                              },
+                            },
                             ...(e.type === 'file' && (TEXT_EXT.test(e.name) || e.size < 64 * 1024) ? [{ label: t('Edit'), onClick: () => void openText(path) }] : []),
                             ...(isZip ? [{ label: t('Unzip here'), onClick: () => void act(t('Unzipping failed'), () => api.unzip(server.id, path), t('Unzipped')) }] : []),
                             ...(running

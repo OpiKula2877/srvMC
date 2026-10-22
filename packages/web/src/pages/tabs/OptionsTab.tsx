@@ -18,6 +18,7 @@ import { Dropdown } from "../../components/Dropdown.tsx";
 import { Icon, Spinner } from "../../components/Icon.tsx";
 import { useToast } from "../../components/Overlays.tsx";
 import { href } from "../../router.ts";
+import { LoginAccounts } from "./LoginAccounts.tsx";
 import { t } from '@srvmc/shared';
 
 const DARK_CODES = new Set(["0", "1", "4", "5", "8"]);
@@ -154,9 +155,6 @@ function AuthCard({
     server.status === "stopped" ||
     server.status === "crashed" ||
     server.status === "error";
-  const plugins = !["fabric", "quilt"].includes(
-    server.type === "modpack" ? (server.modpack?.loader ?? "") : server.type,
-  );
 
   useEffect(() => {
     api
@@ -177,9 +175,7 @@ function AuthCard({
         toast(
           "ok",
           t('Paid and unpaid accounts'),
-          plugins
-            ? t('Players set a password on their first join. Those with a paid account type /premium once and are signed in by themselves from then on.')
-            : t('Unpaid players set a password on their first join, paid ones are signed in by themselves.'),
+          t('Players type /register <password> <password> on their first join and /login <password> after that. With a paid account /autologin on skips the password.'),
         );
       } else {
         toast(
@@ -233,7 +229,7 @@ function AuthCard({
                 }
                 title={
                   unsupported
-                    ? t('Works on Paper, Purpur, Spigot, Fabric and Quilt')
+                    ? t('Works on Java servers')
                     : undefined
                 }
                 onClick={() => void choose(c.mode)}
@@ -245,6 +241,7 @@ function AuthCard({
               </button>
             );
           })}
+          {state?.mode === "hybrid" && <LoginAccounts server={server} />}
           {state?.mode === "offline" && (
             <div className="banner error">
               {t('Without account checks someone can take an operator\'s name. Turn on the whitelist and give OP carefully.')}

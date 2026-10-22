@@ -21,6 +21,8 @@ await build({
   external: ['electron'],
   sourcemap: true,
   logLevel: 'info',
+  // srvMC's CurseForge application key, when the build machine has one (never committed).
+  define: { 'process.env.SRVMC_CF_APP_KEY': JSON.stringify(process.env.SRVMC_CF_APP_KEY ?? '') },
   // Bundled CommonJS dependencies (Fastify and friends) expect require/__dirname.
   banner: {
     js: [

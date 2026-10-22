@@ -6,7 +6,7 @@ import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ContentHit, ContentKind, InstallResult, ManualDownload, ModpackHit, ModpackVersion } from '@srvmc/shared';
 import { downloadToCache } from './download.ts';
-import { HttpError, fetchJson } from './http.ts';
+import { HttpError, USER_AGENT, fetchJson } from './http.ts';
 import type { ManualDownloads, ManualFile } from './manual.ts';
 import type { Paths } from './paths.ts';
 import { UserError } from './providers/types.ts';
@@ -40,7 +40,25 @@ export async function loadCurseForgeKey(paths: Paths, secretBox: SecretBox | und
   }
 }
 
-export const curseForgeKeySet = () => !!key;
+/**
+ * srvMC's own application key from CurseForge, put in at build time (SRVMC_CF_APP_KEY). Approved
+ * application keys have far higher limits than personal ones; a key the user saved still wins.
+ */
+const APP_KEY: string | null = process.env.SRVMC_CF_APP_KEY || null;
+const activeKey = () => key ?? APP_KEY;
+
+export const curseForgeKeySet = () => !!activeKey();
+
+/** Headers for a download: CurseForge's CDN takes the key since July 2026 and answers 401 without it. */
+export function cfDownloadHeaders(url: string): Record<string, string> | undefined {
+  const k = activeKey();
+  if (!k) return undefined;
+  try {
+    return /(^|\.)forgecdn\.net$/i.test(new URL(url).hostname) ? { 'x-api-key': k } : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Checks the key with CurseForge before it is kept. */
 export async function saveCurseForgeKey(value: string | null): Promise<void> {
@@ -58,14 +76,44 @@ export async function saveCurseForgeKey(value: string | null): Promise<void> {
   await writeFile(keyFile, JSON.stringify(key ? { key: seal(box, key) } : {}, null, 2), { encoding: 'utf8', mode: 0o600 });
 }
 
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** The same request already on its way is not sent twice (a list and its details open together). */
+const inFlight = new Map<string, Promise<unknown>>();
+
+async function cfOnce<T>(urlPath: string, init: RequestInit | undefined, k: string): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${API}${urlPath}`, {
+      ...init,
+      signal: AbortSignal.timeout(30_000),
+      headers: { 'User-Agent': USER_AGENT, 'x-api-key': k, accept: 'application/json', ...(init?.body ? { 'content-type': 'application/json' } : {}), ...init?.headers },
+    });
+    if (res.ok) return ((await res.json()) as { data: T }).data;
+    // Too many requests at once: CurseForge says how long to wait.
+    if ((res.status === 429 || res.status === 503) && attempt < 3) {
+      const after = Number(res.headers.get('retry-after'));
+      await wait(Math.min(30_000, Number.isFinite(after) && after > 0 ? after * 1000 : 2000 * 2 ** attempt));
+      continue;
+    }
+    throw new HttpError(`${API}${urlPath}`, res.status);
+  }
+}
+
 async function cf<T>(urlPath: string, init?: RequestInit): Promise<T> {
-  if (!key) throw new UserError(t('CurseForge needs an API key – add it in the Mods and plugins tab.'));
+  const k = activeKey();
+  if (!k) throw new UserError(t('CurseForge needs an API key – add it in the Mods and plugins tab.'));
+  const id = `${init?.method ?? 'GET'} ${urlPath} ${typeof init?.body === 'string' ? init.body : ''}`;
+  let p = inFlight.get(id) as Promise<T> | undefined;
+  if (!p) {
+    p = cfOnce<T>(urlPath, init, k).finally(() => inFlight.delete(id));
+    inFlight.set(id, p);
+  }
   try {
-    const res = await fetchJson<{ data: T }>(`${API}${urlPath}`, { ...init, headers: { 'x-api-key': key, accept: 'application/json', ...(init?.body ? { 'content-type': 'application/json' } : {}), ...init?.headers } });
-    return res.data;
+    return await p;
   } catch (err) {
-    if (err instanceof HttpError && err.status === 403) throw new UserError(t('CurseForge refused the API key (invalid, or the limit is used up). Try again in a moment or add a new one.'));
-    if (err instanceof HttpError && err.status === 404) throw new UserError('Na CurseForge to nebylo nalezeno.');
+    if (err instanceof HttpError && (err.status === 403 || err.status === 429)) {
+      throw new UserError(t('CurseForge refused the API key (invalid, or the limit is used up). Try again in a moment or add a new one.'));
+    }
+    if (err instanceof HttpError && err.status === 404) throw new UserError(t('Not found on CurseForge.'));
     throw err;
   }
 }
@@ -273,7 +321,7 @@ export async function installCurseForge(modId: number, opts: CfInstallOptions, r
   };
   const url = cfDownloadUrl(file);
   if (url) {
-    await place(await downloadToCache(opts.paths, { url, fileName, sha1: cfSha1(file), size: file.fileLength }));
+    await place(await downloadToCache(opts.paths, { url, fileName, sha1: cfSha1(file), size: file.fileLength, headers: cfDownloadHeaders(url) }));
     result.installed.push(fileName);
   } else {
     const item: ManualDownload = await opts.manual.add(opts.serverId, manualFileOf(mod, file), place);

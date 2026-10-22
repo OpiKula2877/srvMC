@@ -14,7 +14,8 @@ export function AddonCards({ server }: { server: ServerInfo }) {
   const toast = useToast();
   const [addons, setAddons] = useState<AddonState[] | null>(null);
   const [busy, setBusy] = useState<AddonId | null>(null);
-  const [consent, setConsent] = useState(false);
+  // 'install': asked when turning the map on; 'allow': asked later, after the first start.
+  const [consent, setConsent] = useState<'install' | 'allow' | null>(null);
   const running = server.status !== 'stopped' && server.status !== 'crashed' && server.status !== 'error';
 
   const load = useCallback(() => api.addons(server.id).then(setAddons).catch(() => setAddons([])), [server.id]);
@@ -58,11 +59,11 @@ export function AddonCards({ server }: { server: ServerInfo }) {
             {busy === a.id ? (
               <Spinner size={16} />
             ) : !a.installed ? (
-              <button type="button" className="btn primary sm" disabled={running} title={running ? t('Stop the server first') : undefined} onClick={() => void run(a.id, () => api.installAddon(server.id, a.id), t('{name}: installed', { name: info.title }))}>
+              <button type="button" className="btn primary sm" disabled={running} title={running ? t('Stop the server first') : undefined} onClick={() => (a.id === 'bluemap' ? setConsent('install') : void run(a.id, () => api.installAddon(server.id, a.id), t('{name}: installed', { name: info.title })))}>
                 {t('Turn on')}
               </button>
             ) : a.needsConsent ? (
-              <button type="button" className="btn primary sm" onClick={() => setConsent(true)}>
+              <button type="button" className="btn primary sm" onClick={() => setConsent('allow')}>
                 {t('Allow')}
               </button>
             ) : a.url && running ? (
@@ -79,7 +80,7 @@ export function AddonCards({ server }: { server: ServerInfo }) {
       })}
       {consent && (
         <ConfirmDialog
-          title={t("Download the game's resources for the map?")}
+          title={t('Do you want to allow accept-download?')}
           text={
             <>
               {t('BlueMap downloads the client part of Minecraft (textures and models) from Mojang. By doing so you agree to the')}{' '}
@@ -89,11 +90,18 @@ export function AddonCards({ server }: { server: ServerInfo }) {
               .
             </>
           }
-          confirmLabel={t('I agree')}
-          onCancel={() => setConsent(false)}
+          confirmLabel={t('Yes')}
+          cancelLabel={t('No')}
+          onCancel={() => {
+            const was = consent;
+            setConsent(null);
+            if (was === 'install') void run('bluemap', () => api.installAddon(server.id, 'bluemap'), t('{name}: installed', { name: INFO.bluemap.title }));
+          }}
           onConfirm={() => {
-            setConsent(false);
-            void run('bluemap', () => api.bluemapConsent(server.id), t('The map starts rendering'));
+            const was = consent;
+            setConsent(null);
+            if (was === 'install') void run('bluemap', () => api.installAddon(server.id, 'bluemap', true), t('{name}: installed', { name: INFO.bluemap.title }));
+            else void run('bluemap', () => api.bluemapConsent(server.id), t('The map starts rendering'));
           }}
         />
       )}

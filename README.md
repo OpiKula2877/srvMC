@@ -23,7 +23,8 @@ The installer is not signed. When Windows SmartScreen asks, click **More info â†
 - Options: MOTD editor with colors and a live preview, server icon, every `server.properties` setting
 - Search for mods, plugins and modpacks (Modrinth, CurseForge, Hangar, SpigotMC) with one-click updates
 - Downloads that a mod author allows only on their website: srvMC opens the page and picks the file up from your Downloads folder
-- Paid and unpaid accounts (password login)
+- Paid and unpaid accounts on every Java server, vanilla too: players type `/register`, `/login`, `/changepassword` and wait in an empty dimension until they are in; `/autologin on` lets a paid account skip the password
+- Datapacks for any Java world
 - Worlds and backups: upload, download, restore, automatic backups
 - Logs and a file manager
 - Graphs of CPU, RAM, players and TPS
@@ -56,6 +57,8 @@ npm test
 ```bash
 npm run installer
 ```
+
+CurseForge needs an API key. Personal keys from console.curseforge.com run out fast; an application key (free, apply in the CurseForge developer console for a 3rd-party app) has far higher limits. Put it into the build machine's environment as `SRVMC_CF_APP_KEY` before `npm run installer`, and it is built in. Never commit it.
 
 Layout: `packages/backend` (core, Fastify), `packages/web` (panel, React), `packages/shared` (shared types and translations), `apps/desktop` (Electron).
 

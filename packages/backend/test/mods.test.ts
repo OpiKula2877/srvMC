@@ -155,12 +155,12 @@ describe('login mode', () => {
     const dir = path.join(root, 'srv');
     await mkdir(dir);
     const inst = new ServerInstance({ id: 't', name: 'T', type: 'vanilla', version: '1.21.11', installed: true } as ServerConfig, dir);
-    expect(await getAuthState(inst)).toEqual({ mode: 'online', hybridSupported: false });
+    expect(await getAuthState(inst)).toEqual({ mode: 'online', hybridSupported: true });
     await writeFile(path.join(dir, 'server.properties'), 'online-mode=false\n');
     expect((await getAuthState(inst)).mode).toBe('offline');
   });
 
-  it('lets unpaid clients in only with chat signatures off, and refuses hybrid without a plugin stack', async () => {
+  it('lets unpaid clients in only with chat signatures off, and turns srvMC Login on for vanilla too', async () => {
     const dir = path.join(root, 'srv');
     await mkdir(dir);
     const inst = new ServerInstance({ id: 't', name: 'T', type: 'vanilla', version: '1.21.11', installed: true } as ServerConfig, dir);
@@ -169,7 +169,10 @@ describe('login mode', () => {
     expect(await readFile(path.join(dir, 'server.properties'), 'utf8')).toMatch(/online-mode=false[\s\S]*enforce-secure-profile=false|enforce-secure-profile=false[\s\S]*online-mode=false/);
     await setAuthMode(inst, ctx, 'online');
     expect(await readFile(path.join(dir, 'server.properties'), 'utf8')).toContain('enforce-secure-profile=true');
-    await expect(setAuthMode(inst, ctx, 'hybrid')).rejects.toThrow(/Vanilla/);
+    expect((await setAuthMode(inst, ctx, 'hybrid')).mode).toBe('hybrid');
+    expect(inst.cfg.srvmcLogin).toBe(true);
+    const bedrock = new ServerInstance({ id: 'b', name: 'B', type: 'bedrock', version: '1.21', installed: true } as ServerConfig, dir);
+    await expect(setAuthMode(bedrock, ctx, 'hybrid')).rejects.toThrow(/Java/);
   });
 });
 

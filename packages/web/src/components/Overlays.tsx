@@ -106,6 +106,7 @@ export function ConfirmDialog(props: {
   title: string;
   text: ReactNode;
   confirmLabel: string;
+  cancelLabel?: string;
   danger?: boolean;
   busy?: boolean;
   onConfirm: () => void;
@@ -129,7 +130,7 @@ export function ConfirmDialog(props: {
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button type="button" className="btn ghost" ref={cancelRef} onClick={props.onCancel}>
-            {t('Cancel')}
+            {props.cancelLabel ?? t('Cancel')}
           </button>
           <button
             type="button"

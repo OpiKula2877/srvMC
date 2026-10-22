@@ -17,6 +17,7 @@ import {
   type ContentSource,
   type ContentTarget,
   type CreateServerRequest,
+  type DatapackInfo,
   type DirListing,
   type FileContent,
   type GameVersion,
@@ -25,6 +26,7 @@ import {
   type InstalledContent,
   type InstallResult,
   type LogFileInfo,
+  type LoginAccount,
   type LogLine,
   type MetricPoint,
   type CurseForgeState,
@@ -105,11 +107,13 @@ export const api = {
 
   logs: (id: string) => request<LogFileInfo[]>('GET', `/api/servers/${id}/logs`),
   logFile: (id: string, kind: LogFileInfo['kind'], name: string) => request<{ text: string; truncated: boolean }>('GET', `/api/servers/${id}/logs/${kind}/${encodeURIComponent(name)}`),
+  deleteLog: (id: string, kind: LogFileInfo['kind'], name: string) => request<void>('DELETE', `/api/servers/${id}/logs/${kind}/${encodeURIComponent(name)}`),
   logDownloadUrl: (id: string, kind: LogFileInfo['kind'], name: string) => `/api/servers/${id}/logs/${kind}/${encodeURIComponent(name)}/download`,
 
   files: (id: string, path: string) => request<DirListing>('GET', `/api/servers/${id}/files?path=${encodeURIComponent(path)}`),
   fileContent: (id: string, path: string) => request<FileContent>('GET', `/api/servers/${id}/files/content?path=${encodeURIComponent(path)}`),
   saveFile: (id: string, path: string, content: string) => request<FileContent>('PUT', `/api/servers/${id}/files/content`, { path, content }),
+  filesZipUrl: (id: string, paths: string[]) => `/api/servers/${id}/files/download-zip?${paths.map((p) => `path=${encodeURIComponent(p)}`).join('&')}`,
   fileDownloadUrl: (id: string, path: string) => `/api/servers/${id}/files/download?path=${encodeURIComponent(path)}`,
   mkdir: (id: string, path: string) => request<void>('POST', `/api/servers/${id}/files/mkdir`, { path }),
   rename: (id: string, from: string, to: string) => request<void>('POST', `/api/servers/${id}/files/rename`, { from, to }),
@@ -122,6 +126,11 @@ export const api = {
   activateWorld: (id: string, name: string) => request<WorldInfo[]>('POST', `/api/servers/${id}/worlds/${encodeURIComponent(name)}/activate`),
   newWorld: (id: string, body: { name: string; seed?: string; type?: string }) => request<WorldInfo[]>('POST', `/api/servers/${id}/worlds`, body),
   resetWorld: (id: string, name: string, seed?: string) => request<WorldInfo[]>('POST', `/api/servers/${id}/worlds/${encodeURIComponent(name)}/reset`, seed === undefined ? {} : { seed }),
+  datapacks: (id: string) => request<DatapackInfo[]>('GET', `/api/servers/${id}/datapacks`),
+  uploadDatapack: (id: string, file: File, onProgress?: (pct: number) => void) =>
+    rawUpload<DatapackInfo[]>('POST', `/api/servers/${id}/datapacks/upload?name=${encodeURIComponent(file.name)}`, file, 'application/octet-stream', onProgress),
+  setDatapackEnabled: (id: string, name: string, enabled: boolean) => request<DatapackInfo[]>('PUT', `/api/servers/${id}/datapacks/${encodeURIComponent(name)}/enabled`, { enabled }),
+  removeDatapack: (id: string, name: string) => request<DatapackInfo[]>('DELETE', `/api/servers/${id}/datapacks/${encodeURIComponent(name)}`),
   deleteWorld: (id: string, name: string) => request<WorldInfo[]>('DELETE', `/api/servers/${id}/worlds/${encodeURIComponent(name)}`),
   worldDownloadUrl: (id: string, name: string) => `/api/servers/${id}/worlds/${encodeURIComponent(name)}/download`,
   importWorld: (id: string, file: File, name: string, activate: boolean, onProgress?: (pct: number) => void) =>
@@ -206,13 +215,17 @@ export const api = {
   testDiscord: (id: string) => request<void>('POST', `/api/servers/${id}/discord/test`),
   stats: (id: string) => request<PlayerStat[]>('GET', `/api/servers/${id}/stats`),
   addons: (id: string) => request<AddonState[]>('GET', `/api/servers/${id}/addons`),
-  installAddon: (id: string, addon: AddonId) => request<AddonState[]>('POST', `/api/servers/${id}/addons/${addon}`),
+  installAddon: (id: string, addon: AddonId, consent = false) => request<AddonState[]>('POST', `/api/servers/${id}/addons/${addon}${consent ? '?consent=1' : ''}`),
   removeAddon: (id: string, addon: AddonId) => request<AddonState[]>('DELETE', `/api/servers/${id}/addons/${addon}`),
   bluemapConsent: (id: string) => request<AddonState[]>('POST', `/api/servers/${id}/addons/bluemap/consent`),
   proxy: (id: string) => request<ProxyState>('GET', `/api/servers/${id}/proxy`),
   saveProxy: (id: string, servers: { id: string; alias?: string }[]) => request<ProxyState>('PUT', `/api/servers/${id}/proxy`, { servers }),
 
   auth: (id: string) => request<AuthState>('GET', `/api/servers/${id}/auth`),
+  loginAccounts: (id: string) => request<LoginAccount[]>('GET', `/api/servers/${id}/login/accounts`),
+  deleteLoginAccount: (id: string, name: string) => request<LoginAccount[]>('DELETE', `/api/servers/${id}/login/accounts/${encodeURIComponent(name)}`),
+  setLoginAutologin: (id: string, name: string, autologin: boolean) =>
+    request<LoginAccount[]>('PUT', `/api/servers/${id}/login/accounts/${encodeURIComponent(name)}/autologin`, { autologin }),
   setAuth: (id: string, mode: AuthMode) => request<AuthState>('PUT', `/api/servers/${id}/auth`, { mode }),
 };
 

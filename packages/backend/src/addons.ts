@@ -129,7 +129,7 @@ export class AddonService {
         installed: bmInstalled,
         ...(bmInstalled && inst.cfg.bluemapPort && { port: inst.cfg.bluemapPort, url: `http://localhost:${inst.cfg.bluemapPort}` }),
         ...(bmInstalled && !core && { pendingStart: true }),
-        ...(bmInstalled && core !== null && confValue(core, 'accept-download') !== 'true' && { needsConsent: true }),
+        ...(bmInstalled && core !== null && !inst.cfg.bluemapConsent && confValue(core, 'accept-download') !== 'true' && { needsConsent: true }),
       },
     ];
   }
@@ -157,7 +157,7 @@ export class AddonService {
     throw new UserError(tr('No free port found for the map.'));
   }
 
-  async install(id: string, addon: AddonId): Promise<AddonState[]> {
+  async install(id: string, addon: AddonId, consent = false): Promise<AddonState[]> {
     const inst = this.manager.get(id);
     if (inst.running) throw new UserError(tr('Stop the server first – Windows keeps the jars locked while it runs.'));
     const type = effectiveType(inst.cfg);
@@ -190,7 +190,9 @@ export class AddonService {
       const port = inst.cfg.bluemapPort ?? (await this.freeBluemapPort(inst));
       await this.manager.saveConfig(id, (cfg) => {
         cfg.bluemapPort = port;
+        if (consent) cfg.bluemapConsent = true;
       });
+      await this.applyConsent(inst);
       await this.applyBluemap(inst);
     }
     this.manager.emit('files-changed', id);
@@ -213,6 +215,7 @@ export class AddonService {
       if (jar) await removeContent(inst, this.ctx(inst), folder, jar);
       await this.manager.saveConfig(id, (cfg) => {
         cfg.bluemapPort = undefined;
+        cfg.bluemapConsent = undefined;
       });
     }
     this.manager.emit('configured', id);
@@ -222,19 +225,32 @@ export class AddonService {
   /** The owner agrees that BlueMap downloads the Minecraft client's resources from Mojang. */
   async consent(id: string): Promise<AddonState[]> {
     const inst = this.manager.get(id);
-    const dir = bluemapConfigDir(effectiveType(inst.cfg));
-    const file = dir && path.join(inst.dir, dir, 'core.conf');
-    const text = file ? await read(file) : null;
-    if (!file || text === null) throw new UserError(tr('BlueMap creates its settings on the first server start. Start the server, then confirm.'));
-    await writeFile(file, setConf(text, 'accept-download', 'true'), 'utf8');
-    if (inst.status === 'running') {
+    if (!bluemapConfigDir(effectiveType(inst.cfg))) throw new UserError(tr('BlueMap does not fit this server.'));
+    await this.manager.saveConfig(id, (cfg) => {
+      cfg.bluemapConsent = true;
+    });
+    const written = await this.applyConsent(inst);
+    if (written && inst.status === 'running') {
       inst.sendCommand('bluemap reload');
       void this.settleBluemap(inst);
     }
-    inst.pushLog('system', tr('BlueMap: downloading the game resources is allowed. The map renders in the background.'));
+    inst.pushLog(
+      'system',
+      written ? tr('BlueMap: downloading the game resources is allowed. The map renders in the background.') : tr('BlueMap: downloading the game resources is allowed. It starts with the next server start.'),
+    );
     return this.list(id);
   }
 
+  /** Writes the stored consent into core.conf; false while BlueMap has not created that file yet. */
+  private async applyConsent(inst: ServerInstance): Promise<boolean> {
+    const dir = bluemapConfigDir(effectiveType(inst.cfg));
+    if (!dir || !inst.cfg.bluemapConsent) return false;
+    const file = path.join(inst.dir, dir, 'core.conf');
+    const text = await read(file);
+    if (text === null) return false;
+    if (confValue(text, 'accept-download') !== 'true') await writeFile(file, setConf(text, 'accept-download', 'true'), 'utf8');
+    return true;
+  }
 
   /** Puts the map's port into webserver.conf; false while BlueMap has not written that file yet. */
   private async applyBluemap(inst: ServerInstance): Promise<boolean> {
@@ -253,6 +269,12 @@ export class AddonService {
   /** BlueMap writes webserver.conf only after the download consent, and loads after the server is up; the port follows once it does. */
   private async settleBluemap(inst: ServerInstance): Promise<void> {
     for (let i = 0; i < 60 && inst.status === 'running'; i++) {
+      // BlueMap writes core.conf on its first load and then waits for the consent.
+      if (inst.cfg.bluemapConsent) {
+        const dir = bluemapConfigDir(effectiveType(inst.cfg));
+        const before = dir ? confValue((await read(path.join(inst.dir, dir, 'core.conf'))) ?? '', 'accept-download') : 'true';
+        if (before !== 'true' && (await this.applyConsent(inst).catch(() => false))) inst.sendCommand('bluemap reload');
+      }
       if (await this.applyBluemap(inst).catch(() => true)) return;
       await new Promise((r) => setTimeout(r, 3000));
     }

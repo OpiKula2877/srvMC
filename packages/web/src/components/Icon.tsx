@@ -25,6 +25,7 @@ const PATHS = {
       <path d="M20 20l-4-4" />
     </>
   ),
+  download: <path d="M12 3v12M7 10l5 5 5-5M4 21h16" />,
   trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
   folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
   bolt: <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,

@@ -135,6 +135,12 @@ export interface ServerConfig {
   geyserPort?: number;
   /** Port of BlueMap's web map. */
   bluemapPort?: number;
+  /** The owner allowed BlueMap's download of the game resources; written into core.conf once BlueMap creates it. */
+  bluemapConsent?: boolean;
+  /** srvMC Login (password login through srvMC's proxy) is on. */
+  srvmcLogin?: boolean;
+  /** With srvMC Login the Minecraft server listens here on 127.0.0.1; srvMC's proxy has the public port. */
+  loginBackendPort?: number;
   /** Velocity: the servers behind this proxy, in the order players are sent to them. */
   proxy?: { servers: { id: string; alias: string }[] };
   /** A backend: the Velocity server it sits behind. */
@@ -557,6 +563,17 @@ export const MAX_UPLOAD = 1024 * 1024 * 1024;
 
 // ---- Worlds, backups, pre-generation ----
 
+/** One datapack of the active world. */
+export interface DatapackInfo {
+  name: string;
+  enabled: boolean;
+  kind: 'folder' | 'zip';
+  size?: number;
+  mtime: number;
+  /** srvMC's own pack (the login limbo); not changed from the panel. */
+  locked?: boolean;
+}
+
 export interface WorldInfo {
   /** Folder name of the overworld, also the value of level-name. */
   name: string;
@@ -699,6 +716,16 @@ export interface AuthState {
   mode: AuthMode;
   /** The server type supports the password + premium bypass mode. */
   hybridSupported: boolean;
+}
+
+/** A player account of srvMC Login. */
+export interface LoginAccount {
+  name: string;
+  createdAt: number;
+  lastLogin?: number;
+  /** Paid account checked by Mojang on join, no password. */
+  autologin: boolean;
+  online: boolean;
 }
 
 export * from './properties.ts';

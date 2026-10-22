@@ -12,6 +12,7 @@ import { loadCurseForgeKey } from './curseforge.ts';
 import { DiscordService } from './discord.ts';
 import { PlayerStatsService } from './playerstats.ts';
 import { ProxyService } from './proxy.ts';
+import { LoginService } from './login/service.ts';
 import { registerExtraRoutes } from './routes/extras.ts';
 import { lanAddresses, readCookie, registerUserRoutes, SESSION_COOKIE } from './routes/users.ts';
 import { UserStore } from './users.ts';
@@ -283,6 +284,7 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   const stats = new PlayerStatsService(manager);
   const addons = new AddonService(manager, paths);
   const proxy = new ProxyService(manager, paths);
+  const login = new LoginService(manager);
   manager.on('deleted', (id: string) => {
     void users.forgetServer(id);
     void proxy.forget(id);
@@ -293,7 +295,7 @@ export async function startBackend(opts: BackendOptions = {}): Promise<Backend> 
   registerWorldRoutes(app, manager, backups, paths);
   registerMonitorRoutes(app, manager, history, scheduler);
   registerNetworkRoutes(app, network);
-  registerExtraRoutes(app, { discord, stats, addons, proxy });
+  registerExtraRoutes(app, { discord, stats, addons, proxy, login });
   registerUserRoutes(app, users, () => port, (req) => req.principal);
   app.get('/api/auth/language', () => ({ lang: getLang() }));
   app.put<{ Body: { lang: Lang } }>(

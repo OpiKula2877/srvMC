@@ -8,6 +8,7 @@ import type { ModpackHit, ModpackInfo, ModpackVersion, ServerType } from '@srvmc
 import {
   CLASS,
   cfClientOnly,
+  cfDownloadHeaders,
   cfDownloadUrl,
   cfFileName,
   cfSha1,
@@ -25,6 +26,7 @@ import { downloadToCache, type DownloadSpec } from '../download.ts';
 import { fetchJson } from '../http.ts';
 import { readJarEntries } from '../jarmeta.ts';
 import { cachedPath, type ManualFile } from '../manual.ts';
+import { identifyHashes, primaryFile } from '../modrinth.ts';
 import { javaMajorFor } from '../mojang.ts';
 import { copyPack, detectLoader, dropClientMods, manifestLoader, packGameVersion, packLaunch, unpack, type PackLoader } from '../packs.ts';
 import { platformArgs } from '../installer.ts';
@@ -124,7 +126,7 @@ interface CfManifest {
 async function cfPackFile(mod: CfMod, f: CfFile, env: PlanEnv, what: string): Promise<string> {
   const url = cfDownloadUrl(f);
   if (url) {
-    return downloadToCache(env.paths, { url, fileName: cfFileName(f), sha1: cfSha1(f), size: f.fileLength }, (d, t) =>
+    return downloadToCache(env.paths, { url, fileName: cfFileName(f), sha1: cfSha1(f), size: f.fileLength, headers: cfDownloadHeaders(url) }, (d, t) =>
       env.progress?.(`Stahuji ${what} · ${Math.round(d / 1048576)}${t ? ` z ${Math.round(t / 1048576)}` : ''} MB`, t ? Math.round((d / t) * 100) : null),
     );
   }
@@ -151,7 +153,7 @@ async function cfPrepared(modId: number, fileId: number, env: PlanEnv): Promise<
   const serverPack = file.serverPackFileId ? await getFile(modId, file.serverPackFileId).catch(() => null) : null;
   if (serverPack) {
     const spZip = await cfPackFile(mod, serverPack, env, 'server pack');
-    env.progress?.('Rozbaluji server pack', null);
+    env.progress?.(t('Unpacking the server pack'), null);
     return { root: await unpack(spZip, staging), kind: 'server', loader, mcHint: mc, info, build: String(file.id), staging };
   }
 
@@ -169,6 +171,9 @@ async function cfPrepared(modId: number, fileId: number, env: PlanEnv): Promise<
       ctx.progress(t('Finding the mods of the modpack'), null);
       const [files, mods] = await Promise.all([getFiles(wanted.map((f) => f.fileID)), getMods([...new Set(wanted.map((f) => f.projectID))])]);
       const byMod = new Map(mods.map((m) => [m.id, m]));
+      // Most mods are on Modrinth too, byte for byte: one lookup by hash, and those come from there.
+      const sha1s = files.map((f) => cfSha1(f)).filter((h): h is string => !!h);
+      const onModrinth = await identifyHashes(sha1s).catch(() => ({}) as Awaited<ReturnType<typeof identifyHashes>>);
       const manual: { mf: ManualFile; out: string }[] = [];
       let i = 0;
       let skipped = 0;
@@ -181,13 +186,16 @@ async function cfPrepared(modId: number, fileId: number, env: PlanEnv): Promise<
           continue;
         }
         const out = path.join(ctx.dir, mod?.classId === CLASS.plugin ? 'plugins' : 'mods', cfFileName(f));
-        const url = cfDownloadUrl(f);
+        const sha1 = cfSha1(f);
+        const mr = sha1 ? onModrinth[sha1] : undefined;
+        const mrFile = mr && (mr.files.find((x) => x.hashes.sha1 === sha1) ?? primaryFile(mr));
+        const url = mrFile?.hashes.sha1 === sha1 ? mrFile!.url : cfDownloadUrl(f);
         if (!url) {
           if (mod) manual.push({ mf: manualFileOf(mod, f), out });
           continue;
         }
-        ctx.progress(`Stahuji mody modpacku · ${i} z ${files.length}`, Math.round((i / files.length) * 100));
-        const cached = await downloadToCache(ctx.paths, { url, fileName: cfFileName(f), sha1: cfSha1(f), size: f.fileLength });
+        ctx.progress(t('Downloading the mods of the modpack · {i} of {n}', { i, n: files.length }), Math.round((i / files.length) * 100));
+        const cached = await downloadToCache(ctx.paths, { url, fileName: cfFileName(f), sha1, size: f.fileLength, headers: cfDownloadHeaders(url) });
         await mkdir(path.dirname(out), { recursive: true });
         await copyFile(cached, out);
       }

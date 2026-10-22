@@ -17,6 +17,7 @@ import {
 import {
   checkServerIcon,
   listDir,
+  deleteLog,
   listLogs,
   logPath,
   makeDir,
@@ -28,7 +29,9 @@ import {
   trashPaths,
   unzipHere,
   writeText,
+  zipSelection,
 } from '../files.ts';
+import { zipStream } from '../zip.ts';
 import type { ServerInstance } from '../instance.ts';
 import type { ServerManager } from '../manager.ts';
 import type { Paths } from '../paths.ts';
@@ -166,10 +169,15 @@ export function registerContentRoutes(app: FastifyInstance, manager: ServerManag
   app.get<{ Params: { id: string; kind: LogFileInfo['kind']; name: string } }>('/api/servers/:id/logs/:kind/:name/download', async (req, reply) => {
     const file = logPath(inst(req.params.id).dir, req.params.kind, req.params.name);
     const s = await stat(file).catch(() => null);
-    if (!s?.isFile()) throw new UserError('Log neexistuje.');
+    if (!s?.isFile()) throw new UserError(t('The log does not exist.'));
     const { stream } = await openForDownload(path.dirname(file), req.params.name);
     attachment(reply, req.params.name, s.size);
     return reply.send(stream);
+  });
+
+  app.delete<{ Params: { id: string; kind: LogFileInfo['kind']; name: string } }>('/api/servers/:id/logs/:kind/:name', async (req, reply) => {
+    await deleteLog(inst(req.params.id), req.params.kind, req.params.name);
+    reply.code(204);
   });
 
   // Files
@@ -193,6 +201,17 @@ export function registerContentRoutes(app: FastifyInstance, manager: ServerManag
     attachment(reply, name, size);
     return reply.send(stream);
   });
+  // Folders, or several files at once, as one zip.
+  app.get<{ Params: { id: string }; Querystring: { path: string[] } }>(
+    '/api/servers/:id/files/download-zip',
+    { schema: { querystring: { type: 'object', required: ['path'], properties: { path: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'string', minLength: 1, maxLength: 1024 } } } } } },
+    async (req, reply) => {
+      const i = inst(req.params.id);
+      const { items, name } = await zipSelection(i.dir, req.query.path);
+      attachment(reply, name);
+      return reply.send(zipStream(items));
+    },
+  );
   app.post<{ Params: { id: string }; Querystring: { path?: string; name: string; overwrite?: string }; Body: Readable }>(
     '/api/servers/:id/files/upload',
     {

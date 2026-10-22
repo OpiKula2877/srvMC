@@ -15,6 +15,8 @@ export interface DownloadSpec {
   sha256?: string;
   md5?: string;
   size?: number;
+  /** Sent with the request only (an API key); not part of the cache key. */
+  headers?: Record<string, string>;
 }
 
 export type ProgressFn = (done: number, total: number | null) => void;
@@ -72,7 +74,7 @@ export async function downloadToCache(paths: Paths, spec: DownloadSpec, onProgre
 
   await mkdir(dir, { recursive: true });
   const part = `${file}.part`;
-  const res = await fetchOk(spec.url, { timeoutMs: 30 * 60_000 });
+  const res = await fetchOk(spec.url, { timeoutMs: 30 * 60_000, ...(spec.headers && { headers: spec.headers }) });
   const total = Number(res.headers.get('content-length')) || spec.size || null;
   if (!res.body) throw new Error(`Empty response for ${spec.url}`);
 

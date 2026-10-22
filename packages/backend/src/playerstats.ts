@@ -6,7 +6,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { createGunzip } from 'node:zlib';
 import { editionOf, type PlayerStat } from '@srvmc/shared';
-import type { ServerInstance } from './instance.ts';
+import { JOIN_RE, LEAVE_RE, type ServerInstance } from './instance.ts';
 import type { ServerManager } from './manager.ts';
 import { activeWorldName } from './worlds.ts';
 
@@ -21,14 +21,17 @@ interface Entry {
   sessions: number;
 }
 
+// Bump to read the old logs again after the log parsing changes.
+const STORE_VERSION = 2;
+
 interface Store {
+  version?: number;
   backfilled: boolean;
   players: Record<string, Entry>;
 }
 
-const TIME_RE = /^\[(\d{2}):(\d{2}):(\d{2})/;
-const JOIN_RE = /\]: ([A-Za-z0-9_.]{1,16}) joined the game/;
-const LEAVE_RE = /\]: ([A-Za-z0-9_.]{1,16}) left the game/;
+// Forge puts a localized date first: "[22říj2026 17:53:12.137]".
+const TIME_RE = /^\[(?:[^\]\s]+\s)?(\d{2}):(\d{2}):(\d{2})/;
 const UUID_RE = /UUID of player ([A-Za-z0-9_.]{1,16}) is ([0-9a-f-]{36})/;
 const STOP_RE = /Stopping (the )?server/;
 
@@ -124,6 +127,7 @@ export class PlayerStatsService {
   private readonly open = new Map<string, Map<string, number>>();
   private readonly stores = new Map<string, Promise<Store>>();
   private readonly saving = new Map<string, NodeJS.Timeout>();
+  private readonly backfills = new Map<string, Promise<void>>();
 
   constructor(private readonly manager: ServerManager) {
     for (const inst of manager.all()) this.attach(inst);
@@ -144,7 +148,8 @@ export class PlayerStatsService {
     if (!s) {
       s = readFile(path.join(inst.dir, FILE), 'utf8')
         .then((t) => JSON.parse(t) as Store)
-        .catch(() => ({ backfilled: false, players: {} }));
+        .then((st) => (st.version === STORE_VERSION ? st : { version: STORE_VERSION, backfilled: false, players: {} }))
+        .catch(() => ({ version: STORE_VERSION, backfilled: false, players: {} }));
       this.stores.set(id, s);
     }
     return s;
@@ -169,7 +174,8 @@ export class PlayerStatsService {
   private async onPlayer(inst: ServerInstance, what: 'join' | 'leave', name: string): Promise<void> {
     const id = inst.cfg.id;
     const now = Date.now();
-    const s = await this.store(inst);
+    // Old logs first, or a session counted live would be counted again from the log later.
+    const s = await this.ready(inst);
     const open = this.open.get(id) ?? new Map<string, number>();
     this.open.set(id, open);
     const key = name.toLowerCase();
@@ -183,6 +189,19 @@ export class PlayerStatsService {
       if (start !== undefined) e.playMs += now - start;
     }
     this.scheduleSave(inst);
+  }
+
+  private async ready(inst: ServerInstance): Promise<Store> {
+    const s = await this.store(inst);
+    if (!s.backfilled) {
+      let b = this.backfills.get(inst.cfg.id);
+      if (!b) {
+        b = this.backfill(inst, s);
+        this.backfills.set(inst.cfg.id, b);
+      }
+      await b;
+    }
+    return s;
   }
 
   /** Reads old logs once, so a server shows its history from before srvMC counted. */
@@ -221,29 +240,37 @@ export class PlayerStatsService {
 
   async list(id: string): Promise<PlayerStat[]> {
     const inst = this.manager.get(id);
-    const s = await this.store(inst);
-    if (!s.backfilled) await this.backfill(inst, s);
+    const s = await this.ready(inst);
     // Names for UUIDs the logs did not mention.
     const cache = await readFile(path.join(inst.dir, 'usercache.json'), 'utf8').then((t) => JSON.parse(t) as { name: string; uuid: string }[], () => []);
+    const game = await this.gameStats(inst);
+    const known = new Set(Object.values(s.players).map((e) => e.uuid));
     for (const c of Array.isArray(cache) ? cache : []) {
+      if (typeof c?.name !== 'string') continue;
       const e = s.players[c.name.toLowerCase()];
       if (e && !e.uuid) e.uuid = c.uuid;
+      // A player with a stats file but no join line in the logs we still have.
+      if (!e && game.has(c.uuid) && !known.has(c.uuid)) {
+        s.players[c.name.toLowerCase()] = { name: c.name, uuid: c.uuid, firstSeen: 0, lastSeen: 0, playMs: 0, sessions: 0 };
+      }
     }
-    const game = await this.gameStats(inst);
     const open = this.open.get(id) ?? new Map<string, number>();
     const now = Date.now();
     return Object.values(s.players)
       .map((e) => {
         const start = open.get(e.name.toLowerCase());
+        const g = e.uuid ? game.get(e.uuid) : undefined;
+        // The game counts play time too; it covers sessions from before the logs we have.
+        const counted = e.playMs + (start !== undefined ? now - start : 0);
         return {
           name: e.name,
           uuid: e.uuid,
           online: inst.players.has(e.name),
           firstSeen: e.firstSeen,
           lastSeen: start !== undefined ? now : e.lastSeen,
-          playMs: e.playMs + (start !== undefined ? now - start : 0),
+          playMs: Math.max(counted, (g?.playTicks ?? 0) * 50),
           sessions: e.sessions,
-          ...(e.uuid && game.has(e.uuid) && { game: game.get(e.uuid) }),
+          ...(g && { game: g }),
         };
       })
       .sort((a, b) => b.playMs - a.playMs);

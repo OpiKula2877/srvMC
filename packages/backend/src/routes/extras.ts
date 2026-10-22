@@ -2,6 +2,7 @@
 import type { FastifyInstance } from 'fastify';
 import { DISCORD_EVENTS, type AddonId } from '@srvmc/shared';
 import type { AddonService } from '../addons.ts';
+import type { LoginService } from '../login/service.ts';
 import type { DiscordService } from '../discord.ts';
 import type { PlayerStatsService } from '../playerstats.ts';
 import type { ProxyService } from '../proxy.ts';
@@ -15,7 +16,7 @@ function addonId(v: string): AddonId {
   return v as AddonId;
 }
 
-export function registerExtraRoutes(app: FastifyInstance, s: { discord: DiscordService; stats: PlayerStatsService; addons: AddonService; proxy: ProxyService }): void {
+export function registerExtraRoutes(app: FastifyInstance, s: { discord: DiscordService; stats: PlayerStatsService; addons: AddonService; proxy: ProxyService; login: LoginService }): void {
   app.put<{ Params: { id: string }; Body: { webhook?: string; events: string[] } }>(
     '/api/servers/:id/discord',
     {
@@ -44,8 +45,29 @@ export function registerExtraRoutes(app: FastifyInstance, s: { discord: DiscordS
 
   app.get<{ Params: { id: string } }>('/api/servers/:id/stats', (req) => s.stats.list(req.params.id));
 
+  // srvMC Login accounts
+  app.get<{ Params: { id: string } }>('/api/servers/:id/login/accounts', (req) => s.login.accounts(s.login.instance(req.params.id)));
+  app.delete<{ Params: { id: string; name: string } }>('/api/servers/:id/login/accounts/:name', async (req) => {
+    const inst = s.login.instance(req.params.id);
+    await s.login.store(inst).remove(req.params.name);
+    inst.pushLog('system', t('srvMC Login: the account {name} was deleted. The player registers again.', { name: req.params.name }));
+    return s.login.accounts(inst);
+  });
+  app.put<{ Params: { id: string; name: string }; Body: { autologin: boolean } }>(
+    '/api/servers/:id/login/accounts/:name/autologin',
+    { schema: { body: { type: 'object', required: ['autologin'], properties: { autologin: { type: 'boolean' } } } } },
+    async (req) => {
+      const inst = s.login.instance(req.params.id);
+      await s.login.store(inst).update(req.params.name, (a) => {
+        a.autologin = req.body.autologin;
+      });
+      return s.login.accounts(inst);
+    },
+  );
   app.get<{ Params: { id: string } }>('/api/servers/:id/addons', (req) => s.addons.list(req.params.id));
-  app.post<{ Params: { id: string; addon: string } }>('/api/servers/:id/addons/:addon', (req) => s.addons.install(req.params.id, addonId(req.params.addon)));
+  app.post<{ Params: { id: string; addon: string }; Querystring: { consent?: string } }>('/api/servers/:id/addons/:addon', (req) =>
+    s.addons.install(req.params.id, addonId(req.params.addon), req.query.consent === '1'),
+  );
   app.delete<{ Params: { id: string; addon: string } }>('/api/servers/:id/addons/:addon', (req) => s.addons.remove(req.params.id, addonId(req.params.addon)));
   app.post<{ Params: { id: string } }>('/api/servers/:id/addons/bluemap/consent', (req) => s.addons.consent(req.params.id));
 

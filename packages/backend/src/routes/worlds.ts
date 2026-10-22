@@ -7,6 +7,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { editionOf, type PregenRequest } from '@srvmc/shared';
 import type { BackupService } from '../backups.ts';
 import { installChunky, pregenCommand, startPregen } from '../chunky.ts';
+import { addDatapack, datapacksSupported, listDatapacks, removeDatapack, setDatapackEnabled } from '../datapacks.ts';
 import { checkDiskRoom } from '../disk.ts';
 import { saveUpload } from '../files.ts';
 import type { ServerManager } from '../manager.ts';
@@ -27,6 +28,7 @@ import { collectFiles, zipStream } from '../zip.ts';
 import { t } from '@srvmc/shared';
 
 const MAX_WORLD_UPLOAD = 20 * 1024 * 1024 * 1024;
+const MAX_DATAPACK = 512 * 1024 * 1024;
 
 function attachment(reply: FastifyReply, name: string, size?: number): void {
   reply.header('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
@@ -148,6 +150,55 @@ export function registerWorldRoutes(app: FastifyInstance, manager: ServerManager
       }
     },
   );
+
+  // Datapacks of the active world
+  const packsOf = (id: string) => {
+    const inst = manager.get(id);
+    if (!datapacksSupported(inst.cfg)) throw new UserError(t('Datapacks work on Java servers only.'));
+    return inst;
+  };
+  const packChanged = (inst: ServerInstance, message: string) => {
+    inst.pushLog('system', message);
+    manager.emit('files-changed', inst.cfg.id);
+  };
+  app.get<{ Params: { id: string } }>('/api/servers/:id/datapacks', (req) => listDatapacks(packsOf(req.params.id).dir));
+  app.post<{ Params: { id: string }; Querystring: { name: string }; Body: Readable }>(
+    '/api/servers/:id/datapacks/upload',
+    { schema: { querystring: { type: 'object', required: ['name'], properties: { name: { type: 'string', minLength: 1, maxLength: 255 } } } } },
+    async (req) => {
+      const inst = packsOf(req.params.id);
+      const declared = Number(req.headers['content-length'] ?? 0);
+      if (declared > MAX_DATAPACK) throw new UserError(t('The datapack is too big (max 512 MB).'));
+      checkDiskRoom(inst.cfg, inst.diskUsageMb, declared * 2);
+      const tmpName = `.srvmc-datapack-${Date.now()}.zip`;
+      await saveUpload(inst.dir, '', tmpName, req.body, MAX_DATAPACK, false);
+      try {
+        const name = await addDatapack(inst.dir, path.join(inst.dir, tmpName), req.query.name);
+        packChanged(inst, inst.running ? t('Datapack {name} added. It loads after /reload or the next start.', { name }) : t('Datapack {name} added.', { name }));
+        return listDatapacks(inst.dir);
+      } finally {
+        await rm(path.join(inst.dir, tmpName), { force: true });
+      }
+    },
+  );
+  app.put<{ Params: { id: string; name: string }; Body: { enabled: boolean } }>(
+    '/api/servers/:id/datapacks/:name/enabled',
+    { schema: { body: { type: 'object', required: ['enabled'], properties: { enabled: { type: 'boolean' } } } } },
+    async (req) => {
+      const inst = packsOf(req.params.id);
+      if (inst.running) throw new UserError(t('Stop the server first – {what} does not work while it runs.', { what: t('turning datapacks on and off') }));
+      await setDatapackEnabled(inst.dir, req.params.name, req.body.enabled);
+      packChanged(inst, req.body.enabled ? t('Datapack {name} turned on.', { name: req.params.name }) : t('Datapack {name} turned off.', { name: req.params.name }));
+      return listDatapacks(inst.dir);
+    },
+  );
+  app.delete<{ Params: { id: string; name: string } }>('/api/servers/:id/datapacks/:name', async (req) => {
+    const inst = packsOf(req.params.id);
+    if (inst.running) throw new UserError(t('Stop the server first – {what} does not work while it runs.', { what: t('deleting datapacks') }));
+    await removeDatapack(inst.dir, req.params.name);
+    packChanged(inst, t('Datapack {name} deleted.', { name: req.params.name }));
+    return listDatapacks(inst.dir);
+  });
 
   // Backups
   app.get<{ Params: { id: string } }>('/api/servers/:id/backups', async (req) => {

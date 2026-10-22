@@ -125,6 +125,24 @@ describe('player statistics', () => {
     expect(logDay('latest.log')).toBeNull();
   });
 
+  it('reads 26.x and Forge log lines', () => {
+    const store = { backfilled: true, players: {} };
+    const day = new Date(2026, 9, 22).getTime();
+    foldLog(
+      store,
+      [
+        '[22říj2026 17:00:00.137] [User Authenticator #1/INFO] [net.minecraft.server.network.ServerLoginPacketListenerImpl/]: UUID of player OpiKula is 0ce9d7b5-20a0-4629-92f5-0e79943ed8bc',
+        '[22říj2026 17:00:01.863] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: System chat: OpiKula joined the game',
+        '[22říj2026 17:30:01.129] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: System chat: OpiKula left the game',
+      ],
+      day,
+    );
+    const p = (store.players as Record<string, { playMs: number; sessions: number; uuid?: string }>).opikula!;
+    expect(p.sessions).toBe(1);
+    expect(p.playMs).toBe(30 * 60_000);
+    expect(p.uuid).toBe('0ce9d7b5-20a0-4629-92f5-0e79943ed8bc');
+  });
+
   it('reads Minecraft stats files', () => {
     const g = readGameStats({
       stats: {
